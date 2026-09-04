@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/collect-produce-prices",
+      "schedule": "0 18 8,18,28 * *"
+    },
+    {
+      "path": "/api/cron/collect-livestock-prices",
+      "schedule": "0 18 5 * *"
+    }
+  ]
+}

@@ -19,12 +19,14 @@ export function StartHerePrompt({
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
         <Link
           href="/import"
+          prefetch={false}
           className="rounded-lg border border-black/15 px-6 py-4 text-base font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
         >
           Excelで管理してる表がある場合はこちら
         </Link>
         <Link
           href="/menus/new"
+          prefetch={false}
           className="rounded-lg bg-black px-6 py-4 text-base font-medium text-white hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/80"
         >
           手入力で始める

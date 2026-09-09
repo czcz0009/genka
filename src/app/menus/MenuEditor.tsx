@@ -399,10 +399,17 @@ function ExistingIngredientPicker({
   alreadyAddedNames: Set<string>;
 }) {
   const [query, setQuery] = useState("");
-  const filtered = query.trim()
-    ? allIngredients.filter((i) => i.name.includes(query.trim()))
-    : allIngredients;
-  const selectedIngredient = allIngredients.find((i) => i.id === selectedId);
+  // メニュー名や売価など、この一覧と無関係な入力欄を触るたびに親(MenuEditor)が
+  // 再レンダリングされ、そのたびにこの絞り込みが再計算されるのは無駄なため
+  // useMemoで、query・allIngredientsが実際に変わった時だけ計算し直すようにする。
+  const filtered = useMemo(
+    () => (query.trim() ? allIngredients.filter((i) => i.name.includes(query.trim())) : allIngredients),
+    [query, allIngredients],
+  );
+  const selectedIngredient = useMemo(
+    () => allIngredients.find((i) => i.id === selectedId),
+    [allIngredients, selectedId],
+  );
 
   return (
     <div className="flex flex-col gap-2">

@@ -39,7 +39,7 @@ export default async function ImportPage() {
             Excelやスプレッドシートで管理してる表(CSV/Excelファイル)をアップロードすると、どの列が何を表しているか自動で推測します。内容を確認・修正してから確定してください。
           </p>
           <p className="mt-1 text-sm">
-            <Link href="/menus/new" className="text-black/50 underline underline-offset-2 hover:text-black dark:text-white/50 dark:hover:text-white">
+            <Link href="/menus/new" prefetch={false} className="text-black/50 underline underline-offset-2 hover:text-black dark:text-white/50 dark:hover:text-white">
               表がない場合は手入力で始める
             </Link>
           </p>

@@ -25,28 +25,40 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        {/*
+          ナビゲーションのリンクは全ページ共通で常に表示される。Next.jsの<Link>は
+          既定でビューポート内に入ると裏側でリンク先のRSCペイロードを丸ごと
+          プリフェッチする(=リンク先ページのSupabaseクエリを含む処理が丸ごと
+          実行される)ため、ここに素のLinkを並べると「ページを1つ開くだけで
+          ナビの全リンク先ページ分のクエリが裏で毎回走る」状態になり、
+          サーバー・Supabaseへの負荷が実際のアクセス頻度の何倍にも膨らんでいた
+          (優先度3のパフォーマンス調査で実際にネットワークログを確認して判明)。
+          ここは「よく使うページへのショートカット」であって「次に開く可能性が
+          高いページの先読み」ではないため、prefetchを明示的に無効化する。
+        */}
         <nav className="border-b border-black/10 px-6 py-3 text-sm dark:border-white/10">
           <div className="mx-auto flex max-w-4xl items-center gap-5">
-            <Link href="/" className="font-semibold">
+            <Link href="/" prefetch={false} className="font-semibold">
               原価計算ツール
             </Link>
-            <Link href="/menus" className="text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white">
+            <Link href="/menus" prefetch={false} className="text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white">
               原価計算
             </Link>
-            <Link href="/import" className="text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white">
+            <Link href="/import" prefetch={false} className="text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white">
               CSV取り込み
             </Link>
-            <Link href="/ranking" className="text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white">
+            <Link href="/ranking" prefetch={false} className="text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white">
               収益ランキング
             </Link>
-            <Link href="/fl-ratio" className="text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white">
+            <Link href="/fl-ratio" prefetch={false} className="text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white">
               FL比率
             </Link>
-            <Link href="/alerts" className="text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white">
+            <Link href="/alerts" prefetch={false} className="text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white">
               仕入れ値アラート
             </Link>
             <Link
               href="/settings"
+              prefetch={false}
               aria-label="店舗設定"
               title="店舗設定"
               className="ml-auto shrink-0 text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white"

@@ -110,6 +110,7 @@ export default async function MenusPage() {
         </div>
         <Link
           href="/menus/new"
+          prefetch={false}
           className="shrink-0 rounded-lg bg-black px-5 py-3 text-sm font-medium text-white hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/80"
         >
           + メニューを追加する
@@ -119,8 +120,11 @@ export default async function MenusPage() {
       <ul className="mt-6 flex flex-col gap-3">
         {rows.map((s) => (
           <li key={s.menuId}>
+            {/* 一覧の行数分だけ/menus/[id]がプリフェッチされ裏でSupabaseクエリが
+                走ってしまうのを避けるため、ここもprefetchを無効化する */}
             <Link
               href={`/menus/${s.menuId}`}
+              prefetch={false}
               className="flex flex-col gap-2 rounded-lg border border-black/15 p-5 hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10 sm:flex-row sm:items-center sm:justify-between"
             >
               <span className="text-base font-medium">{s.menuName}</span>

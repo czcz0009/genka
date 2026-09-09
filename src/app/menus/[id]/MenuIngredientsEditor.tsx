@@ -24,6 +24,16 @@ function formatYen(n: number): string {
   return `¥${Math.round(n).toLocaleString()}`;
 }
 
+/**
+ * 仕入単価(1gあたり0.16円、のような小数)専用のフォーマッタ。
+ * formatYen(四捨五入)を使うと0.16円や0.7円がすべて「¥0」「¥1」に潰れてしまい、
+ * 食材選択の一覧で見分けがつかなくなる不具合があったため分けている。
+ */
+function formatUnitPrice(n: number): string {
+  const rounded = Math.round(n * 100) / 100;
+  return `¥${rounded}`;
+}
+
 export function MenuIngredientsEditor({
   storeId,
   menuId,
@@ -201,24 +211,33 @@ function AddIngredientForm({
   onAdded: () => void;
 }) {
   const [mode, setMode] = useState<"existing" | "new">(allIngredients.length > 0 ? "existing" : "new");
-  const [existingId, setExistingId] = useState(allIngredients[0]?.id ?? "");
+  const [existingId, setExistingId] = useState<string>(allIngredients[0]?.id ?? "");
   const [newName, setNewName] = useState("");
   const [newUnit, setNewUnit] = useState("g");
   const [newPrice, setNewPrice] = useState("");
   const [quantity, setQuantity] = useState("");
-  const [unit, setUnit] = useState("g");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const pickedExisting = allIngredients.find((i) => i.id === existingId);
+  // 分量の単位は「使う食材」で自動的に決まる(既存食材ならその単位、新規食材なら
+  // 今入力している単位)。以前は分量用にも別の単位入力欄があり、
+  // 「単位が2つあってどっちを触ればいいか分からない」という指摘を受けて統合した。
+  const effectiveUnit = mode === "existing" ? (pickedExisting?.unit ?? "") : newUnit;
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (mode === "existing" && !existingId) {
+      setError("食材を選んでください");
+      return;
+    }
     setSaving(true);
     const result = await addIngredientToMenu({
       storeId,
       menuId,
       quantity: Number(quantity),
-      unit,
+      unit: effectiveUnit,
       existingIngredientId: mode === "existing" ? existingId : undefined,
       newIngredient:
         mode === "new" ? { name: newName, unit: newUnit, purchasePrice: Number(newPrice) } : undefined,
@@ -235,49 +254,43 @@ function AddIngredientForm({
   }
 
   return (
-    <form onSubmit={handleAdd} className="flex flex-col gap-4 rounded-lg border border-black/10 p-5 dark:border-white/10">
+    <form onSubmit={handleAdd} className="flex flex-col gap-5 rounded-lg border border-black/10 p-5 dark:border-white/10">
       <p className="text-base font-medium">食材を追加</p>
 
       {allIngredients.length > 0 && (
-        <div className="flex gap-2 text-sm">
-          <button
-            type="button"
-            onClick={() => setMode("existing")}
-            className={`rounded-full px-3 py-1.5 ${mode === "existing" ? "bg-black text-white dark:bg-white dark:text-black" : "bg-black/5 dark:bg-white/10"}`}
-          >
-            登録済みの食材から選ぶ
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("new")}
-            className={`rounded-full px-3 py-1.5 ${mode === "new" ? "bg-black text-white dark:bg-white dark:text-black" : "bg-black/5 dark:bg-white/10"}`}
-          >
-            新しい食材を登録する
-          </button>
+        <div>
+          <p className="mb-2 text-sm text-black/60 dark:text-white/60">使う食材は?</p>
+          <div className="flex gap-2 text-sm">
+            <button
+              type="button"
+              onClick={() => setMode("existing")}
+              className={`flex-1 rounded-lg border px-3 py-2.5 ${mode === "existing" ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black" : "border-black/15 dark:border-white/20"}`}
+            >
+              登録済みの食材から選ぶ
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("new")}
+              className={`flex-1 rounded-lg border px-3 py-2.5 ${mode === "new" ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black" : "border-black/15 dark:border-white/20"}`}
+            >
+              新しく食材を登録する
+            </button>
+          </div>
         </div>
       )}
 
       {mode === "existing" ? (
-        <label className="flex flex-col gap-2 text-base">
-          食材
-          <select
-            value={existingId}
-            onChange={(e) => {
-              setExistingId(e.target.value);
-              const picked = allIngredients.find((i) => i.id === e.target.value);
-              if (picked) setUnit(picked.unit);
-            }}
-            className="rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
-          >
-            {allIngredients.map((i) => (
-              <option key={i.id} value={i.id}>
-                {i.name}({i.unit}あたり{formatYen(i.currentPurchasePrice)})
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex flex-col gap-2">
+          <p className="text-base">食材を選ぶ</p>
+          <ExistingIngredientPicker
+            allIngredients={allIngredients}
+            selectedId={existingId}
+            onSelect={(id) => setExistingId(id)}
+          />
+        </div>
       ) : (
-        <>
+        <div className="flex flex-col gap-4 rounded-lg bg-black/[0.03] p-4 dark:bg-white/[0.04]">
+          <p className="text-sm font-medium text-black/70 dark:text-white/70">新しい食材の情報</p>
           <label className="flex flex-col gap-2 text-base">
             食材名
             <input
@@ -315,14 +328,14 @@ function AddIngredientForm({
             </label>
           </div>
           <p className="text-xs text-black/40 dark:text-white/40">
-            仕入単価は「単位1つあたりの金額」です。例:1kg800円のお肉をgで使うなら、800÷1000=0.8円と入力してください。
+            仕入単価は「単位1つあたりの金額」です。例:1kg800円のお肉をgで使うなら、800÷1000=0.8円と入力してください。この単位は、下の「このメニューで使う分量」でもそのまま使います。
           </p>
-        </>
+        </div>
       )}
 
-      <div className="flex gap-3">
-        <label className="flex flex-1 flex-col gap-2 text-base">
-          このメニューで使う分量
+      <label className="flex flex-col gap-2 text-base">
+        このメニューで使う分量
+        <div className="flex items-center gap-2">
           <input
             type="number"
             min={0}
@@ -332,20 +345,11 @@ function AddIngredientForm({
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
             placeholder="例: 150"
-            className="rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
+            className="flex-1 rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
           />
-        </label>
-        <label className="flex w-28 flex-col gap-2 text-base">
-          単位
-          <input
-            required
-            value={unit}
-            onChange={(e) => setUnit(e.target.value)}
-            placeholder="g"
-            className="rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
-          />
-        </label>
-      </div>
+          <span className="min-w-10 text-base text-black/60 dark:text-white/60">{effectiveUnit || "-"}</span>
+        </div>
+      </label>
 
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
@@ -357,5 +361,61 @@ function AddIngredientForm({
         {saving ? "追加中…" : "この食材を追加する"}
       </button>
     </form>
+  );
+}
+
+/**
+ * 既存食材から選ぶための一覧。ネイティブの<select>は開いたポップアップの
+ * デザインをアプリ側で制御できず(ダークモードでも白背景で開くなどして
+ * 「見づらい」との指摘を受けた)、自前の絞り込みリストに置き換えている。
+ */
+function ExistingIngredientPicker({
+  allIngredients,
+  selectedId,
+  onSelect,
+}: {
+  allIngredients: IngredientOption[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const filtered = query.trim()
+    ? allIngredients.filter((i) => i.name.includes(query.trim()))
+    : allIngredients;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="食材名で絞り込む"
+        className="rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
+      />
+      <div className="max-h-56 overflow-y-auto rounded-lg border border-black/15 dark:border-white/20">
+        {filtered.length === 0 && (
+          <p className="p-4 text-sm text-black/40 dark:text-white/40">見つかりませんでした</p>
+        )}
+        {filtered.map((i) => {
+          const selected = i.id === selectedId;
+          return (
+            <button
+              key={i.id}
+              type="button"
+              onClick={() => onSelect(i.id)}
+              className={`flex w-full items-center justify-between border-b border-black/5 px-4 py-3 text-left text-base last:border-0 dark:border-white/5 ${
+                selected
+                  ? "bg-black text-white dark:bg-white dark:text-black"
+                  : "hover:bg-black/5 dark:hover:bg-white/10"
+              }`}
+            >
+              <span>{i.name}</span>
+              <span className={`text-sm ${selected ? "opacity-70" : "text-black/40 dark:text-white/40"}`}>
+                {i.unit}あたり{formatUnitPrice(i.currentPurchasePrice)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }

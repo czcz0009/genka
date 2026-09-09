@@ -3,6 +3,10 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  /* これを指定しないと、ページ自体はダークモードでもselectのポップアップや
+     スクロールバーなどのネイティブUIだけ白背景のまま浮いてしまう
+     (実際に食材選択プルダウンが「見づらい」と指摘され気づいた不具合)。 */
+  color-scheme: light;
 }
 
 @theme inline {
@@ -16,6 +20,7 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    color-scheme: dark;
   }
 }
 

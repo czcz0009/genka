@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getOrCreateStore } from "@/lib/store";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient, type RankingSales } from "@/lib/menuRanking";
 import { monthToPeriod, currentMonthString } from "@/lib/period/month";
+import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { RankingView } from "./RankingView.tsx";
 
 export const metadata: Metadata = {
@@ -44,6 +45,25 @@ export default async function RankingPage({
 
   const { month: monthParam } = await searchParams;
 
+  // メニューが1件もなければ、それ以降の重いクエリ(販売実績・食材等)は
+  // 実行するだけ無駄なので、ここで打ち切って「まずはここから」の案内だけ出す。
+  const { data: menus } = await supabase
+    .from("menus")
+    .select("id, name, selling_price, target_cost_rate")
+    .eq("store_id", store.id);
+
+  if (!menus || menus.length === 0) {
+    return (
+      <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
+        <h1 className="text-xl font-bold tracking-tight">メニュー別収益貢献度ランキング</h1>
+        <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+          メニューを登録すると、利益貢献度のランキングがここに表示されます。
+        </p>
+        <StartHerePrompt />
+      </main>
+    );
+  }
+
   const { data: menuSalesPeriods } = await supabase
     .from("menu_sales")
     .select("period_start, menus!inner(store_id)")
@@ -57,8 +77,7 @@ export default async function RankingPage({
   const month = monthParam ?? availableMonths[availableMonths.length - 1] ?? currentMonthString();
   const period = monthToPeriod(month);
 
-  const [{ data: menus }, { data: menuIngredients }, { data: ingredients }, { data: sales }] = await Promise.all([
-    supabase.from("menus").select("id, name, selling_price, target_cost_rate").eq("store_id", store.id),
+  const [{ data: menuIngredients }, { data: ingredients }, { data: sales }] = await Promise.all([
     supabase.from("menu_ingredients").select("menu_id, ingredient_id, quantity, menus!inner(store_id)").eq(
       "menus.store_id",
       store.id,

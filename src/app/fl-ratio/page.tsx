@@ -13,6 +13,7 @@ import {
   type FixedCostRow,
 } from "@/lib/flRatio";
 import { monthToPeriod, currentMonthString, recentMonths, formatMonthLabel } from "@/lib/period/month";
+import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { FlRatioView } from "./FlRatioView.tsx";
 
 export const metadata: Metadata = {
@@ -58,9 +59,27 @@ export default async function FlRatioPage({
   const rangeStart = monthToPeriod(months[0]).start;
   const rangeEnd = monthToPeriod(months[months.length - 1]).end;
 
-  const [{ data: menus }, { data: menuIngredients }, { data: ingredients }, { data: sales }, { data: fixedCosts }] =
+  // メニューが1件もなければ、それ以降の重いクエリ(月次推移の再計算等)は
+  // 実行するだけ無駄なので、ここで打ち切って「まずはここから」の案内だけ出す。
+  const { data: menus } = await supabase
+    .from("menus")
+    .select("id, name, selling_price, target_cost_rate")
+    .eq("store_id", store.id);
+
+  if (!menus || menus.length === 0) {
+    return (
+      <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
+        <h1 className="text-xl font-bold tracking-tight">FL比率・FLR比率</h1>
+        <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+          メニューを登録すると、F比率(食材原価)を含むFL比率がここに表示されます。
+        </p>
+        <StartHerePrompt />
+      </main>
+    );
+  }
+
+  const [{ data: menuIngredients }, { data: ingredients }, { data: sales }, { data: fixedCosts }] =
     await Promise.all([
-      supabase.from("menus").select("id, name, selling_price, target_cost_rate").eq("store_id", store.id),
       supabase
         .from("menu_ingredients")
         .select("menu_id, ingredient_id, quantity, menus!inner(store_id)")

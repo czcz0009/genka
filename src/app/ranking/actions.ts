@@ -1,9 +1,9 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
 import { monthToPeriod } from "@/lib/period/month";
 import { normalizeForDedupe } from "@/lib/normalize";
 import { applySalesMapping, buildSalesImportPlan, type SalesFinalMapping } from "@/lib/salesImport/applySalesMapping";
+import { requireAuthedClient } from "@/lib/supabase/requireAuthedClient";
 
 export interface SaveManualSalesInput {
   storeId: string;
@@ -14,18 +14,6 @@ export interface SaveManualSalesInput {
 export type SaveSalesResult =
   | { success: true; savedCount: number; skippedMenuNames: string[] }
   | { success: false; error: string };
-
-type AuthedClient = { error: string } | { supabase: NonNullable<Awaited<ReturnType<typeof createClient>>>; userId: string };
-
-async function requireAuthedClient(): Promise<AuthedClient> {
-  const supabase = await createClient();
-  if (!supabase) return { error: "Supabaseが未設定です" };
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "ログインが必要です" };
-  return { supabase, userId: user.id };
-}
 
 /** 手動入力された販売数量を保存する(全メニューぶんまとめて上書き) */
 export async function saveManualSales(input: SaveManualSalesInput): Promise<SaveSalesResult> {

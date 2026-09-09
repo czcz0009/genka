@@ -37,7 +37,7 @@ export function LoginForm() {
           setError(error.message);
           return;
         }
-        router.push("/import");
+        router.push("/");
         router.refresh();
       } else {
         const { data, error } = await supabase!.auth.signUp({ email, password });
@@ -46,7 +46,7 @@ export function LoginForm() {
           return;
         }
         if (data.session) {
-          router.push("/import");
+          router.push("/");
           router.refresh();
         } else {
           setNotice("確認メールを送信しました。メール内のリンクを開いてから、ログインしてください。");

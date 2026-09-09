@@ -10,6 +10,7 @@ import { confirmedLinksToMatches } from "@/lib/marketPrices/livestock/confirmedL
 import { CHIKUSAN_COLUMNS, type ChikusanItemCode } from "@/lib/marketPrices/livestock/chikusanColumns";
 import { suggestChikusanItems } from "@/lib/marketPrices/livestock/suggestChikusanItem";
 import type { SyuyoItem } from "@/lib/marketPrices/parseSyuyoCsv";
+import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { AlertsView } from "./AlertsView.tsx";
 import { LivestockLinkSettings } from "./LivestockLinkSettings.tsx";
 
@@ -49,35 +50,46 @@ export default async function AlertsPage() {
     );
   }
 
-  const [
-    { data: ingredients },
-    { data: menus },
-    { data: menuIngredients },
-    { data: produceObservations },
-    { data: livestockObservations },
-    { data: links },
-  ] = await Promise.all([
+  // メニューが1件もなければ、食材と紐付ける対象がそもそも無いため、市場データ
+  // (旬別・月別の全履歴)を取得するだけ無駄。ここで打ち切って案内だけ出す。
+  const [{ data: ingredients }, { data: menus }] = await Promise.all([
     supabase.from("ingredients").select("id, name, current_purchase_price").eq("store_id", store.id),
     supabase.from("menus").select("id, name, selling_price, target_cost_rate").eq("store_id", store.id),
-    supabase
-      .from("menu_ingredients")
-      .select("menu_id, ingredient_id, quantity, menus!inner(store_id)")
-      .eq("menus.store_id", store.id),
-    supabase
-      .from("market_price_observations")
-      .select("item_code, item_name, period_year, period_month, period_third, price_per_kg")
-      .order("period_year", { ascending: false })
-      .order("period_month", { ascending: false })
-      .order("period_third", { ascending: false })
-      .limit(1200),
-    supabase
-      .from("livestock_price_observations")
-      .select("item_code, item_name, period_year, period_month, price_per_kg")
-      .order("period_year", { ascending: false })
-      .order("period_month", { ascending: false })
-      .limit(200),
-    supabase.from("ingredient_market_links").select("ingredient_id, item_code").eq("source", "chikusan"),
   ]);
+
+  if (!menus || menus.length === 0) {
+    return (
+      <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
+        <h1 className="text-xl font-bold tracking-tight">仕入れ値変動アラート</h1>
+        <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+          メニューと食材を登録すると、市場価格の変動アラートがここに表示されます。
+        </p>
+        <StartHerePrompt />
+      </main>
+    );
+  }
+
+  const [{ data: menuIngredients }, { data: produceObservations }, { data: livestockObservations }, { data: links }] =
+    await Promise.all([
+      supabase
+        .from("menu_ingredients")
+        .select("menu_id, ingredient_id, quantity, menus!inner(store_id)")
+        .eq("menus.store_id", store.id),
+      supabase
+        .from("market_price_observations")
+        .select("item_code, item_name, period_year, period_month, period_third, price_per_kg")
+        .order("period_year", { ascending: false })
+        .order("period_month", { ascending: false })
+        .order("period_third", { ascending: false })
+        .limit(1200),
+      supabase
+        .from("livestock_price_observations")
+        .select("item_code, item_name, period_year, period_month, price_per_kg")
+        .order("period_year", { ascending: false })
+        .order("period_month", { ascending: false })
+        .limit(200),
+      supabase.from("ingredient_market_links").select("ingredient_id, item_code").eq("source", "chikusan"),
+    ]);
 
   const alertIngredients = (ingredients ?? []).map((i) => ({
     id: i.id,

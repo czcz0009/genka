@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -36,6 +37,11 @@ export default async function ImportPage() {
           <h1 className="text-xl font-bold tracking-tight">レシピ・仕入れデータの取り込み</h1>
           <p className="mt-1 text-sm text-black/60 dark:text-white/60">
             CSV/Excelをアップロードすると列の意味を推測します。内容を確認・修正してから確定してください。
+          </p>
+          <p className="mt-1 text-sm">
+            <Link href="/menus/new" className="text-black/50 underline underline-offset-2 hover:text-black dark:text-white/50 dark:hover:text-white">
+              CSVがない場合は手入力で始める
+            </Link>
           </p>
         </div>
         {userEmail && (

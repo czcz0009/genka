@@ -23,9 +23,9 @@ const LEVEL_STYLE: Record<string, string> = {
 };
 
 const LEVEL_LABEL: Record<string, string> = {
-  high: "推測: 高",
-  medium: "推測: 中",
-  none: "未推測(要選択)",
+  high: "自動で判定できました",
+  medium: "確認してください",
+  none: "手動で選んでください",
 };
 
 export function ImportWizard({ storeId }: { storeId: string | null }) {
@@ -126,7 +126,7 @@ export function ImportWizard({ storeId }: { storeId: string | null }) {
             </p>
             <button
               onClick={resetAll}
-              className="text-xs text-black/50 underline underline-offset-2 hover:text-black dark:text-white/50 dark:hover:text-white"
+              className="rounded-lg px-3 py-2 text-sm text-black/50 underline underline-offset-2 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white"
             >
               別のファイルを選び直す
             </button>
@@ -150,7 +150,7 @@ export function ImportWizard({ storeId }: { storeId: string | null }) {
             </p>
             {requiredMissing.length > 0 && (
               <p className="text-amber-700 dark:text-amber-400">
-                必須項目が未設定です: {requiredMissing.map((f) => f.label).join("・")}
+                必須項目が未設定です: {requiredMissing.map((f) => f.label).join("・")}。上の表の「対応する列」でどの列か選んでください。
               </p>
             )}
             {applyResult.errors.length > 0 && (
@@ -172,7 +172,7 @@ export function ImportWizard({ storeId }: { storeId: string | null }) {
             <button
               disabled={requiredMissing.length > 0 || applyResult.rows.length === 0}
               onClick={() => setStep("confirm")}
-              className="rounded-lg bg-black px-5 py-2.5 text-sm font-medium text-white disabled:opacity-30 dark:bg-white dark:text-black"
+              className="rounded-lg bg-black px-5 py-3 text-base font-medium text-white disabled:opacity-30 dark:bg-white dark:text-black"
             >
               この内容で確定する
             </button>
@@ -289,7 +289,9 @@ function MappingTable({
           <tr>
             <th className="px-3 py-2 font-medium">取り込み項目</th>
             <th className="px-3 py-2 font-medium">対応する列</th>
-            <th className="px-3 py-2 font-medium">AIの推測</th>
+            <th className="px-3 py-2 font-medium" title="表の見出しの言葉から、どの列が対応するかを自動で判定した結果です">
+              自動判定の結果
+            </th>
           </tr>
         </thead>
         <tbody>

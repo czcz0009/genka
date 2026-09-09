@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getOrCreateStore } from "@/lib/store";
 import { computeStoreAlerts } from "@/lib/marketPrices/computeStoreAlerts";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
+import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { AlertsView } from "./AlertsView.tsx";
 import { LivestockLinkSettings } from "./LivestockLinkSettings.tsx";
 
@@ -34,7 +35,7 @@ export default async function AlertsPage() {
   if (!store) {
     return (
       <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
-        <p className="text-sm text-red-600 dark:text-red-400">店舗情報の取得に失敗しました。</p>
+        <StoreLoadError />
       </main>
     );
   }

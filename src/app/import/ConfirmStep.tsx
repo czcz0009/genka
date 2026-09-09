@@ -180,36 +180,31 @@ export function ConfirmStep({
       {configured && saveState.status === "error" && (
         <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
           保存に失敗しました: {saveState.message}
+          しばらくしてからもう一度お試しください。改善しない場合は「JSONで書き出す」で内容を保存しておくと安心です。
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <div className="flex gap-3">
-          <button
-            onClick={onBack}
-            className="rounded-lg border border-black/15 px-4 py-2 text-sm dark:border-white/20"
-          >
-            マッピングを修正する
-          </button>
-          <button
-            onClick={onStartOver}
-            className="text-sm text-black/50 underline underline-offset-2 hover:text-black dark:text-white/50 dark:hover:text-white"
-          >
-            最初からやり直す
-          </button>
-        </div>
-        <div className="flex gap-3">
-          <button
-            onClick={downloadPlanAsJson}
-            className="rounded-lg border border-black/15 px-5 py-2.5 text-sm font-medium dark:border-white/20"
-          >
-            {downloaded ? "再度ダウンロード" : "JSONで書き出す"}
-          </button>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex gap-3">
+            <button
+              onClick={onBack}
+              className="rounded-lg border border-black/15 px-4 py-3 text-base dark:border-white/20"
+            >
+              マッピングを修正する
+            </button>
+            <button
+              onClick={onStartOver}
+              className="rounded-lg px-3 py-3 text-base text-black/50 underline underline-offset-2 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white"
+            >
+              最初からやり直す
+            </button>
+          </div>
           {configured && storeId && (
             <button
               onClick={handleSave}
               disabled={saveState.status === "saving" || saveState.status === "done"}
-              className="rounded-lg bg-black px-5 py-2.5 text-sm font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black"
+              className="rounded-lg bg-black px-5 py-4 text-base font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black"
             >
               {saveState.status === "saving"
                 ? "保存中…"
@@ -219,6 +214,14 @@ export function ConfirmStep({
             </button>
           )}
         </div>
+        {/* JSON書き出しは確認作業の主目的(保存)とは無関係な補助機能のため、
+            保存ボタンと並べて競わせず、控えめなテキストリンクとして分離する */}
+        <button
+          onClick={downloadPlanAsJson}
+          className="self-start rounded-lg px-3 py-2 text-sm text-black/50 underline underline-offset-2 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white"
+        >
+          {downloaded ? "JSONを再度ダウンロード" : "内容をJSONファイルとして保存しておく"}
+        </button>
       </div>
     </div>
   );

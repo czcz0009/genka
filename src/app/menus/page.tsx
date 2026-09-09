@@ -6,6 +6,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getOrCreateStore } from "@/lib/store";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient } from "@/lib/menuRanking";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
+import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 
 export const metadata: Metadata = {
   title: "メニュー一覧",
@@ -38,7 +39,7 @@ export default async function MenusPage() {
   if (!store) {
     return (
       <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-10">
-        <p className="text-sm text-red-600 dark:text-red-400">店舗情報の取得に失敗しました。</p>
+        <StoreLoadError />
       </main>
     );
   }
@@ -105,13 +106,13 @@ export default async function MenusPage() {
         <div>
           <h1 className="text-xl font-bold tracking-tight">メニュー一覧</h1>
           <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-            登録済みのメニューと、それぞれの原価・原価率です。タップすると食材の追加・編集ができます。
+            登録済みのメニューと、それぞれの原価・原価率です。原価率は「原価 ÷ 売価」で、低いほど利益が残ります。タップすると食材の追加・編集ができます。
           </p>
         </div>
         <Link
           href="/menus/new"
           prefetch={false}
-          className="shrink-0 rounded-lg bg-black px-5 py-3 text-sm font-medium text-white hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/80"
+          className="shrink-0 rounded-lg bg-black px-5 py-3 text-base font-medium text-white hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/80"
         >
           + メニューを追加する
         </Link>

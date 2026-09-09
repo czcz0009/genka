@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { formatMonthLabel } from "@/lib/period/month";
 import type { Severity } from "@/lib/flRatio";
 import { saveFixedCost } from "./actions.ts";
@@ -43,7 +44,7 @@ export function FlRatioView({
           type="month"
           value={month}
           onChange={(e) => router.push(`?month=${e.target.value}`)}
-          className="rounded border border-black/15 bg-transparent px-2 py-1 dark:border-white/20"
+          className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
         />
       </label>
 
@@ -53,6 +54,9 @@ export function FlRatioView({
         <RatioCard label="FL比率" value={formatPercent(current.flRate)} severity={current.flSeverity} />
         <RatioCard label="FLR比率" value={formatPercent(current.flrRate)} severity={current.flrSeverity} />
       </div>
+      <p className="-mt-3 text-xs text-black/40 dark:text-white/40">
+        FL比率 = (食材原価 + 人件費)÷ 売上。FLR比率 = そこにさらに家賃を加えたものの割合です。
+      </p>
 
       <FixedCostEntry storeId={storeId} month={month} currentLabor={currentLabor} currentRent={currentRent} />
 
@@ -92,6 +96,9 @@ function FixedCostEntry({
   currentRent: number | null;
 }) {
   const router = useRouter();
+  // 未設定(初めてこの画面を見る等)なら最初から開いておき、設定済みなら
+  // 「原価率を見る」という本来の1画面1タスクを崩さないよう畳んでおく。
+  const [open, setOpen] = useState(currentLabor == null && currentRent == null);
   const [labor, setLabor] = useState(currentLabor != null ? String(currentLabor) : "");
   const [rent, setRent] = useState(currentRent != null ? String(currentRent) : "");
   const [saving, setSaving] = useState<"labor" | "rent" | null>(null);
@@ -100,7 +107,7 @@ function FixedCostEntry({
   async function handleSave(costType: "labor" | "rent") {
     const amount = Number(costType === "labor" ? labor : rent);
     if (!Number.isFinite(amount) || amount < 0) {
-      setError("金額を正しく入力してください");
+      setError("0以上の数値で入力してください");
       return;
     }
     setSaving(costType);
@@ -114,51 +121,78 @@ function FixedCostEntry({
     router.refresh();
   }
 
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="self-start rounded-lg border border-black/15 px-4 py-2.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+      >
+        {formatMonthLabel(month)}の家賃・人件費を編集する
+      </button>
+    );
+  }
+
   return (
     <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
-      <p className="mb-3 text-sm font-semibold">{formatMonthLabel(month)}の固定費</p>
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-sm font-semibold">{formatMonthLabel(month)}の固定費</p>
+        <button
+          onClick={() => setOpen(false)}
+          className="text-xs text-black/40 underline underline-offset-2 hover:text-black dark:text-white/40 dark:hover:text-white"
+        >
+          閉じる
+        </button>
+      </div>
       <div className="flex flex-col gap-3 sm:flex-row">
-        <label className="flex flex-1 items-center gap-2 text-sm">
-          人件費(月次)
-          <input
-            type="number"
-            min={0}
-            value={labor}
-            onChange={(e) => setLabor(e.target.value)}
-            placeholder="例: 400000"
-            className="w-32 rounded border border-black/15 bg-transparent px-2 py-1 dark:border-white/20"
-          />
-          円
-          <button
-            onClick={() => handleSave("labor")}
-            disabled={saving === "labor"}
-            className="rounded border border-black/15 px-3 py-1 text-xs disabled:opacity-40 dark:border-white/20"
-          >
-            {saving === "labor" ? "保存中…" : "保存"}
-          </button>
+        <label className="flex flex-1 flex-col gap-2 text-sm sm:flex-row sm:items-center">
+          <span className="shrink-0">人件費(月次)</span>
+          <div className="flex flex-1 items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              value={labor}
+              onChange={(e) => setLabor(e.target.value)}
+              placeholder="例: 400000"
+              className="w-full min-w-0 rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+            />
+            <span className="shrink-0">円</span>
+            <button
+              onClick={() => handleSave("labor")}
+              disabled={saving === "labor"}
+              className="shrink-0 rounded-lg border border-black/15 px-3 py-2 text-sm disabled:opacity-40 dark:border-white/20"
+            >
+              {saving === "labor" ? "保存中…" : "保存"}
+            </button>
+          </div>
         </label>
-        <label className="flex flex-1 items-center gap-2 text-sm">
-          家賃(月額・継続)
-          <input
-            type="number"
-            min={0}
-            value={rent}
-            onChange={(e) => setRent(e.target.value)}
-            placeholder="例: 180000"
-            className="w-32 rounded border border-black/15 bg-transparent px-2 py-1 dark:border-white/20"
-          />
-          円
-          <button
-            onClick={() => handleSave("rent")}
-            disabled={saving === "rent"}
-            className="rounded border border-black/15 px-3 py-1 text-xs disabled:opacity-40 dark:border-white/20"
-          >
-            {saving === "rent" ? "保存中…" : "保存"}
-          </button>
+        <label className="flex flex-1 flex-col gap-2 text-sm sm:flex-row sm:items-center">
+          <span className="shrink-0">家賃(月額・継続)</span>
+          <div className="flex flex-1 items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              value={rent}
+              onChange={(e) => setRent(e.target.value)}
+              placeholder="例: 180000"
+              className="w-full min-w-0 rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+            />
+            <span className="shrink-0">円</span>
+            <button
+              onClick={() => handleSave("rent")}
+              disabled={saving === "rent"}
+              className="shrink-0 rounded-lg border border-black/15 px-3 py-2 text-sm disabled:opacity-40 dark:border-white/20"
+            >
+              {saving === "rent" ? "保存中…" : "保存"}
+            </button>
+          </div>
         </label>
       </div>
       <p className="mt-2 text-xs text-black/40 dark:text-white/40">
-        家賃は一度登録すれば、金額が変わるまで翌月以降にも引き継がれます。人件費は月ごとに入力してください。
+        家賃は一度登録すれば、金額が変わるまで翌月以降にも引き継がれます。人件費は月ごとに入力してください。今月分だけでよければ、
+        <Link href="/settings" className="underline underline-offset-2 hover:text-black dark:hover:text-white">
+          店舗設定
+        </Link>
+        からも入力できます。
       </p>
       {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
     </div>

@@ -15,7 +15,7 @@ export function SignOutButton() {
         router.push("/login");
         router.refresh();
       }}
-      className="underline underline-offset-2 hover:text-black dark:hover:text-white"
+      className="rounded-lg px-3 py-2 underline underline-offset-2 hover:bg-black/5 hover:text-black dark:hover:bg-white/10 dark:hover:text-white"
     >
       ログアウト
     </button>

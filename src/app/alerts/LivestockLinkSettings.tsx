@@ -56,7 +56,7 @@ export function LivestockLinkSettings({
               <button
                 onClick={() => handleClear(i.id)}
                 disabled={saving === i.id}
-                className="text-xs text-black/50 underline underline-offset-2 hover:text-black disabled:opacity-40 dark:text-white/50 dark:hover:text-white"
+                className="rounded-lg px-3 py-2 text-sm text-black/50 underline underline-offset-2 hover:bg-black/5 hover:text-black disabled:opacity-40 dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white"
               >
                 解除
               </button>

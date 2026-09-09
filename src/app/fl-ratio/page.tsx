@@ -14,6 +14,7 @@ import {
 } from "@/lib/flRatio";
 import { monthToPeriod, currentMonthString, recentMonths, formatMonthLabel } from "@/lib/period/month";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
+import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { FlRatioView } from "./FlRatioView.tsx";
 
 export const metadata: Metadata = {
@@ -48,7 +49,7 @@ export default async function FlRatioPage({
   if (!store) {
     return (
       <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
-        <p className="text-sm text-red-600 dark:text-red-400">店舗情報の取得に失敗しました。</p>
+        <StoreLoadError />
       </main>
     );
   }

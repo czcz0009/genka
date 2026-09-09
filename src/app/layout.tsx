@@ -50,7 +50,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <Link href="/ranking" prefetch={false} className="text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white">
               収益ランキング
             </Link>
-            <Link href="/fl-ratio" prefetch={false} className="text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white">
+            <Link
+              href="/fl-ratio"
+              prefetch={false}
+              title="FL比率(食材原価+人件費が売上に占める割合)"
+              className="text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white"
+            >
               FL比率
             </Link>
             <Link href="/alerts" prefetch={false} className="text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white">
@@ -61,7 +66,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               prefetch={false}
               aria-label="店舗設定"
               title="店舗設定"
-              className="ml-auto shrink-0 text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white"
+              className="-my-2 -mr-2 ml-auto shrink-0 rounded-lg p-2 text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/10 dark:hover:text-white"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"

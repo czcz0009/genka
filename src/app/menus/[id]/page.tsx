@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getOrCreateStore } from "@/lib/store";
 import { MenuEditor, type LocalLine } from "../MenuEditor.tsx";
+import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 
 export const metadata: Metadata = {
   title: "メニューを編集",
@@ -22,7 +23,7 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
   if (!store) {
     return (
       <main className="mx-auto w-full max-w-lg flex-1 px-6 py-10">
-        <p className="text-sm text-red-600 dark:text-red-400">店舗情報の取得に失敗しました。</p>
+        <StoreLoadError />
       </main>
     );
   }

@@ -6,6 +6,7 @@ import { getOrCreateStore } from "@/lib/store";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient, type RankingSales } from "@/lib/menuRanking";
 import { monthToPeriod, currentMonthString } from "@/lib/period/month";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
+import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { RankingView } from "./RankingView.tsx";
 
 export const metadata: Metadata = {
@@ -38,7 +39,7 @@ export default async function RankingPage({
   if (!store) {
     return (
       <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
-        <p className="text-sm text-red-600 dark:text-red-400">店舗情報の取得に失敗しました。</p>
+        <StoreLoadError />
       </main>
     );
   }

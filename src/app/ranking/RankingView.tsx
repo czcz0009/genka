@@ -68,13 +68,13 @@ export function RankingView({
           <div className="mb-3 flex gap-2 text-sm">
             <button
               onClick={() => setEntryTab("manual")}
-              className={`rounded-full px-3 py-1 ${entryTab === "manual" ? "bg-black text-white dark:bg-white dark:text-black" : "bg-black/5 dark:bg-white/10"}`}
+              className={`flex-1 rounded-lg border px-3 py-2.5 ${entryTab === "manual" ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black" : "border-black/15 dark:border-white/20"}`}
             >
               手動入力
             </button>
             <button
               onClick={() => setEntryTab("csv")}
-              className={`rounded-full px-3 py-1 ${entryTab === "csv" ? "bg-black text-white dark:bg-white dark:text-black" : "bg-black/5 dark:bg-white/10"}`}
+              className={`flex-1 rounded-lg border px-3 py-2.5 ${entryTab === "csv" ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black" : "border-black/15 dark:border-white/20"}`}
             >
               CSV取り込み
             </button>
@@ -110,26 +110,31 @@ export function RankingView({
       )}
 
       <div className="overflow-x-auto rounded-lg border border-black/10 dark:border-white/10">
-        <table className="w-full text-sm">
+        <table className="text-sm">
           <thead className="bg-black/5 text-left dark:bg-white/5">
             <tr>
-              <th className="px-3 py-2 font-medium">#</th>
-              <th className="px-3 py-2 font-medium">メニュー</th>
-              <th className="px-3 py-2 text-right font-medium">販売数</th>
-              <th className="px-3 py-2 text-right font-medium">売価</th>
-              <th className="px-3 py-2 text-right font-medium">原価率</th>
-              <th className="px-3 py-2 text-right font-medium">利益貢献度</th>
-              <th className="px-3 py-2 font-medium">値上げ検討</th>
+              <th className="whitespace-nowrap px-3 py-2 font-medium">#</th>
+              <th className="whitespace-nowrap px-3 py-2 font-medium">メニュー</th>
+              <th className="whitespace-nowrap px-3 py-2 text-right font-medium">販売数</th>
+              <th className="whitespace-nowrap px-3 py-2 text-right font-medium">売価</th>
+              <th className="whitespace-nowrap px-3 py-2 text-right font-medium">原価率</th>
+              <th
+                className="whitespace-nowrap px-3 py-2 text-right font-medium"
+                title="販売数量 ×(売価−原価)。原価率が高くても数が出ないメニューより、実際に利益を多く生んでいるメニューが上位に来ます"
+              >
+                利益貢献度
+              </th>
+              <th className="whitespace-nowrap px-3 py-2 font-medium">値上げ検討</th>
             </tr>
           </thead>
           <tbody>
             {summaries.map((s, idx) => (
               <tr key={s.menuId} className="border-t border-black/5 dark:border-white/5">
-                <td className="px-3 py-2 text-black/40 dark:text-white/40">{idx + 1}</td>
-                <td className="px-3 py-2 font-medium">{s.menuName}</td>
-                <td className="px-3 py-2 text-right">{s.quantitySold}</td>
-                <td className="px-3 py-2 text-right">{formatYen(s.sellingPrice)}</td>
-                <td className="px-3 py-2 text-right">
+                <td className="whitespace-nowrap px-3 py-2 text-black/40 dark:text-white/40">{idx + 1}</td>
+                <td className="whitespace-nowrap px-3 py-2 font-medium">{s.menuName}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-right">{s.quantitySold}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-right">{formatYen(s.sellingPrice)}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-right">
                   <span
                     className={
                       s.overTarget
@@ -143,8 +148,8 @@ export function RankingView({
                   </span>
                   <span className="ml-1 text-black/30 dark:text-white/30">(目標{s.targetCostRate}%)</span>
                 </td>
-                <td className="px-3 py-2 text-right font-medium">{formatYen(s.profitContribution)}</td>
-                <td className="px-3 py-2">
+                <td className="whitespace-nowrap px-3 py-2 text-right font-medium">{formatYen(s.profitContribution)}</td>
+                <td className="whitespace-nowrap px-3 py-2">
                   {s.overTarget && s.suggestedPriceIncrease ? (
                     <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
                       +{s.suggestedPriceIncrease}円が目安
@@ -155,13 +160,6 @@ export function RankingView({
                 </td>
               </tr>
             ))}
-            {summaries.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-black/40 dark:text-white/40">
-                  メニューが登録されていません。①のCSV取り込みから登録してください。
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
       </div>
@@ -219,7 +217,7 @@ function ManualSalesEntry({
                     min={0}
                     value={values[m.id] ?? "0"}
                     onChange={(e) => setValues({ ...values, [m.id]: e.target.value })}
-                    className="w-24 rounded border border-black/15 bg-transparent px-2 py-1 text-right dark:border-white/20"
+                    className="w-24 rounded-lg border border-black/15 bg-transparent px-3 py-2 text-right text-base dark:border-white/20"
                   />
                 </td>
               </tr>
@@ -231,7 +229,7 @@ function ManualSalesEntry({
       <button
         onClick={handleSave}
         disabled={saving || menus.length === 0}
-        className="self-end rounded-lg bg-black px-5 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black"
+        className="self-end rounded-lg bg-black px-5 py-3 text-base font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black"
       >
         {saving ? "保存中…" : "保存する"}
       </button>

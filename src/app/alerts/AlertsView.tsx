@@ -81,11 +81,16 @@ export function AlertsView({
 
       {produceNeedsReview.length > 0 && (
         <section className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
-          <p className="font-medium">確信度が低く通知していない候補({produceNeedsReview.length}件)</p>
-          <ul className="mt-1 space-y-0.5">
+          <p className="font-medium">
+            この食材かもしれないと思われますが、判定に自信が持てず通知していません({produceNeedsReview.length}件)
+          </p>
+          <p className="mt-1 text-xs opacity-80">
+            国が公表している市場価格の品目名と、食材名の綴りが十分に一致しなかったものです。関係なければ無視して構いません。
+          </p>
+          <ul className="mt-2 space-y-0.5">
             {produceNeedsReview.map((m) => (
               <li key={m.ingredientId}>
-                {m.ingredientName} ≈ 市場品目「{m.itemName}」(要確認)
+                {m.ingredientName} ≈ 「{m.itemName}」の可能性
               </li>
             ))}
           </ul>

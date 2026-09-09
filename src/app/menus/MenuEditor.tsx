@@ -167,7 +167,7 @@ export function MenuEditor({
               </span>
               <button
                 onClick={() => removeLine(l.key)}
-                className="text-sm text-black/40 underline underline-offset-2 hover:text-black dark:text-white/40 dark:hover:text-white"
+                className="rounded-lg px-3 py-2 text-sm text-black/40 underline underline-offset-2 hover:bg-black/5 hover:text-black dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white"
               >
                 削除
               </button>

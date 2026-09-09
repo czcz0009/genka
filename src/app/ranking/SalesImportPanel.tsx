@@ -13,7 +13,11 @@ const LEVEL_STYLE: Record<string, string> = {
   medium: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
   none: "bg-black/5 text-black/50 dark:bg-white/10 dark:text-white/50",
 };
-const LEVEL_LABEL: Record<string, string> = { high: "推測: 高", medium: "推測: 中", none: "未推測(要選択)" };
+const LEVEL_LABEL: Record<string, string> = {
+  high: "自動で判定できました",
+  medium: "確認してください",
+  none: "手動で選んでください",
+};
 
 export function SalesImportPanel({
   storeId,
@@ -46,7 +50,7 @@ export function SalesImportPanel({
     try {
       const parsed = await parseSpreadsheetFile(file);
       if (parsed.headers.length === 0) {
-        setParseError("ファイルからデータを読み取れませんでした。");
+        setParseError("ファイルからデータを読み取れませんでした。1行目に列見出しがあるか確認してください。");
         return;
       }
       setFileName(parsed.fileName);
@@ -97,7 +101,9 @@ export function SalesImportPanel({
                 <tr>
                   <th className="px-3 py-2 font-medium">項目</th>
                   <th className="px-3 py-2 font-medium">対応する列</th>
-                  <th className="px-3 py-2 font-medium">推測</th>
+                  <th className="px-3 py-2 font-medium" title="表の見出しの言葉から、どの列が対応するかを自動で判定した結果です">
+                    自動判定の結果
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -157,15 +163,16 @@ export function SalesImportPanel({
           {result && !result.success && <p className="text-sm text-red-600 dark:text-red-400">{result.error}</p>}
           {result && result.success && result.skippedMenuNames.length > 0 && (
             <p className="text-sm text-amber-700 dark:text-amber-400">
-              登録済みメニューと一致しなかったため{result.skippedMenuNames.length}件スキップしました:{" "}
+              登録済みメニューと名前が一致しなかったため{result.skippedMenuNames.length}件スキップしました:{" "}
               {result.skippedMenuNames.join("、")}
+              。メニュー一覧で名前が同じか確認するか、先にメニューを登録してから取り込み直してください。
             </p>
           )}
 
           <button
             onClick={handleConfirm}
             disabled={saving || requiredMissing.length > 0 || applyResult.rows.length === 0}
-            className="self-end rounded-lg bg-black px-5 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black"
+            className="self-end rounded-lg bg-black px-5 py-3 text-base font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black"
           >
             {saving ? "保存中…" : "この内容で保存する"}
           </button>

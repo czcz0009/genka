@@ -6,6 +6,7 @@ import { getOrCreateStore } from "@/lib/store";
 import { selectApplicableFixedCost, type FixedCostRow } from "@/lib/flRatio";
 import { monthToPeriod, currentMonthString, formatMonthLabel } from "@/lib/period/month";
 import { SettingsForm } from "./SettingsForm.tsx";
+import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 
 export const metadata: Metadata = {
   title: "店舗設定",
@@ -33,7 +34,7 @@ export default async function SettingsPage() {
   if (!store) {
     return (
       <main className="mx-auto w-full max-w-lg flex-1 px-6 py-10">
-        <p className="text-sm text-red-600 dark:text-red-400">店舗情報の取得に失敗しました。</p>
+        <StoreLoadError />
       </main>
     );
   }

@@ -6,6 +6,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getOrCreateStore } from "@/lib/store";
 import { buildFastDashboardSummary, getCurrentFlRate, getAlertCount } from "@/lib/dashboardSummary";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
+import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 
 /** getOrCreateStore が新規作成時に付ける仮の店舗名。まだ店名を設定していない目印として使う。 */
 const DEFAULT_STORE_NAME = "マイ店舗";
@@ -60,7 +61,7 @@ export default async function Home() {
   if (!store) {
     return (
       <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-16">
-        <p className="text-sm text-red-600 dark:text-red-400">店舗情報の取得に失敗しました。</p>
+        <StoreLoadError />
       </main>
     );
   }

@@ -68,12 +68,12 @@ export function LivestockLinkSettings({
       {unlinkedIngredients.length > 0 && (
         <ul className="mt-3 flex flex-col gap-2">
           {unlinkedIngredients.map((i) => (
-            <li key={i.id} className="flex items-center gap-2 rounded border border-black/10 px-3 py-2 text-sm dark:border-white/10">
-              <span className="flex-1">{i.name}</span>
+            <li key={i.id} className="flex flex-wrap items-center gap-2 rounded border border-black/10 px-3 py-2 text-sm dark:border-white/10">
+              <span className="w-full sm:w-auto sm:flex-1">{i.name}</span>
               <select
                 value={selection[i.id] ?? ""}
                 onChange={(e) => setSelection({ ...selection, [i.id]: e.target.value })}
-                className="rounded border border-black/15 bg-transparent px-2 py-1 text-xs dark:border-white/20"
+                className="min-w-0 flex-1 rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm sm:flex-none dark:border-white/20"
               >
                 <option value="">(対象外)</option>
                 {PRICED_COLUMNS.map((c) => (
@@ -86,7 +86,7 @@ export function LivestockLinkSettings({
               <button
                 onClick={() => handleSave(i.id)}
                 disabled={saving === i.id || !selection[i.id]}
-                className="rounded border border-black/15 px-3 py-1 text-xs disabled:opacity-40 dark:border-white/20"
+                className="rounded-lg border border-black/15 px-3 py-2 text-sm disabled:opacity-40 dark:border-white/20"
               >
                 確定
               </button>

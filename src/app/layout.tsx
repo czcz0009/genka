@@ -30,6 +30,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <Link href="/" className="font-semibold">
               原価計算ツール
             </Link>
+            <Link href="/menus" className="text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white">
+              原価計算
+            </Link>
             <Link href="/import" className="text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white">
               CSV取り込み
             </Link>

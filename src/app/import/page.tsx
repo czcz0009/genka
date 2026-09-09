@@ -36,11 +36,11 @@ export default async function ImportPage() {
         <div>
           <h1 className="text-xl font-bold tracking-tight">レシピ・仕入れデータの取り込み</h1>
           <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-            CSV/Excelをアップロードすると列の意味を推測します。内容を確認・修正してから確定してください。
+            Excelやスプレッドシートで管理してる表(CSV/Excelファイル)をアップロードすると、どの列が何を表しているか自動で推測します。内容を確認・修正してから確定してください。
           </p>
           <p className="mt-1 text-sm">
             <Link href="/menus/new" className="text-black/50 underline underline-offset-2 hover:text-black dark:text-white/50 dark:hover:text-white">
-              CSVがない場合は手入力で始める
+              表がない場合は手入力で始める
             </Link>
           </p>
         </div>

@@ -119,7 +119,7 @@ export function SalesImportPanel({
                               [field.id]: e.target.value === "" ? null : Number(e.target.value),
                             })
                           }
-                          className="rounded border border-black/15 bg-transparent px-2 py-1 dark:border-white/20"
+                          className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
                         >
                           <option value="">(選択しない)</option>
                           {headers.map((h, idx) => (

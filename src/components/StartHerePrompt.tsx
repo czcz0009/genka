@@ -7,7 +7,7 @@ import Link from "next/link";
  */
 export function StartHerePrompt({
   heading = "まだメニューが登録されていません",
-  description = "CSV/Excelを取り込むか、手入力でメニューを登録して始めましょう。",
+  description = "Excelで管理している表があれば取り込みが早いですが、なくても手入力で1分で始められます。",
 }: {
   heading?: string;
   description?: string;
@@ -21,7 +21,7 @@ export function StartHerePrompt({
           href="/import"
           className="rounded-lg border border-black/15 px-6 py-4 text-base font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
         >
-          CSV/Excelを取り込む
+          Excelで管理してる表がある場合はこちら
         </Link>
         <Link
           href="/menus/new"

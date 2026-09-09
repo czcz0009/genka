@@ -46,7 +46,7 @@ export function RankingView({
           <select
             value={month}
             onChange={(e) => router.push(`?month=${e.target.value}`)}
-            className="rounded border border-black/15 bg-transparent px-2 py-1 dark:border-white/20"
+            className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
           >
             {monthOptions.map((m) => (
               <option key={m} value={m}>

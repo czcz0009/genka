@@ -114,6 +114,7 @@ export function ImportWizard({ storeId }: { storeId: string | null }) {
           <p className="mt-2 text-xs text-black/40 dark:text-white/40">
             列の並びは自由です。「メニュー名・食材名・分量・単位・仕入単価・売価」に近い列を自動で推測します。
           </p>
+          <SampleTableHelp />
         </div>
       )}
 
@@ -222,6 +223,52 @@ function StepIndicator({ step }: { step: Step }) {
   );
 }
 
+const SAMPLE_TABLE_HEADERS = ["メニュー名", "食材名", "分量", "単位", "仕入単価", "売価"];
+const SAMPLE_TABLE_ROWS = [
+  ["生姜焼き定食", "豚肉", "150", "g", "80", "900"],
+  ["生姜焼き定食", "キャベツ", "50", "g", "16", ""],
+  ["唐揚げ定食", "鶏もも肉", "180", "g", "85", "850"],
+];
+
+/**
+ * 「CSV」という言葉だけでは何のことか伝わらない、という指摘を受けて追加した
+ * 見本ヘルプ。実際にどんな表なら取り込めるかを、架空の値でそのまま見せる。
+ */
+function SampleTableHelp() {
+  return (
+    <details className="mt-2 w-full max-w-lg text-xs text-black/60 dark:text-white/60">
+      <summary className="cursor-pointer select-none text-center">どんな表が取り込めるか見本を見る</summary>
+      <div className="mt-3 overflow-x-auto rounded border border-black/10 dark:border-white/10">
+        <table className="w-full text-left text-xs">
+          <thead className="bg-black/5 dark:bg-white/10">
+            <tr>
+              {SAMPLE_TABLE_HEADERS.map((h) => (
+                <th key={h} className="whitespace-nowrap px-2 py-1.5 font-medium">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {SAMPLE_TABLE_ROWS.map((row, i) => (
+              <tr key={i} className="border-t border-black/5 dark:border-white/5">
+                {row.map((cell, j) => (
+                  <td key={j} className="whitespace-nowrap px-2 py-1.5">
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2">
+        1行が「1つのメニューで使う食材1つ分」です。同じメニューを複数の食材の行に分けて書いてください(上の例では「生姜焼き定食」が2行)。列の順番や見出しの言い回しは自由です。仕入単価・売価は後からでも入力できます。
+      </p>
+    </details>
+  );
+}
+
 function MappingTable({
   headers,
   mapping,
@@ -257,7 +304,7 @@ function MappingTable({
                 </td>
                 <td className="px-3 py-2">
                   <select
-                    className="rounded border border-black/15 bg-transparent px-2 py-1 dark:border-white/20"
+                    className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
                     value={value == null ? "" : String(value)}
                     onChange={(e) => {
                       const v = e.target.value;

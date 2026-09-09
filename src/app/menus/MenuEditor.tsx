@@ -1,23 +1,31 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { addIngredientToMenu, removeMenuIngredient, updateMenuSellingPrice } from "../actions.ts";
+import { calcCostRate } from "@/lib/costCalc";
+import { saveMenuWithIngredients, type SaveMenuLineInput } from "./actions.ts";
 
-interface Line {
-  id: string;
-  ingredientId: string;
-  ingredientName: string;
-  quantity: number;
-  unit: string;
-}
-
-interface IngredientOption {
+export interface IngredientOption {
   id: string;
   name: string;
   unit: string;
   currentPurchasePrice: number;
+}
+
+/** 画面内だけで完結するローカルな食材行。保存ボタンを押すまでサーバーには送らない。 */
+export interface LocalLine {
+  key: string;
+  quantity: string;
+  unit: string;
+  ingredientName: string;
+  unitPrice: number;
+  source: { type: "existing"; ingredientId: string } | { type: "new"; name: string; unit: string; purchasePrice: number };
+}
+
+let keySeq = 0;
+function nextKey(): string {
+  keySeq += 1;
+  return `line-${keySeq}`;
 }
 
 function formatYen(n: number): string {
@@ -34,181 +42,176 @@ function formatUnitPrice(n: number): string {
   return `¥${rounded}`;
 }
 
-export function MenuIngredientsEditor({
+export function MenuEditor({
   storeId,
   menuId,
-  sellingPrice,
-  totalCost,
-  costRate,
-  targetCostRate,
-  lines,
+  initialName,
+  initialSellingPrice,
+  initialLines,
   allIngredients,
+  targetCostRate,
 }: {
   storeId: string;
-  menuId: string;
-  sellingPrice: number | null;
-  totalCost: number;
-  costRate: number | null;
-  targetCostRate: number;
-  lines: Line[];
+  menuId?: string;
+  initialName: string;
+  initialSellingPrice: number | null;
+  initialLines: LocalLine[];
   allIngredients: IngredientOption[];
+  targetCostRate: number;
 }) {
   const router = useRouter();
+  const [name, setName] = useState(initialName);
+  const [sellingPrice, setSellingPrice] = useState(initialSellingPrice != null ? String(initialSellingPrice) : "");
+  const [lines, setLines] = useState<LocalLine[]>(initialLines);
+  const [saving, setSaving] = useState<"save" | "saveAndNew" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const totalCost = useMemo(
+    () => lines.reduce((sum, l) => sum + (Number(l.quantity) || 0) * l.unitPrice, 0),
+    [lines],
+  );
+  const sellingPriceNumber = sellingPrice.trim() ? Number(sellingPrice) : null;
+  const costRate = calcCostRate(totalCost, sellingPriceNumber);
   const overTarget = costRate != null && costRate > targetCostRate;
+
+  function addLine(line: LocalLine) {
+    setLines((prev) => [...prev, line]);
+  }
+
+  function removeLine(key: string) {
+    setLines((prev) => prev.filter((l) => l.key !== key));
+  }
+
+  async function handleSave(mode: "save" | "saveAndNew") {
+    setError(null);
+    if (!name.trim()) {
+      setError("メニュー名を入力してください");
+      return;
+    }
+    setSaving(mode);
+    const lineInputs: SaveMenuLineInput[] = lines.map((l) => ({
+      quantity: Number(l.quantity),
+      unit: l.unit,
+      existingIngredientId: l.source.type === "existing" ? l.source.ingredientId : undefined,
+      newIngredient:
+        l.source.type === "new"
+          ? { name: l.source.name, unit: l.source.unit, purchasePrice: l.source.purchasePrice }
+          : undefined,
+    }));
+    const result = await saveMenuWithIngredients({
+      storeId,
+      menuId,
+      name,
+      sellingPrice: sellingPriceNumber,
+      lines: lineInputs,
+    });
+    setSaving(null);
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+    if (mode === "saveAndNew") {
+      router.push("/menus/new");
+    } else {
+      router.push("/menus");
+    }
+    router.refresh();
+  }
 
   return (
     <div className="mt-6 flex flex-col gap-6">
-      <SellingPriceCard
-        menuId={menuId}
-        sellingPrice={sellingPrice}
-        totalCost={totalCost}
-        costRate={costRate}
-        targetCostRate={targetCostRate}
-        overTarget={overTarget}
-        onSaved={() => router.refresh()}
-      />
+      <label className="flex flex-col gap-2 text-base">
+        メニュー名
+        <input
+          required
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="例: 生姜焼き定食"
+          className="rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
+        />
+      </label>
+
+      <label className="flex flex-col gap-2 text-base">
+        売価(円)
+        <input
+          type="number"
+          min={0}
+          step="1"
+          inputMode="decimal"
+          value={sellingPrice}
+          onChange={(e) => setSellingPrice(e.target.value)}
+          placeholder="例: 900(あとで入力してもOK)"
+          className="rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
+        />
+      </label>
+
+      <div className="flex items-center gap-4 rounded-lg border border-black/10 p-4 text-sm dark:border-white/10">
+        <span className="text-black/60 dark:text-white/60">原価合計 {formatYen(totalCost)}</span>
+        <span
+          className={overTarget ? "font-medium text-red-600 dark:text-red-400" : "text-black/60 dark:text-white/60"}
+        >
+          原価率 {costRate != null ? `${costRate.toFixed(1)}%` : "-"}(目標{targetCostRate}%)
+        </span>
+      </div>
 
       {lines.length > 0 && (
         <ul className="flex flex-col gap-2">
-          {lines.map((line) => (
+          {lines.map((l) => (
             <li
-              key={line.id}
-              className="flex items-center justify-between rounded-lg border border-black/10 px-4 py-3 text-base dark:border-white/10"
+              key={l.key}
+              className="flex items-center justify-between rounded-lg border border-black/10 px-4 py-3 dark:border-white/10"
             >
-              <span>
-                {line.ingredientName}
-                <span className="ml-2 text-black/50 dark:text-white/50">
-                  {line.quantity}
-                  {line.unit}
-                </span>
+              <span className="text-base">
+                {l.ingredientName} {l.quantity || 0}
+                {l.unit}
               </span>
-              <RemoveButton menuIngredientId={line.id} onRemoved={() => router.refresh()} />
+              <button
+                onClick={() => removeLine(l.key)}
+                className="text-sm text-black/40 underline underline-offset-2 hover:text-black dark:text-white/40 dark:hover:text-white"
+              >
+                削除
+              </button>
             </li>
           ))}
         </ul>
       )}
 
-      <AddIngredientForm
-        storeId={storeId}
-        menuId={menuId}
-        allIngredients={allIngredients}
-        onAdded={() => router.refresh()}
-      />
+      <AddIngredientForm allIngredients={allIngredients} existingNames={new Set(lines.map((l) => l.ingredientName))} onAdd={addLine} />
 
-      {lines.length > 0 && (
-        <div className="flex flex-col gap-3 border-t border-black/10 pt-6 dark:border-white/10">
-          <p className="text-sm text-black/60 dark:text-white/60">
-            食材の追加が終わったら、次に進めます。
-          </p>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Link
-              href="/menus/new"
-              className="flex-1 rounded-lg border border-black/15 px-5 py-3 text-center text-base dark:border-white/20"
-            >
-              + 別のメニューを追加する
-            </Link>
-            <Link
-              href="/ranking"
-              className="flex-1 rounded-lg bg-black px-5 py-3 text-center text-base font-medium text-white dark:bg-white dark:text-black"
-            >
-              完了してランキングを見る
-            </Link>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
-function SellingPriceCard({
-  menuId,
-  sellingPrice,
-  totalCost,
-  costRate,
-  targetCostRate,
-  overTarget,
-  onSaved,
-}: {
-  menuId: string;
-  sellingPrice: number | null;
-  totalCost: number;
-  costRate: number | null;
-  targetCostRate: number;
-  overTarget: boolean;
-  onSaved: () => void;
-}) {
-  const [value, setValue] = useState(sellingPrice != null ? String(sellingPrice) : "");
-  const [saving, setSaving] = useState(false);
-
-  async function handleSave() {
-    setSaving(true);
-    await updateMenuSellingPrice({ menuId, sellingPrice: value.trim() ? Number(value) : null });
-    setSaving(false);
-    onSaved();
-  }
-
-  return (
-    <div className="rounded-lg border border-black/10 p-5 dark:border-white/10">
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-2 text-base">
-          売価(円)
-          <input
-            type="number"
-            min={0}
-            inputMode="numeric"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder="例: 900"
-            className="w-32 rounded-lg border border-black/15 bg-transparent px-3 py-2 text-base dark:border-white/20"
-          />
-        </label>
+      <div className="flex flex-col gap-3 sm:flex-row">
         <button
-          onClick={handleSave}
-          disabled={saving}
-          className="rounded-lg border border-black/15 px-4 py-2 text-sm disabled:opacity-40 dark:border-white/20"
+          onClick={() => handleSave("save")}
+          disabled={saving != null}
+          className="flex-1 rounded-lg bg-black px-5 py-4 text-base font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black"
         >
-          {saving ? "保存中…" : "売価を保存"}
+          {saving === "save" ? "保存中…" : "保存する"}
+        </button>
+        <button
+          onClick={() => handleSave("saveAndNew")}
+          disabled={saving != null}
+          className="flex-1 rounded-lg border border-black/15 px-5 py-4 text-base font-medium disabled:opacity-40 dark:border-white/20"
+        >
+          {saving === "saveAndNew" ? "保存中…" : "保存して別のメニューを追加する"}
         </button>
       </div>
-
-      <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
-        <span className="text-black/60 dark:text-white/60">原価合計 {formatYen(totalCost)}</span>
-        <span className={overTarget ? "font-semibold text-red-600 dark:text-red-400" : "text-black/60 dark:text-white/60"}>
-          原価率 {costRate != null ? `${costRate.toFixed(1)}%` : "売価未入力"}
-          <span className="ml-1 text-black/40 dark:text-white/40">(目標{targetCostRate}%)</span>
-        </span>
-      </div>
     </div>
   );
 }
 
-function RemoveButton({ menuIngredientId, onRemoved }: { menuIngredientId: string; onRemoved: () => void }) {
-  const [removing, setRemoving] = useState(false);
-  return (
-    <button
-      onClick={async () => {
-        setRemoving(true);
-        await removeMenuIngredient({ menuIngredientId });
-        onRemoved();
-      }}
-      disabled={removing}
-      className="text-sm text-black/40 underline underline-offset-2 hover:text-red-600 disabled:opacity-40 dark:text-white/40 dark:hover:text-red-400"
-    >
-      削除
-    </button>
-  );
-}
-
+/**
+ * 食材の追加フォーム。押した瞬間にローカルのlinesへ追加するだけで、
+ * サーバーへは一切問い合わせない(即座に反映される)。
+ */
 function AddIngredientForm({
-  storeId,
-  menuId,
   allIngredients,
-  onAdded,
+  existingNames,
+  onAdd,
 }: {
-  storeId: string;
-  menuId: string;
   allIngredients: IngredientOption[];
-  onAdded: () => void;
+  existingNames: Set<string>;
+  onAdd: (line: LocalLine) => void;
 }) {
   const [mode, setMode] = useState<"existing" | "new">(allIngredients.length > 0 ? "existing" : "new");
   const [existingId, setExistingId] = useState<string>(allIngredients[0]?.id ?? "");
@@ -216,45 +219,63 @@ function AddIngredientForm({
   const [newUnit, setNewUnit] = useState("g");
   const [newPrice, setNewPrice] = useState("");
   const [quantity, setQuantity] = useState("");
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const pickedExisting = allIngredients.find((i) => i.id === existingId);
-  // 分量の単位は「使う食材」で自動的に決まる(既存食材ならその単位、新規食材なら
-  // 今入力している単位)。以前は分量用にも別の単位入力欄があり、
-  // 「単位が2つあってどっちを触ればいいか分からない」という指摘を受けて統合した。
   const effectiveUnit = mode === "existing" ? (pickedExisting?.unit ?? "") : newUnit;
 
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault();
+  function handleAdd() {
     setError(null);
-    if (mode === "existing" && !existingId) {
-      setError("食材を選んでください");
+    const qty = Number(quantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      setError("分量は0より大きい数値で入力してください");
       return;
     }
-    setSaving(true);
-    const result = await addIngredientToMenu({
-      storeId,
-      menuId,
-      quantity: Number(quantity),
-      unit: effectiveUnit,
-      existingIngredientId: mode === "existing" ? existingId : undefined,
-      newIngredient:
-        mode === "new" ? { name: newName, unit: newUnit, purchasePrice: Number(newPrice) } : undefined,
-    });
-    setSaving(false);
-    if (!result.success) {
-      setError(result.error);
-      return;
+
+    if (mode === "existing") {
+      if (!pickedExisting) {
+        setError("食材を選んでください");
+        return;
+      }
+      onAdd({
+        key: nextKey(),
+        quantity,
+        unit: pickedExisting.unit,
+        ingredientName: pickedExisting.name,
+        unitPrice: pickedExisting.currentPurchasePrice,
+        source: { type: "existing", ingredientId: pickedExisting.id },
+      });
+    } else {
+      const name = newName.trim();
+      const price = Number(newPrice);
+      if (!name) {
+        setError("食材名を入力してください");
+        return;
+      }
+      if (!newUnit.trim()) {
+        setError("単位を入力してください");
+        return;
+      }
+      if (!Number.isFinite(price) || price < 0) {
+        setError("仕入単価は0以上の数値で入力してください");
+        return;
+      }
+      onAdd({
+        key: nextKey(),
+        quantity,
+        unit: newUnit,
+        ingredientName: name,
+        unitPrice: price,
+        source: { type: "new", name, unit: newUnit, purchasePrice: price },
+      });
+      setNewName("");
+      setNewPrice("");
     }
-    setNewName("");
-    setNewPrice("");
     setQuantity("");
-    onAdded();
   }
 
   return (
-    <form onSubmit={handleAdd} className="flex flex-col gap-5 rounded-lg border border-black/10 p-5 dark:border-white/10">
+    <div className="flex flex-col gap-5 rounded-lg border border-black/10 p-5 dark:border-white/10">
       <p className="text-base font-medium">食材を追加</p>
 
       {allIngredients.length > 0 && (
@@ -286,6 +307,7 @@ function AddIngredientForm({
             allIngredients={allIngredients}
             selectedId={existingId}
             onSelect={(id) => setExistingId(id)}
+            alreadyAddedNames={existingNames}
           />
         </div>
       ) : (
@@ -294,7 +316,6 @@ function AddIngredientForm({
           <label className="flex flex-col gap-2 text-base">
             食材名
             <input
-              required
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="例: 豚肉"
@@ -308,7 +329,6 @@ function AddIngredientForm({
                 type="number"
                 min={0}
                 step="0.01"
-                required
                 inputMode="decimal"
                 value={newPrice}
                 onChange={(e) => setNewPrice(e.target.value)}
@@ -319,7 +339,6 @@ function AddIngredientForm({
             <label className="flex w-28 flex-col gap-2 text-base">
               単位
               <input
-                required
                 value={newUnit}
                 onChange={(e) => setNewUnit(e.target.value)}
                 placeholder="g"
@@ -340,7 +359,6 @@ function AddIngredientForm({
             type="number"
             min={0}
             step="0.01"
-            required
             inputMode="decimal"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
@@ -354,13 +372,13 @@ function AddIngredientForm({
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
       <button
-        type="submit"
-        disabled={saving}
-        className="rounded-lg bg-black px-5 py-4 text-base font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black"
+        type="button"
+        onClick={handleAdd}
+        className="rounded-lg bg-black px-5 py-4 text-base font-medium text-white dark:bg-white dark:text-black"
       >
-        {saving ? "追加中…" : "この食材を追加する"}
+        この食材を追加する
       </button>
-    </form>
+    </div>
   );
 }
 
@@ -373,10 +391,12 @@ function ExistingIngredientPicker({
   allIngredients,
   selectedId,
   onSelect,
+  alreadyAddedNames,
 }: {
   allIngredients: IngredientOption[];
   selectedId: string;
   onSelect: (id: string) => void;
+  alreadyAddedNames: Set<string>;
 }) {
   const [query, setQuery] = useState("");
   const filtered = query.trim()
@@ -408,7 +428,14 @@ function ExistingIngredientPicker({
                   : "hover:bg-black/5 dark:hover:bg-white/10"
               }`}
             >
-              <span>{i.name}</span>
+              <span>
+                {i.name}
+                {alreadyAddedNames.has(i.name) && (
+                  <span className={`ml-2 text-xs ${selected ? "opacity-70" : "text-black/40 dark:text-white/40"}`}>
+                    (追加済み)
+                  </span>
+                )}
+              </span>
               <span className={`text-sm ${selected ? "opacity-70" : "text-black/40 dark:text-white/40"}`}>
                 {i.unit}あたり{formatUnitPrice(i.currentPurchasePrice)}
               </span>

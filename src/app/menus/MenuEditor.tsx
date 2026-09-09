@@ -402,10 +402,12 @@ function ExistingIngredientPicker({
   // メニュー名や売価など、この一覧と無関係な入力欄を触るたびに親(MenuEditor)が
   // 再レンダリングされ、そのたびにこの絞り込みが再計算されるのは無駄なため
   // useMemoで、query・allIngredientsが実際に変わった時だけ計算し直すようにする。
-  const filtered = useMemo(
-    () => (query.trim() ? allIngredients.filter((i) => i.name.includes(query.trim())) : allIngredients),
-    [query, allIngredients],
-  );
+  const filtered = useMemo(() => {
+    // 全角/半角・大文字小文字のゆれを吸収して絞り込む
+    const normalize = (s: string) => s.normalize("NFKC").toLowerCase();
+    const trimmedQuery = normalize(query.trim());
+    return trimmedQuery ? allIngredients.filter((i) => normalize(i.name).includes(trimmedQuery)) : allIngredients;
+  }, [query, allIngredients]);
   const selectedIngredient = useMemo(
     () => allIngredients.find((i) => i.id === selectedId),
     [allIngredients, selectedId],

@@ -6,6 +6,7 @@ import { suggestColumnMapping } from "@/lib/mapping/columnMapper";
 import { SALES_FIELD_DEFS, type SalesFieldId } from "@/lib/salesImport/salesFields";
 import { applySalesMapping, type SalesFinalMapping } from "@/lib/salesImport/applySalesMapping";
 import { formatMonthLabel } from "@/lib/period/month";
+import { SearchablePicker, type PickerOption } from "@/components/SearchablePicker.tsx";
 import { saveSalesImportPlan } from "./actions.ts";
 
 const LEVEL_STYLE: Record<string, string> = {
@@ -95,56 +96,44 @@ export function SalesImportPanel({
       {headers.length > 0 && (
         <>
           <p className="text-xs text-black/50 dark:text-white/50">{fileName} ・ {rows.length}行</p>
-          <div className="overflow-x-auto rounded border border-black/10 dark:border-white/10">
-            <table className="w-full text-sm">
-              <thead className="bg-black/5 text-left dark:bg-white/5">
-                <tr>
-                  <th className="px-3 py-2 font-medium">項目</th>
-                  <th className="px-3 py-2 font-medium">対応する列</th>
-                  <th className="px-3 py-2 font-medium" title="表の見出しの言葉から、どの列が対応するかを自動で判定した結果です">
-                    自動判定の結果
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {SALES_FIELD_DEFS.map((field) => {
-                  const s = suggestions.find((x) => x.fieldId === field.id);
-                  const value = mapping[field.id as SalesFieldId];
-                  return (
-                    <tr key={field.id} className="border-t border-black/5 dark:border-white/5">
-                      <td className="px-3 py-2">
-                        {field.label}
-                        {field.required && <span className="ml-1 text-red-500">*</span>}
-                      </td>
-                      <td className="px-3 py-2">
-                        <select
-                          value={value == null ? "" : String(value)}
-                          onChange={(e) =>
-                            setMapping({
-                              ...mapping,
-                              [field.id]: e.target.value === "" ? null : Number(e.target.value),
-                            })
-                          }
-                          className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
-                        >
-                          <option value="">(選択しない)</option>
-                          {headers.map((h, idx) => (
-                            <option key={idx} value={idx}>
-                              {h}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className={`rounded-full px-2 py-0.5 text-xs ${LEVEL_STYLE[s?.level ?? "none"]}`}>
-                          {LEVEL_LABEL[s?.level ?? "none"]}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          {/* ネイティブの<select>は見づらいという指摘を受け、検索絞り込みつきの
+              一覧(SearchablePicker)に統一。テーブルではなく項目ごとのカードにする。 */}
+          <div className="flex flex-col gap-4">
+            {SALES_FIELD_DEFS.map((field) => {
+              const s = suggestions.find((x) => x.fieldId === field.id);
+              const value = mapping[field.id as SalesFieldId];
+              const columnOptions: PickerOption[] = [
+                { value: "", label: "(選択しない)" },
+                ...headers.map((h, idx) => ({ value: String(idx), label: h })),
+              ];
+              return (
+                <div key={field.id} className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-base font-medium">
+                      {field.label}
+                      {field.required && <span className="ml-1 text-red-500">*</span>}
+                    </p>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs ${LEVEL_STYLE[s?.level ?? "none"]}`}
+                      title="表の見出しの言葉から、どの列が対応するかを自動で判定した結果です"
+                    >
+                      {LEVEL_LABEL[s?.level ?? "none"]}
+                    </span>
+                  </div>
+                  <div className="mt-3">
+                    <SearchablePicker
+                      options={columnOptions}
+                      value={value == null ? "" : String(value)}
+                      onChange={(v) =>
+                        setMapping({ ...mapping, [field.id]: v === "" ? null : Number(v) })
+                      }
+                      searchPlaceholder="列名で絞り込む"
+                      selectedLabelPrefix="対応する列"
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           <p className="text-sm">
@@ -156,7 +145,7 @@ export function SalesImportPanel({
           </p>
           {requiredMissing.length > 0 && (
             <p className="text-sm text-amber-700 dark:text-amber-400">
-              必須項目が未設定です: {requiredMissing.map((f) => f.label).join("・")}
+              必須項目が未設定です: {requiredMissing.map((f) => f.label).join("・")}。上のカードで対応する列を選んでください。
             </p>
           )}
 

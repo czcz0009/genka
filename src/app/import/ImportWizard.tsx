@@ -11,6 +11,7 @@ import {
   type MenuNameFill,
 } from "@/lib/mapping/applyMapping";
 import { ConfirmStep } from "./ConfirmStep.tsx";
+import { SearchablePicker, type PickerOption } from "@/components/SearchablePicker.tsx";
 
 type Step = "upload" | "map" | "confirm";
 
@@ -281,59 +282,46 @@ function MappingTable({
   suggestions: ReturnType<typeof suggestColumnMapping>;
 }) {
   const suggestionByField = new Map(suggestions.map((s) => [s.fieldId, s]));
+  // ネイティブの<select>は開いたポップアップの見た目を制御できず見づらいという
+  // 指摘を受けて、検索絞り込みつきの一覧(SearchablePicker)に統一した。
+  // 1行1列のテーブルにこの一覧を詰め込むと縦に間延びするため、表形式ではなく
+  // 項目ごとのカードに組み直している。
+  const columnOptions: PickerOption[] = [
+    { value: "", label: "(選択しない)" },
+    ...headers.map((h, idx) => ({ value: String(idx), label: h })),
+  ];
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-black/10 dark:border-white/10">
-      <table className="w-full text-sm">
-        <thead className="bg-black/5 text-left dark:bg-white/5">
-          <tr>
-            <th className="px-3 py-2 font-medium">取り込み項目</th>
-            <th className="px-3 py-2 font-medium">対応する列</th>
-            <th className="px-3 py-2 font-medium" title="表の見出しの言葉から、どの列が対応するかを自動で判定した結果です">
-              自動判定の結果
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {FIELD_DEFS.map((field) => {
-            const s = suggestionByField.get(field.id);
-            const value = mapping[field.id];
-            return (
-              <tr key={field.id} className="border-t border-black/5 dark:border-white/5">
-                <td className="px-3 py-2">
-                  {field.label}
-                  {field.required && <span className="ml-1 text-red-500">*</span>}
-                </td>
-                <td className="px-3 py-2">
-                  <select
-                    className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
-                    value={value == null ? "" : String(value)}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setMapping({
-                        ...mapping,
-                        [field.id]: v === "" ? null : Number(v),
-                      });
-                    }}
-                  >
-                    <option value="">(選択しない)</option>
-                    {headers.map((h, idx) => (
-                      <option key={idx} value={idx}>
-                        {h}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td className="px-3 py-2">
-                  <span className={`rounded-full px-2 py-0.5 text-xs ${LEVEL_STYLE[s?.level ?? "none"]}`}>
-                    {LEVEL_LABEL[s?.level ?? "none"]}
-                  </span>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <div className="flex flex-col gap-4">
+      {FIELD_DEFS.map((field) => {
+        const s = suggestionByField.get(field.id);
+        const value = mapping[field.id];
+        return (
+          <div key={field.id} className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-base font-medium">
+                {field.label}
+                {field.required && <span className="ml-1 text-red-500">*</span>}
+              </p>
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs ${LEVEL_STYLE[s?.level ?? "none"]}`}
+                title="表の見出しの言葉から、どの列が対応するかを自動で判定した結果です"
+              >
+                {LEVEL_LABEL[s?.level ?? "none"]}
+              </span>
+            </div>
+            <div className="mt-3">
+              <SearchablePicker
+                options={columnOptions}
+                value={value == null ? "" : String(value)}
+                onChange={(v) => setMapping({ ...mapping, [field.id]: v === "" ? null : Number(v) })}
+                searchPlaceholder="列名で絞り込む"
+                selectedLabelPrefix="対応する列"
+              />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -162,9 +162,16 @@ export async function computeStoreAlerts(
     livestockAlerts = result.alerts;
   }
 
+  // 食材名から豚/牛/鶏のいずれかだと判定できたものだけを「畜産物の規格設定が
+  // 必要な食材」として扱う。以前はここでフィルタしておらず、野菜など畜産物と
+  // 無関係な食材にまで規格選択UIが表示される不具合があった。
+  // suggestChikusanItems は既に同じ畜種の規格だけに絞り込んだ結果を返す
+  // (例: 牛は最大5規格)ため、ここでさらに件数を絞る(.slice)ことはしない
+  // — 以前は上位3件に切り詰めており、牛肉の食材で選べる規格が一部隠れていた。
   const unlinkedIngredients = alertIngredients
     .filter((i) => !linkByIngredientId.has(i.id))
-    .map((i) => ({ id: i.id, name: i.name, suggestions: suggestChikusanItems(i.name).slice(0, 3) }));
+    .map((i) => ({ id: i.id, name: i.name, suggestions: suggestChikusanItems(i.name) }))
+    .filter((i) => i.suggestions.length > 0);
   const linkedIngredients = alertIngredients
     .filter((i) => linkByIngredientId.has(i.id))
     .map((i) => ({

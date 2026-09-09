@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { MenuCostSummary } from "@/lib/types";
 import type { RankingMenu } from "@/lib/menuRanking";
 import { formatMonthLabel } from "@/lib/period/month";
+import { SearchablePicker } from "@/components/SearchablePicker.tsx";
 import { saveManualSales } from "./actions.ts";
 import { SalesImportPanel } from "./SalesImportPanel.tsx";
 
@@ -29,6 +30,7 @@ export function RankingView({
   const router = useRouter();
   const [showEntry, setShowEntry] = useState(false);
   const [entryTab, setEntryTab] = useState<"manual" | "csv">("manual");
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
 
   const monthOptions = useMemo(() => {
     const set = new Set(availableMonths);
@@ -41,27 +43,37 @@ export function RankingView({
   return (
     <div className="mt-8 flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <label className="flex items-center gap-2 text-sm">
-          対象期間:
-          <select
-            value={month}
-            onChange={(e) => router.push(`?month=${e.target.value}`)}
-            className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
-          >
-            {monthOptions.map((m) => (
-              <option key={m} value={m}>
-                {formatMonthLabel(m)}
-              </option>
-            ))}
-          </select>
-        </label>
+        {/* ネイティブの<select>は見づらいという指摘を受け、他画面と同じ検索
+            絞り込みつきの一覧(SearchablePicker)に統一。常時表示すると場所を
+            取るため、ボタンを押した時だけ下に展開する。 */}
+        <button
+          onClick={() => setShowMonthPicker((v) => !v)}
+          className="rounded-lg border border-black/15 px-4 py-2.5 text-sm dark:border-white/20"
+        >
+          対象期間: {formatMonthLabel(month)}
+        </button>
         <button
           onClick={() => setShowEntry((v) => !v)}
-          className="rounded-lg border border-black/15 px-4 py-2 text-sm dark:border-white/20"
+          className="rounded-lg border border-black/15 px-4 py-2.5 text-sm dark:border-white/20"
         >
           {showEntry ? "閉じる" : "販売数量を入力/取り込む"}
         </button>
       </div>
+
+      {showMonthPicker && (
+        <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+          <SearchablePicker
+            options={monthOptions.map((m) => ({ value: m, label: formatMonthLabel(m) }))}
+            value={month}
+            onChange={(v) => {
+              setShowMonthPicker(false);
+              router.push(`?month=${v}`);
+            }}
+            searchPlaceholder="月で絞り込む"
+            selectedLabelPrefix="対象期間"
+          />
+        </div>
+      )}
 
       {showEntry && (
         <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">

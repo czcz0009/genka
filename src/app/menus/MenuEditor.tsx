@@ -402,6 +402,7 @@ function ExistingIngredientPicker({
   const filtered = query.trim()
     ? allIngredients.filter((i) => i.name.includes(query.trim()))
     : allIngredients;
+  const selectedIngredient = allIngredients.find((i) => i.id === selectedId);
 
   return (
     <div className="flex flex-col gap-2">
@@ -443,6 +444,28 @@ function ExistingIngredientPicker({
           );
         })}
       </div>
+
+      {/*
+        一覧の中でハイライトされているだけでは「本当に選ばれているか分からない」
+        という指摘を受けたため、選んだ食材名をテキストボックスにもはっきり
+        表示する(読み取り専用。編集したい場合は上の絞り込み欄や一覧から選び直す)。
+      */}
+      <label className="flex flex-col gap-1 text-sm text-black/60 dark:text-white/60">
+        選択中の食材
+        <input
+          readOnly
+          value={
+            selectedIngredient
+              ? `${selectedIngredient.name}(${selectedIngredient.unit}あたり${formatUnitPrice(selectedIngredient.currentPurchasePrice)})`
+              : "(未選択)"
+          }
+          className={`rounded-lg border px-4 py-3 text-base ${
+            selectedIngredient
+              ? "border-black/15 bg-black/[0.03] font-medium text-black dark:border-white/20 dark:bg-white/[0.04] dark:text-white"
+              : "border-black/15 bg-transparent text-black/40 dark:border-white/20 dark:text-white/40"
+          }`}
+        />
+      </label>
     </div>
   );
 }

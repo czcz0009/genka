@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getOrCreateStore } from "@/lib/store";
 import { ImportWizard } from "./ImportWizard.tsx";
@@ -18,9 +18,7 @@ export default async function ImportPage() {
 
   if (isSupabaseConfigured()) {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = (await supabase?.auth.getUser()) ?? { data: { user: null } };
+    const user = await getAuthUser(supabase);
 
     if (!user) {
       redirect("/login");

@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getOrCreateStore } from "@/lib/store";
 import { Sidebar } from "@/components/Sidebar.tsx";
@@ -18,9 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   if (isSupabaseConfigured()) {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = (await supabase?.auth.getUser()) ?? { data: { user: null } };
+    const user = await getAuthUser(supabase);
 
     if (user && supabase) {
       const store = await getOrCreateStore(supabase, user.id);

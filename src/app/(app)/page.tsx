@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createClient, getAuthUser } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { getOrCreateStore } from "@/lib/store";
+import { getSessionStore } from "@/lib/store";
 import {
   buildFastDashboardSummary,
   getCurrentFlRate,
@@ -14,7 +14,7 @@ import { FL_BENCHMARK_PERCENT } from "@/lib/flRatio";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 
-/** getOrCreateStore が新規作成時に付ける仮の店舗名。まだ店名を設定していない目印として使う。 */
+/** getSessionStore(RPC) が新規作成時に付ける仮の店舗名。まだ店名を設定していない目印として使う。 */
 const DEFAULT_STORE_NAME = "マイ店舗";
 
 type Status = "ok" | "warn" | "danger";
@@ -65,38 +65,46 @@ export default async function Home() {
   }
 
   const supabase = await createClient();
-  const user = await getAuthUser(supabase);
 
-  if (!user || !supabase) {
-    return (
-      <main className="mx-auto flex max-w-2xl flex-1 flex-col justify-center gap-6 px-6 py-16">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: "var(--font-noto-sans-jp)", color: "var(--foreground)" }}>
-            原価計算・値付けツール
-          </h1>
-          <p className="mt-2 text-sm" style={{ color: "var(--muted-foreground)" }}>
-            個人飲食店向けの原価計算・メニュー値付けツール。メニューの原価率をすぐに見える化できます。
-          </p>
-        </div>
-        <Link
-          href="/login"
-          className="inline-flex w-fit items-center gap-2 rounded px-6 py-4 text-base font-bold transition-colors"
-          style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
-        >
-          ログインして始める
-        </Link>
-      </main>
-    );
+  const notLoggedInView = (
+    <main className="mx-auto flex max-w-2xl flex-1 flex-col justify-center gap-6 px-6 py-16">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: "var(--font-noto-sans-jp)", color: "var(--foreground)" }}>
+          原価計算・値付けツール
+        </h1>
+        <p className="mt-2 text-sm" style={{ color: "var(--muted-foreground)" }}>
+          個人飲食店向けの原価計算・メニュー値付けツール。メニューの原価率をすぐに見える化できます。
+        </p>
+      </div>
+      <Link
+        href="/login"
+        className="inline-flex w-fit items-center gap-2 rounded px-6 py-4 text-base font-bold transition-colors"
+        style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
+      >
+        ログインして始める
+      </Link>
+    </main>
+  );
+
+  if (!supabase) {
+    return notLoggedInView;
   }
 
-  const store = await getOrCreateStore(supabase, user.id);
-  if (!store) {
+  const session = await getSessionStore(supabase);
+
+  if (session.status === "unauthenticated") {
+    return notLoggedInView;
+  }
+
+  if (session.status === "error") {
     return (
       <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-16">
         <StoreLoadError />
       </main>
     );
   }
+
+  const { store } = session;
 
   // 「登録メニュー数・平均原価率・値上げ検討数」だけをここで待つ(速い)。
   // 「今月のFL比率」「仕入れ値アラート件数」は市場価格データ等の追加取得が必要で

@@ -12,9 +12,10 @@ import { isSupabaseConfigured } from "./env.ts";
  *
  * cache()でラップし、同一リクエスト内(例: (app)/layout.tsxと各ページの両方)
  * から呼ばれても同じクライアントインスタンスを再利用するようにしている。
- * これにより、getOrCreateStore側のcache()が「同じsupabaseインスタンス+同じuserId」
- * という条件で正しく重複排除できる(参照が毎回別インスタンスだとcache()が
- * 効かず、店舗取得のupsert+selectがナビゲーションのたびに二重実行されてしまう)。
+ * これにより、getSessionStore側のcache()(src/lib/store.ts)が「同じsupabase
+ * インスタンス」という条件で正しく重複排除できる(参照が毎回別インスタンスだと
+ * cache()が効かず、認証確認+店舗取得のRPCがナビゲーションのたびに二重実行
+ * されてしまう)。
  */
 export const createClient = cache(async function createClient() {
   if (!isSupabaseConfigured()) return null;
@@ -47,11 +48,12 @@ export const createClient = cache(async function createClient() {
 /**
  * ログイン中のユーザーを取得する。
  *
- * これもcache()でラップしている理由はcreateClientと同じ:
- * (app)/layout.tsx(サイドバー表示のため認証確認が必要)と各ページの両方が
- * 同じリクエスト内でユーザー確認を行うようになり、supabase.auth.getUser()
- * (Supabase側にJWTの有効性を都度問い合わせる、ネットワークを伴う処理)が
- * ナビゲーションのたびに二重に走ってタブ切り替えが遅くなっていたため。
+ * ほとんどの画面は「ログイン確認+店舗取得」を1回のRPCにまとめた
+ * src/lib/store.ts の getSessionStore() を使うため、この関数は
+ * メールアドレス表示が必要な /import 画面などでのみ使う想定。
+ * cache()でラップし、同一リクエスト内での重複呼び出しを避ける
+ * (supabase.auth.getUser() はSupabase側にJWTの有効性を都度問い合わせる、
+ * ネットワークを伴う処理のため)。
  */
 export const getAuthUser = cache(async function getAuthUser(
   supabase: SupabaseClient | null,

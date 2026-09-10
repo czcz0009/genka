@@ -1,6 +1,6 @@
-import { createClient, getAuthUser } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { getOrCreateStore } from "@/lib/store";
+import { getSessionStore } from "@/lib/store";
 import { Sidebar } from "@/components/Sidebar.tsx";
 
 /**
@@ -18,12 +18,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   if (isSupabaseConfigured()) {
     const supabase = await createClient();
-    const user = await getAuthUser(supabase);
-
-    if (user && supabase) {
-      const store = await getOrCreateStore(supabase, user.id);
-      if (store) storeName = store.name;
-    }
+    const session = await getSessionStore(supabase);
+    if (session.status === "ok") storeName = session.store.name;
   }
 
   return (

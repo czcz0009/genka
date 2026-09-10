@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { createClient, getAuthUser } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { getOrCreateStore } from "@/lib/store";
+import { getSessionStore } from "@/lib/store";
 import { selectApplicableFixedCost, type FixedCostRow } from "@/lib/flRatio";
 import { monthToPeriod, currentMonthString, formatMonthLabel } from "@/lib/period/month";
 import { SettingsForm } from "./SettingsForm.tsx";
@@ -26,17 +26,17 @@ export default async function SettingsPage() {
   }
 
   const supabase = await createClient();
-  const user = await getAuthUser(supabase);
-  if (!user || !supabase) redirect("/login");
-
-  const store = await getOrCreateStore(supabase, user.id);
-  if (!store) {
+  if (!supabase) redirect("/login");
+  const session = await getSessionStore(supabase);
+  if (session.status === "unauthenticated") redirect("/login");
+  if (session.status === "error") {
     return (
       <div className="max-w-xl space-y-6 p-6 md:p-8">
         <StoreLoadError />
       </div>
     );
   }
+  const { store } = session;
 
   const month = currentMonthString();
   const period = monthToPeriod(month);

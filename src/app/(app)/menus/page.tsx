@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient, getAuthUser } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { getOrCreateStore } from "@/lib/store";
+import { getSessionStore } from "@/lib/store";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient } from "@/lib/menuRanking";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
@@ -43,17 +43,17 @@ export default async function MenusPage() {
   }
 
   const supabase = await createClient();
-  const user = await getAuthUser(supabase);
-  if (!user || !supabase) redirect("/login");
-
-  const store = await getOrCreateStore(supabase, user.id);
-  if (!store) {
+  if (!supabase) redirect("/login");
+  const session = await getSessionStore(supabase);
+  if (session.status === "unauthenticated") redirect("/login");
+  if (session.status === "error") {
     return (
       <div className="max-w-4xl space-y-6 p-6 md:p-8">
         <StoreLoadError />
       </div>
     );
   }
+  const { store } = session;
 
   // menu_ingredients・ingredientsはmenusの結果に依存せず(store_idだけで絞り込める)、
   // 以前は「まずmenusだけ取得→空でなければ残り2つをPromise.all」と直列に待っていた。

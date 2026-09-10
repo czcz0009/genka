@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
-import { createClient, getAuthUser } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { getOrCreateStore } from "@/lib/store";
+import { getSessionStore } from "@/lib/store";
 import { MenuEditor, type LocalLine } from "../MenuEditor.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
@@ -15,17 +15,17 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
   if (!isSupabaseConfigured()) redirect("/");
 
   const supabase = await createClient();
-  const user = await getAuthUser(supabase);
-  if (!user || !supabase) redirect("/login");
-
-  const store = await getOrCreateStore(supabase, user.id);
-  if (!store) {
+  if (!supabase) redirect("/login");
+  const session = await getSessionStore(supabase);
+  if (session.status === "unauthenticated") redirect("/login");
+  if (session.status === "error") {
     return (
       <div className="max-w-2xl p-6 md:p-8">
         <StoreLoadError />
       </div>
     );
   }
+  const { store } = session;
 
   const { id: menuId } = await params;
 

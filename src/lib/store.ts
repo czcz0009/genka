@@ -2,42 +2,56 @@ import "server-only";
 import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+export interface StoreInfo {
+  id: string;
+  name: string;
+  defaultTargetCostRate: number;
+}
+
+export type SessionStoreResult =
+  | { status: "unauthenticated" }
+  | { status: "error" }
+  | { status: "ok"; store: StoreInfo };
+
 /**
- * ログインユーザーの店舗を取得し、なければ作成する(MVPは1ユーザー1店舗)。
- * 呼び出し側で認証済みであることを確認してから呼ぶこと。
+ * ログイン確認 + 店舗の取得(なければ作成)を1回のDB往復(RPC)にまとめたもの。
  *
- * 「select→なければinsert」という素朴な実装は、同一ユーザーからのほぼ同時リクエスト
- * (ページの初回レンダリングとNext.jsのプリフェッチが重なる等)でTOCTOUレース条件が
- * 発生し、実際に同一ユーザーに対して複数のstore行が作られる不具合を実機テストで
- * 確認した。そのため upsert(onConflict: owner_id, ignoreDuplicates) + 再取得という
- * レース安全な形にしている。これは `stores.owner_id` の UNIQUE制約
- * (0004_stores_owner_unique.sql)を前提にしている。
+ * 実機計測(本番Vercel東京リージョン)で判明した経緯:
+ * 以前は (1) supabase.auth.getUser()(JWT検証、実測150〜400ms)→
+ * (2) upsert(なければ作成、実測150〜500ms)→ (3) select(再取得、実測150〜300ms)
+ * という3回の直列ネットワーク往復を毎回の画面表示のたびに行っており、
+ * 合計400〜1100msかかっていた。認証確認(user.id)は「getOrCreateStoreに渡す」
+ * 以外の用途がほぼ無かったため、認証確認自体をこのRPC内(auth.uid())に統合し、
+ * 1回の往復で済ませる。事前に supabase/migrations/0007_get_or_create_store_rpc.sql
+ * の適用が必要(SupabaseダッシュボードのSQL Editorで実行)。
  *
- * cache()でラップしているのは、サイドバー導入(デザイン刷新)以降、
- * (app)/layout.tsx(サイドバーの店舗名表示用)と各ページの両方がこの関数を
- * 同じリクエスト内で呼ぶようになり、ナビゲーションのたびにupsert+selectが
- * 二重に走ってタブ切り替えが遅くなっていたため。同一リクエスト内で
- * supabase(createClientも合わせてcache化)・userIdが同じ呼び出しは
- * 1回の実行結果を共有する。
+ * 「select→なければinsert」ではなくupsert(onConflict: owner_id, ignoreDuplicates)を
+ * RPC内でも使っているのは、以前の実装からの教訓(同一ユーザーからのほぼ同時
+ * リクエストでTOCTOUレース条件が発生し複数store行が作られた不具合)を踏襲するため。
+ * これは `stores.owner_id` の UNIQUE制約(0004_stores_owner_unique.sql)を前提にしている。
+ *
+ * 未ログイン(auth.uid()がnull)の場合、RPC側が明示的にエラー(SQLSTATE 28000)を
+ * 送出するため、「未ログイン」と「その他の失敗(StoreLoadError表示)」を区別できる。
+ *
+ * cache()でラップし、(app)/layout.tsxと各ページの両方が同一リクエスト内で
+ * 呼んでも実際のRPC呼び出しは1回で済むようにしている。
  */
-export const getOrCreateStore = cache(async function getOrCreateStore(
-  supabase: SupabaseClient,
-  userId: string,
-): Promise<{ id: string; name: string; defaultTargetCostRate: number } | null> {
-  const { error: upsertError } = await supabase
-    .from("stores")
-    .upsert(
-      { owner_id: userId, name: "マイ店舗", default_target_cost_rate: 30 },
-      { onConflict: "owner_id", ignoreDuplicates: true },
-    );
-  if (upsertError) return null;
+export const getSessionStore = cache(async function getSessionStore(
+  supabase: SupabaseClient | null,
+): Promise<SessionStoreResult> {
+  if (!supabase) return { status: "unauthenticated" };
 
-  const { data, error: selectError } = await supabase
-    .from("stores")
-    .select("id, name, default_target_cost_rate")
-    .eq("owner_id", userId)
-    .single();
-  if (selectError || !data) return null;
+  const { data, error } = await supabase.rpc("get_or_create_store");
+  if (error) {
+    if (error.code === "28000") return { status: "unauthenticated" };
+    return { status: "error" };
+  }
 
-  return { id: data.id, name: data.name, defaultTargetCostRate: data.default_target_cost_rate };
+  const row = data?.[0];
+  if (!row) return { status: "error" };
+
+  return {
+    status: "ok",
+    store: { id: row.id, name: row.name, defaultTargetCostRate: row.default_target_cost_rate },
+  };
 });

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { getOrCreateStore } from "@/lib/store";
+import { getSessionStore } from "@/lib/store";
 import { ImportWizard } from "./ImportWizard.tsx";
 import { SignOutButton } from "@/components/SignOutButton.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
@@ -25,8 +25,10 @@ export default async function ImportPage() {
     }
 
     userEmail = user.email ?? null;
-    const store = supabase ? await getOrCreateStore(supabase, user.id) : null;
-    storeId = store?.id ?? null;
+    // このページはメールアドレス表示のためgetAuthUser自体は引き続き必要だが、
+    // 店舗の取得はgetSessionStore(RPC1回)にまとめている。
+    const session = supabase ? await getSessionStore(supabase) : ({ status: "unauthenticated" } as const);
+    storeId = session.status === "ok" ? session.store.id : null;
   }
 
   return (

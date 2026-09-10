@@ -6,6 +6,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getOrCreateStore } from "@/lib/store";
 import { ImportWizard } from "./ImportWizard.tsx";
 import { SignOutButton } from "@/components/SignOutButton.tsx";
+import { PageHeader } from "@/components/PageHeader.tsx";
 
 export const metadata: Metadata = {
   title: "レシピ・仕入れデータの取り込み",
@@ -31,27 +32,34 @@ export default async function ImportPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">レシピ・仕入れデータの取り込み</h1>
-          <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-            Excelやスプレッドシートで管理してる表(CSV/Excelファイル)をアップロードすると、どの列が何を表しているか自動で推測します。内容を確認・修正してから確定してください。
-          </p>
-          <p className="mt-1 text-sm">
-            <Link href="/menus/new" prefetch={false} className="text-black/50 underline underline-offset-2 hover:text-black dark:text-white/50 dark:hover:text-white">
-              表がない場合は手入力で始める
-            </Link>
-          </p>
-        </div>
+    <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <PageHeader
+          eyebrow="データ取り込み"
+          title="レシピ・仕入れデータの取り込み"
+          description={
+            <>
+              Excelやスプレッドシートで管理してる表(CSV/Excelファイル)をアップロードすると、どの列が何を表しているか自動で推測します。内容を確認・修正してから確定してください。
+              <br />
+              <Link
+                href="/menus/new"
+                prefetch={false}
+                className="underline underline-offset-2"
+                style={{ color: "var(--accent)" }}
+              >
+                表がない場合は手入力で始める
+              </Link>
+            </>
+          }
+        />
         {userEmail && (
-          <div className="flex items-center gap-3 text-xs text-black/50 dark:text-white/50">
+          <div className="flex shrink-0 items-center gap-3 text-xs" style={{ color: "var(--muted-foreground)" }}>
             <span>{userEmail}</span>
             <SignOutButton />
           </div>
         )}
       </div>
       <ImportWizard storeId={storeId} />
-    </main>
+    </div>
   );
 }

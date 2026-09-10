@@ -7,12 +7,13 @@ import { SALES_FIELD_DEFS, type SalesFieldId } from "@/lib/salesImport/salesFiel
 import { applySalesMapping, type SalesFinalMapping } from "@/lib/salesImport/applySalesMapping";
 import { formatMonthLabel } from "@/lib/period/month";
 import { SearchablePicker, type PickerOption } from "@/components/SearchablePicker.tsx";
+import { StatusBadge, type BadgeStatus } from "@/components/StatusBadge.tsx";
 import { saveSalesImportPlan } from "./actions.ts";
 
-const LEVEL_STYLE: Record<string, string> = {
-  high: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
-  medium: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  none: "bg-black/5 text-black/50 dark:bg-white/10 dark:text-white/50",
+const LEVEL_STATUS: Record<string, BadgeStatus> = {
+  high: "ok",
+  medium: "warn",
+  none: "muted",
 };
 const LEVEL_LABEL: Record<string, string> = {
   high: "自動で判定できました",
@@ -78,7 +79,7 @@ export function SalesImportPanel({
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs text-black/50 dark:text-white/50">
+      <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
         メニュー名・販売数量の列があるCSV/Excelを取り込むと、{formatMonthLabel(month)}
         の販売数量として保存します(日別内訳のCSVでも、同じメニュー名の行は自動的に合算します)。
       </p>
@@ -91,33 +92,41 @@ export function SalesImportPanel({
         }}
         className="text-sm"
       />
-      {parseError && <p className="text-sm text-red-600 dark:text-red-400">{parseError}</p>}
+      {parseError && (
+        <p className="text-sm" style={{ color: "var(--status-danger)" }}>
+          {parseError}
+        </p>
+      )}
 
       {headers.length > 0 && (
         <>
-          <p className="text-xs text-black/50 dark:text-white/50">{fileName} ・ {rows.length}行</p>
+          <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+            {fileName} ・ {rows.length}行
+          </p>
           {/* ネイティブの<select>は見づらいという指摘を受け、検索絞り込みつきの
               一覧(SearchablePicker)に統一。テーブルではなく項目ごとのカードにする。 */}
           <div className="flex flex-col gap-4">
             {SALES_FIELD_DEFS.map((field) => {
               const s = suggestions.find((x) => x.fieldId === field.id);
               const value = mapping[field.id as SalesFieldId];
+              const level = s?.level ?? "none";
               const columnOptions: PickerOption[] = [
                 { value: "", label: "(選択しない)" },
                 ...headers.map((h, idx) => ({ value: String(idx), label: h })),
               ];
               return (
-                <div key={field.id} className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+                <div key={field.id} className="rounded border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-base font-medium">
+                    <p className="text-base font-medium" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
                       {field.label}
-                      {field.required && <span className="ml-1 text-red-500">*</span>}
+                      {field.required && (
+                        <span className="ml-1" style={{ color: "var(--status-danger)" }}>
+                          *
+                        </span>
+                      )}
                     </p>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs ${LEVEL_STYLE[s?.level ?? "none"]}`}
-                      title="表の見出しの言葉から、どの列が対応するかを自動で判定した結果です"
-                    >
-                      {LEVEL_LABEL[s?.level ?? "none"]}
+                    <span title="表の見出しの言葉から、どの列が対応するかを自動で判定した結果です">
+                      <StatusBadge status={LEVEL_STATUS[level]} label={LEVEL_LABEL[level]} />
                     </span>
                   </div>
                   <div className="mt-3">
@@ -136,22 +145,26 @@ export function SalesImportPanel({
             })}
           </div>
 
-          <p className="text-sm">
+          <p className="text-sm" style={{ color: "var(--foreground)" }}>
             取り込み可能な行: <strong>{applyResult.rows.length}</strong> 件 / エラー行:{" "}
-            <strong className={applyResult.errors.length > 0 ? "text-red-600 dark:text-red-400" : ""}>
+            <strong style={applyResult.errors.length > 0 ? { color: "var(--status-danger)" } : undefined}>
               {applyResult.errors.length}
             </strong>
             件
           </p>
           {requiredMissing.length > 0 && (
-            <p className="text-sm text-amber-700 dark:text-amber-400">
+            <p className="text-sm" style={{ color: "var(--status-warn)" }}>
               必須項目が未設定です: {requiredMissing.map((f) => f.label).join("・")}。上のカードで対応する列を選んでください。
             </p>
           )}
 
-          {result && !result.success && <p className="text-sm text-red-600 dark:text-red-400">{result.error}</p>}
+          {result && !result.success && (
+            <p className="text-sm" style={{ color: "var(--status-danger)" }}>
+              {result.error}
+            </p>
+          )}
           {result && result.success && result.skippedMenuNames.length > 0 && (
-            <p className="text-sm text-amber-700 dark:text-amber-400">
+            <p className="text-sm" style={{ color: "var(--status-warn)" }}>
               登録済みメニューと名前が一致しなかったため{result.skippedMenuNames.length}件スキップしました:{" "}
               {result.skippedMenuNames.join("、")}
               。メニュー一覧で名前が同じか確認するか、先にメニューを登録してから取り込み直してください。
@@ -161,7 +174,8 @@ export function SalesImportPanel({
           <button
             onClick={handleConfirm}
             disabled={saving || requiredMissing.length > 0 || applyResult.rows.length === 0}
-            className="self-end rounded-lg bg-black px-5 py-3 text-base font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black"
+            className="self-end rounded px-5 py-3 text-base font-bold transition-colors disabled:opacity-40"
+            style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
           >
             {saving ? "保存中…" : "この内容で保存する"}
           </button>

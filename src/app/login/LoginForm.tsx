@@ -40,7 +40,7 @@ export function LoginForm() {
 
   if (!supabase) {
     return (
-      <p className="mt-6 text-sm text-red-600 dark:text-red-400">
+      <p className="mt-6 text-sm" style={{ color: "var(--status-danger)" }}>
         Supabaseが未設定のためログインできません。.env.localを確認してください。
       </p>
     );
@@ -85,31 +85,42 @@ export function LoginForm() {
         <button
           type="button"
           onClick={() => setMode("signin")}
-          className={`flex-1 rounded-lg border px-3 py-2.5 ${mode === "signin" ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black" : "border-black/15 dark:border-white/20"}`}
+          className="flex-1 rounded border px-3 py-2.5 transition-colors"
+          style={
+            mode === "signin"
+              ? { background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "var(--primary)" }
+              : { borderColor: "var(--border)", color: "var(--foreground)" }
+          }
         >
           ログイン
         </button>
         <button
           type="button"
           onClick={() => setMode("signup")}
-          className={`flex-1 rounded-lg border px-3 py-2.5 ${mode === "signup" ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black" : "border-black/15 dark:border-white/20"}`}
+          className="flex-1 rounded border px-3 py-2.5 transition-colors"
+          style={
+            mode === "signup"
+              ? { background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "var(--primary)" }
+              : { borderColor: "var(--border)", color: "var(--foreground)" }
+          }
         >
           新規登録
         </button>
       </div>
 
-      <label className="flex flex-col gap-2 text-base">
+      <label className="flex flex-col gap-2 text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
         メールアドレス
         <input
           type="email"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
+          className="rounded border px-4 py-3 text-base focus:outline-none focus:ring-2"
+          style={{ background: "var(--card)", borderColor: "var(--border)", color: "var(--foreground)" }}
         />
       </label>
 
-      <label className="flex flex-col gap-2 text-base">
+      <label className="flex flex-col gap-2 text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
         パスワード
         <input
           type="password"
@@ -117,17 +128,27 @@ export function LoginForm() {
           minLength={6}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
+          className="rounded border px-4 py-3 text-base focus:outline-none focus:ring-2"
+          style={{ background: "var(--card)", borderColor: "var(--border)", color: "var(--foreground)" }}
         />
       </label>
 
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-      {notice && <p className="text-sm text-emerald-700 dark:text-emerald-400">{notice}</p>}
+      {error && (
+        <p className="text-sm" style={{ color: "var(--status-danger)" }}>
+          {error}
+        </p>
+      )}
+      {notice && (
+        <p className="text-sm" style={{ color: "var(--status-ok)" }}>
+          {notice}
+        </p>
+      )}
 
       <button
         type="submit"
         disabled={isSubmitting}
-        className="rounded-lg bg-black px-5 py-4 text-base font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black"
+        className="rounded px-5 py-4 text-base font-bold transition-colors disabled:opacity-40"
+        style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
       >
         {mode === "signin" ? "ログイン" : "登録する"}
       </button>

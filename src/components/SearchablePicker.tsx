@@ -49,11 +49,19 @@ export function SearchablePicker({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={searchPlaceholder}
-        className="rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
+        className="rounded border px-4 py-3 text-base focus:outline-none focus:ring-2"
+        style={{
+          background: "var(--background)",
+          borderColor: "var(--border)",
+          color: "var(--foreground)",
+          fontFamily: "var(--font-noto-sans-jp)",
+        }}
       />
-      <div className="max-h-56 overflow-y-auto rounded-lg border border-black/15 dark:border-white/20">
+      <div className="max-h-56 overflow-y-auto rounded border" style={{ borderColor: "var(--border)" }}>
         {filtered.length === 0 && (
-          <p className="p-4 text-sm text-black/40 dark:text-white/40">見つかりませんでした</p>
+          <p className="p-4 text-sm" style={{ color: "var(--muted-foreground)" }}>
+            見つかりませんでした
+          </p>
         )}
         {filtered.map((o) => {
           const isSelected = o.value === value;
@@ -62,15 +70,20 @@ export function SearchablePicker({
               key={o.value}
               type="button"
               onClick={() => onChange(o.value)}
-              className={`flex w-full items-center justify-between border-b border-black/5 px-4 py-3 text-left text-base last:border-0 dark:border-white/5 ${
-                isSelected
-                  ? "bg-black text-white dark:bg-white dark:text-black"
-                  : "hover:bg-black/5 dark:hover:bg-white/10"
-              }`}
+              className="flex w-full items-center justify-between border-b px-4 py-3 text-left text-base transition-colors last:border-0"
+              style={{
+                borderColor: "var(--border)",
+                background: isSelected ? "var(--primary)" : "transparent",
+                color: isSelected ? "var(--primary-foreground)" : "var(--foreground)",
+                fontFamily: "var(--font-noto-sans-jp)",
+              }}
             >
               <span>{o.label}</span>
               {o.hint && (
-                <span className={`text-sm ${isSelected ? "opacity-70" : "text-black/40 dark:text-white/40"}`}>
+                <span
+                  className="font-mono text-sm"
+                  style={{ color: isSelected ? "var(--primary-foreground)" : "var(--muted-foreground)", opacity: isSelected ? 0.8 : 1 }}
+                >
                   {o.hint}
                 </span>
               )}
@@ -81,16 +94,17 @@ export function SearchablePicker({
 
       {/* 一覧内のハイライトだけでは「本当に選ばれているか分からない」という
           指摘を受けたため、選んだ内容をテキストボックスにもはっきり表示する。 */}
-      <label className="flex flex-col gap-1 text-sm text-black/60 dark:text-white/60">
+      <label className="flex flex-col gap-1 text-sm" style={{ color: "var(--muted-foreground)" }}>
         {selectedLabelPrefix}
         <input
           readOnly
           value={selected ? selected.label : emptyLabel}
-          className={`rounded-lg border px-4 py-3 text-base ${
+          className="rounded border px-4 py-3 text-base"
+          style={
             selected
-              ? "border-black/15 bg-black/[0.03] font-medium text-black dark:border-white/20 dark:bg-white/[0.04] dark:text-white"
-              : "border-black/15 bg-transparent text-black/40 dark:border-white/20 dark:text-white/40"
-          }`}
+              ? { borderColor: "var(--border)", background: "var(--muted)", color: "var(--foreground)", fontWeight: 500 }
+              : { borderColor: "var(--border)", background: "transparent", color: "var(--muted-foreground)" }
+          }
         />
       </label>
     </div>

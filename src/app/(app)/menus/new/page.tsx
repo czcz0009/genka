@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getOrCreateStore } from "@/lib/store";
 import { MenuEditor } from "../MenuEditor.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
+import { PageHeader } from "@/components/PageHeader.tsx";
 
 export const metadata: Metadata = {
   title: "メニューを登録",
@@ -22,9 +23,9 @@ export default async function NewMenuPage() {
   const store = await getOrCreateStore(supabase, user.id);
   if (!store) {
     return (
-      <main className="mx-auto w-full max-w-lg flex-1 px-6 py-10">
+      <div className="mx-auto max-w-2xl p-6 md:p-8">
         <StoreLoadError />
-      </main>
+      </div>
     );
   }
 
@@ -35,11 +36,12 @@ export default async function NewMenuPage() {
     .order("name");
 
   return (
-    <main className="mx-auto w-full max-w-lg flex-1 px-6 py-10">
-      <h1 className="text-xl font-bold tracking-tight">メニューを登録</h1>
-      <p className="mt-2 text-sm text-black/60 dark:text-white/60">
-        メニュー名・売価・使う食材を、この1画面でまとめて登録できます。食材は後から追加・削除もできます。
-      </p>
+    <div className="mx-auto max-w-2xl p-6 md:p-8">
+      <PageHeader
+        eyebrow="メニュー管理"
+        title="メニューを登録"
+        description="メニュー名・売価・使う食材を、この1画面でまとめて登録できます。食材は後から追加・削除もできます。"
+      />
 
       <MenuEditor
         storeId={store.id}
@@ -54,6 +56,6 @@ export default async function NewMenuPage() {
         }))}
         targetCostRate={store.defaultTargetCostRate}
       />
-    </main>
+    </div>
   );
 }

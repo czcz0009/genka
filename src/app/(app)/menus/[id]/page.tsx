@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getOrCreateStore } from "@/lib/store";
 import { MenuEditor, type LocalLine } from "../MenuEditor.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
+import { PageHeader } from "@/components/PageHeader.tsx";
 
 export const metadata: Metadata = {
   title: "メニューを編集",
@@ -22,9 +23,9 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
   const store = await getOrCreateStore(supabase, user.id);
   if (!store) {
     return (
-      <main className="mx-auto w-full max-w-lg flex-1 px-6 py-10">
+      <div className="mx-auto max-w-2xl p-6 md:p-8">
         <StoreLoadError />
-      </main>
+      </div>
     );
   }
 
@@ -59,11 +60,12 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
   });
 
   return (
-    <main className="mx-auto w-full max-w-lg flex-1 px-6 py-10">
-      <h1 className="text-xl font-bold tracking-tight">{menu.name}を編集</h1>
-      <p className="mt-2 text-sm text-black/60 dark:text-white/60">
-        メニュー名・売価・使う食材を、この1画面でまとめて編集できます。
-      </p>
+    <div className="mx-auto max-w-2xl p-6 md:p-8">
+      <PageHeader
+        eyebrow="メニュー管理"
+        title={`${menu.name}を編集`}
+        description="メニュー名・売価・使う食材を、この1画面でまとめて編集できます。"
+      />
 
       <MenuEditor
         storeId={store.id}
@@ -79,6 +81,6 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
         }))}
         targetCostRate={menu.target_cost_rate ?? store.defaultTargetCostRate}
       />
-    </main>
+    </div>
   );
 }

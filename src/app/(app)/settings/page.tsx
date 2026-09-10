@@ -7,6 +7,7 @@ import { selectApplicableFixedCost, type FixedCostRow } from "@/lib/flRatio";
 import { monthToPeriod, currentMonthString, formatMonthLabel } from "@/lib/period/month";
 import { SettingsForm } from "./SettingsForm.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
+import { PageHeader } from "@/components/PageHeader.tsx";
 
 export const metadata: Metadata = {
   title: "店舗設定",
@@ -15,12 +16,12 @@ export const metadata: Metadata = {
 export default async function SettingsPage() {
   if (!isSupabaseConfigured()) {
     return (
-      <main className="mx-auto w-full max-w-lg flex-1 px-6 py-10">
-        <h1 className="text-xl font-bold tracking-tight">店舗設定</h1>
-        <p className="mt-4 text-sm text-black/60 dark:text-white/60">
+      <div className="mx-auto max-w-xl space-y-6 p-6 md:p-8">
+        <PageHeader eyebrow="設定" title="店舗設定" />
+        <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           Supabaseが未接続のため、この画面はまだ利用できません。
         </p>
-      </main>
+      </div>
     );
   }
 
@@ -33,9 +34,9 @@ export default async function SettingsPage() {
   const store = await getOrCreateStore(supabase, user.id);
   if (!store) {
     return (
-      <main className="mx-auto w-full max-w-lg flex-1 px-6 py-10">
+      <div className="mx-auto max-w-xl space-y-6 p-6 md:p-8">
         <StoreLoadError />
-      </main>
+      </div>
     );
   }
 
@@ -56,11 +57,12 @@ export default async function SettingsPage() {
   const currentLabor = selectApplicableFixedCost(fixedCostRows, "labor", period);
 
   return (
-    <main className="mx-auto w-full max-w-lg flex-1 px-6 py-10">
-      <h1 className="text-xl font-bold tracking-tight">店舗設定</h1>
-      <p className="mt-2 text-sm text-black/60 dark:text-white/60">
-        すべて任意です。設定しなくてもツールは使えますが、設定すると原価率の目安判定やFL比率がより正確になります。
-      </p>
+    <div className="mx-auto max-w-xl space-y-6 p-6 md:p-8">
+      <PageHeader
+        eyebrow="設定"
+        title="店舗設定"
+        description="すべて任意です。設定しなくてもツールは使えますが、設定すると原価率の目安判定やFL比率がより正確になります。"
+      />
 
       <SettingsForm
         storeId={store.id}
@@ -71,6 +73,6 @@ export default async function SettingsPage() {
         month={month}
         monthLabel={formatMonthLabel(month)}
       />
-    </main>
+    </div>
   );
 }

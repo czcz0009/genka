@@ -42,6 +42,32 @@ function formatUnitPrice(n: number): string {
   return `¥${rounded}`;
 }
 
+const inputStyle: React.CSSProperties = {
+  background: "var(--background)",
+  borderColor: "var(--border)",
+  color: "var(--foreground)",
+  fontFamily: "var(--font-noto-sans-jp)",
+};
+
+const INPUT_CLASS = "rounded border px-4 py-3 text-base focus:outline-none focus:ring-2";
+
+function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex-1 rounded border px-3 py-2.5 transition-colors"
+      style={
+        active
+          ? { background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "var(--primary)" }
+          : { borderColor: "var(--border)", color: "var(--foreground)" }
+      }
+    >
+      {children}
+    </button>
+  );
+}
+
 export function MenuEditor({
   storeId,
   menuId,
@@ -120,18 +146,19 @@ export function MenuEditor({
 
   return (
     <div className="mt-6 flex flex-col gap-6">
-      <label className="flex flex-col gap-2 text-base">
+      <label className="flex flex-col gap-2 text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
         メニュー名
         <input
           required
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="例: 生姜焼き定食"
-          className="rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
+          className={INPUT_CLASS}
+          style={inputStyle}
         />
       </label>
 
-      <label className="flex flex-col gap-2 text-base">
+      <label className="flex flex-col gap-2 text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
         売価(円)
         <input
           type="number"
@@ -141,17 +168,36 @@ export function MenuEditor({
           value={sellingPrice}
           onChange={(e) => setSellingPrice(e.target.value)}
           placeholder="例: 900(あとで入力してもOK)"
-          className="rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
+          className={INPUT_CLASS + " font-mono"}
+          style={inputStyle}
         />
       </label>
 
-      <div className="flex items-center gap-4 rounded-lg border border-black/10 p-4 text-sm dark:border-white/10">
-        <span className="text-black/60 dark:text-white/60">原価合計 {formatYen(totalCost)}</span>
-        <span
-          className={overTarget ? "font-medium text-red-600 dark:text-red-400" : "text-black/60 dark:text-white/60"}
-        >
-          原価率 {costRate != null ? `${costRate.toFixed(1)}%` : "-"}(目標{targetCostRate}%)
-        </span>
+      {/* 現在の原価率 */}
+      <div className="flex items-center gap-6 rounded border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+        <div>
+          <div className="text-xs font-medium" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+            原価率
+          </div>
+          <div
+            className="mt-1 font-mono text-3xl font-bold leading-none"
+            style={{ color: overTarget ? "var(--status-danger)" : costRate != null ? "var(--status-ok)" : "var(--muted-foreground)" }}
+          >
+            {costRate != null ? `${costRate.toFixed(1)}%` : "-"}
+          </div>
+          <div className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+            目標{targetCostRate}%
+          </div>
+        </div>
+        <div className="h-12 w-px" style={{ background: "var(--border)" }} />
+        <div>
+          <div className="text-xs font-medium" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+            原価合計
+          </div>
+          <div className="mt-1 font-mono text-2xl font-bold" style={{ color: "var(--foreground)" }}>
+            {formatYen(totalCost)}
+          </div>
+        </div>
       </div>
 
       {lines.length > 0 && (
@@ -159,15 +205,17 @@ export function MenuEditor({
           {lines.map((l) => (
             <li
               key={l.key}
-              className="flex items-center justify-between rounded-lg border border-black/10 px-4 py-3 dark:border-white/10"
+              className="flex items-center justify-between rounded border px-4 py-3"
+              style={{ borderColor: "var(--border)" }}
             >
-              <span className="text-base">
+              <span className="text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
                 {l.ingredientName} {l.quantity || 0}
                 {l.unit}
               </span>
               <button
                 onClick={() => removeLine(l.key)}
-                className="rounded-lg px-3 py-2 text-sm text-black/40 underline underline-offset-2 hover:bg-black/5 hover:text-black dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white"
+                className="rounded px-3 py-2 text-sm underline underline-offset-2 transition-colors hover:bg-[color:var(--muted)]"
+                style={{ color: "var(--muted-foreground)" }}
               >
                 削除
               </button>
@@ -178,20 +226,26 @@ export function MenuEditor({
 
       <AddIngredientForm allIngredients={allIngredients} existingNames={new Set(lines.map((l) => l.ingredientName))} onAdd={addLine} />
 
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && (
+        <p className="text-sm" style={{ color: "var(--status-danger)" }}>
+          {error}
+        </p>
+      )}
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <button
           onClick={() => handleSave("save")}
           disabled={saving != null}
-          className="flex-1 rounded-lg bg-black px-5 py-4 text-base font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black"
+          className="flex-1 rounded px-5 py-4 text-base font-bold transition-colors disabled:opacity-40"
+          style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
         >
           {saving === "save" ? "保存中…" : "保存する"}
         </button>
         <button
           onClick={() => handleSave("saveAndNew")}
           disabled={saving != null}
-          className="flex-1 rounded-lg border border-black/15 px-5 py-4 text-base font-medium disabled:opacity-40 dark:border-white/20"
+          className="flex-1 rounded border px-5 py-4 text-base font-medium disabled:opacity-40"
+          style={{ borderColor: "var(--border)", color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
         >
           {saving === "saveAndNew" ? "保存中…" : "保存して別のメニューを追加する"}
         </button>
@@ -275,34 +329,32 @@ function AddIngredientForm({
   }
 
   return (
-    <div className="flex flex-col gap-5 rounded-lg border border-black/10 p-5 dark:border-white/10">
-      <p className="text-base font-medium">食材を追加</p>
+    <div className="flex flex-col gap-5 rounded border p-5" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+      <p className="text-base font-semibold" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+        食材を追加
+      </p>
 
       {allIngredients.length > 0 && (
         <div>
-          <p className="mb-2 text-sm text-black/60 dark:text-white/60">使う食材は?</p>
+          <p className="mb-2 text-sm" style={{ color: "var(--muted-foreground)" }}>
+            使う食材は?
+          </p>
           <div className="flex gap-2 text-sm">
-            <button
-              type="button"
-              onClick={() => setMode("existing")}
-              className={`flex-1 rounded-lg border px-3 py-2.5 ${mode === "existing" ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black" : "border-black/15 dark:border-white/20"}`}
-            >
+            <TabButton active={mode === "existing"} onClick={() => setMode("existing")}>
               登録済みの食材から選ぶ
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("new")}
-              className={`flex-1 rounded-lg border px-3 py-2.5 ${mode === "new" ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black" : "border-black/15 dark:border-white/20"}`}
-            >
+            </TabButton>
+            <TabButton active={mode === "new"} onClick={() => setMode("new")}>
               新しく食材を登録する
-            </button>
+            </TabButton>
           </div>
         </div>
       )}
 
       {mode === "existing" ? (
         <div className="flex flex-col gap-2">
-          <p className="text-base">食材を選ぶ</p>
+          <p className="text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+            食材を選ぶ
+          </p>
           <ExistingIngredientPicker
             allIngredients={allIngredients}
             selectedId={existingId}
@@ -311,19 +363,25 @@ function AddIngredientForm({
           />
         </div>
       ) : (
-        <div className="flex flex-col gap-4 rounded-lg bg-black/[0.03] p-4 dark:bg-white/[0.04]">
-          <p className="text-sm font-medium text-black/70 dark:text-white/70">新しい食材の情報</p>
-          <label className="flex flex-col gap-2 text-base">
+        <div className="flex flex-col gap-4 rounded p-4" style={{ background: "var(--muted)" }}>
+          <p className="text-sm font-medium" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+            新しい食材の情報
+          </p>
+          <label className="flex flex-col gap-2 text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
             食材名
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="例: 豚肉"
-              className="rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
+              className={INPUT_CLASS}
+              style={inputStyle}
             />
           </label>
           <div className="flex gap-3">
-            <label className="flex flex-1 flex-col gap-2 text-base">
+            <label
+              className="flex flex-1 flex-col gap-2 text-base"
+              style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
+            >
               仕入単価(円)
               <input
                 type="number"
@@ -333,26 +391,31 @@ function AddIngredientForm({
                 value={newPrice}
                 onChange={(e) => setNewPrice(e.target.value)}
                 placeholder="例: 0.7"
-                className="rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
+                className={INPUT_CLASS + " font-mono"}
+                style={inputStyle}
               />
             </label>
-            <label className="flex w-28 flex-col gap-2 text-base">
+            <label
+              className="flex w-28 flex-col gap-2 text-base"
+              style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
+            >
               単位
               <input
                 value={newUnit}
                 onChange={(e) => setNewUnit(e.target.value)}
                 placeholder="g"
-                className="rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
+                className={INPUT_CLASS}
+                style={inputStyle}
               />
             </label>
           </div>
-          <p className="text-xs text-black/40 dark:text-white/40">
+          <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
             仕入単価は「単位1つあたりの金額」です。例:1kg800円のお肉をgで使うなら、800÷1000=0.8円と入力してください。この単位は、下の「このメニューで使う分量」でもそのまま使います。
           </p>
         </div>
       )}
 
-      <label className="flex flex-col gap-2 text-base">
+      <label className="flex flex-col gap-2 text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
         このメニューで使う分量
         <div className="flex items-center gap-2">
           <input
@@ -363,18 +426,26 @@ function AddIngredientForm({
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
             placeholder="例: 150"
-            className="flex-1 rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
+            className={INPUT_CLASS + " flex-1"}
+            style={inputStyle}
           />
-          <span className="min-w-10 text-base text-black/60 dark:text-white/60">{effectiveUnit || "-"}</span>
+          <span className="min-w-10 text-base" style={{ color: "var(--muted-foreground)" }}>
+            {effectiveUnit || "-"}
+          </span>
         </div>
       </label>
 
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && (
+        <p className="text-sm" style={{ color: "var(--status-danger)" }}>
+          {error}
+        </p>
+      )}
 
       <button
         type="button"
         onClick={handleAdd}
-        className="rounded-lg bg-black px-5 py-4 text-base font-medium text-white dark:bg-white dark:text-black"
+        className="rounded px-5 py-4 text-base font-bold transition-colors"
+        style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
       >
         この食材を追加する
       </button>
@@ -419,11 +490,14 @@ function ExistingIngredientPicker({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="食材名で絞り込む"
-        className="rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
+        className={INPUT_CLASS}
+        style={inputStyle}
       />
-      <div className="max-h-56 overflow-y-auto rounded-lg border border-black/15 dark:border-white/20">
+      <div className="max-h-56 overflow-y-auto rounded border" style={{ borderColor: "var(--border)" }}>
         {filtered.length === 0 && (
-          <p className="p-4 text-sm text-black/40 dark:text-white/40">見つかりませんでした</p>
+          <p className="p-4 text-sm" style={{ color: "var(--muted-foreground)" }}>
+            見つかりませんでした
+          </p>
         )}
         {filtered.map((i) => {
           const selected = i.id === selectedId;
@@ -432,21 +506,22 @@ function ExistingIngredientPicker({
               key={i.id}
               type="button"
               onClick={() => onSelect(i.id)}
-              className={`flex w-full items-center justify-between border-b border-black/5 px-4 py-3 text-left text-base last:border-0 dark:border-white/5 ${
-                selected
-                  ? "bg-black text-white dark:bg-white dark:text-black"
-                  : "hover:bg-black/5 dark:hover:bg-white/10"
-              }`}
+              className="flex w-full items-center justify-between border-b px-4 py-3 text-left text-base transition-colors last:border-0"
+              style={{
+                borderColor: "var(--border)",
+                background: selected ? "var(--primary)" : "transparent",
+                color: selected ? "var(--primary-foreground)" : "var(--foreground)",
+              }}
             >
-              <span>
+              <span style={{ fontFamily: "var(--font-noto-sans-jp)" }}>
                 {i.name}
                 {alreadyAddedNames.has(i.name) && (
-                  <span className={`ml-2 text-xs ${selected ? "opacity-70" : "text-black/40 dark:text-white/40"}`}>
+                  <span className="ml-2 text-xs" style={{ opacity: selected ? 0.8 : 0.6 }}>
                     (追加済み)
                   </span>
                 )}
               </span>
-              <span className={`text-sm ${selected ? "opacity-70" : "text-black/40 dark:text-white/40"}`}>
+              <span className="font-mono text-sm" style={{ opacity: selected ? 0.8 : 1, color: selected ? undefined : "var(--muted-foreground)" }}>
                 {i.unit}あたり{formatUnitPrice(i.currentPurchasePrice)}
               </span>
             </button>
@@ -459,7 +534,7 @@ function ExistingIngredientPicker({
         という指摘を受けたため、選んだ食材名をテキストボックスにもはっきり
         表示する(読み取り専用。編集したい場合は上の絞り込み欄や一覧から選び直す)。
       */}
-      <label className="flex flex-col gap-1 text-sm text-black/60 dark:text-white/60">
+      <label className="flex flex-col gap-1 text-sm" style={{ color: "var(--muted-foreground)" }}>
         選択中の食材
         <input
           readOnly
@@ -468,11 +543,12 @@ function ExistingIngredientPicker({
               ? `${selectedIngredient.name}(${selectedIngredient.unit}あたり${formatUnitPrice(selectedIngredient.currentPurchasePrice)})`
               : "(未選択)"
           }
-          className={`rounded-lg border px-4 py-3 text-base ${
+          className="rounded border px-4 py-3 text-base"
+          style={
             selectedIngredient
-              ? "border-black/15 bg-black/[0.03] font-medium text-black dark:border-white/20 dark:bg-white/[0.04] dark:text-white"
-              : "border-black/15 bg-transparent text-black/40 dark:border-white/20 dark:text-white/40"
-          }`}
+              ? { borderColor: "var(--border)", background: "var(--muted)", color: "var(--foreground)", fontWeight: 500 }
+              : { borderColor: "var(--border)", background: "transparent", color: "var(--muted-foreground)" }
+          }
         />
       </label>
     </div>

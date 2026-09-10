@@ -7,6 +7,8 @@ import { getOrCreateStore } from "@/lib/store";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient } from "@/lib/menuRanking";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
+import { StatusBadge, type BadgeStatus } from "@/components/StatusBadge.tsx";
+import { PageHeader } from "@/components/PageHeader.tsx";
 
 export const metadata: Metadata = {
   title: "メニュー一覧",
@@ -17,15 +19,26 @@ function formatYen(n: number | null): string {
   return `¥${Math.round(n).toLocaleString()}`;
 }
 
+function rowStatus(overTarget: boolean, costRate: number | null): BadgeStatus {
+  if (costRate == null) return "muted";
+  return overTarget ? "danger" : "ok";
+}
+
+function rowStatusLabel(status: BadgeStatus): string {
+  if (status === "danger") return "要対応";
+  if (status === "muted") return "-";
+  return "正常";
+}
+
 export default async function MenusPage() {
   if (!isSupabaseConfigured()) {
     return (
-      <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-10">
-        <h1 className="text-xl font-bold tracking-tight">メニュー一覧</h1>
-        <p className="mt-4 text-sm text-black/60 dark:text-white/60">
+      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+        <PageHeader eyebrow="メニュー管理" title="メニュー一覧" />
+        <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           Supabaseが未接続のため、この画面はまだ利用できません。
         </p>
-      </main>
+      </div>
     );
   }
 
@@ -38,9 +51,9 @@ export default async function MenusPage() {
   const store = await getOrCreateStore(supabase, user.id);
   if (!store) {
     return (
-      <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-10">
+      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
         <StoreLoadError />
-      </main>
+      </div>
     );
   }
 
@@ -52,13 +65,13 @@ export default async function MenusPage() {
 
   if (!menus || menus.length === 0) {
     return (
-      <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-10">
-        <h1 className="text-xl font-bold tracking-tight">メニュー一覧</h1>
-        <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+        <PageHeader eyebrow="メニュー管理" title="メニュー一覧" />
+        <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           登録したメニューの原価・原価率がここに一覧で表示されます。
         </p>
         <StartHerePrompt />
-      </main>
+      </div>
     );
   }
 
@@ -101,53 +114,77 @@ export default async function MenusPage() {
   const rows = [...summaries].sort((a, b) => (orderById.get(a.menuId) ?? 0) - (orderById.get(b.menuId) ?? 0));
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-10">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">メニュー一覧</h1>
-          <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-            登録済みのメニューと、それぞれの原価・原価率です。原価率は「原価 ÷ 売価」で、低いほど利益が残ります。タップすると食材の追加・編集ができます。
-          </p>
-        </div>
+    <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <PageHeader
+          eyebrow="メニュー管理"
+          title="メニュー一覧"
+          description="登録済みのメニューと、それぞれの原価・原価率です。原価率は「原価 ÷ 売価」で、低いほど利益が残ります。タップすると食材の追加・編集ができます。"
+        />
         <Link
           href="/menus/new"
           prefetch={false}
-          className="shrink-0 rounded-lg bg-black px-5 py-3 text-base font-medium text-white hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/80"
+          className="shrink-0 rounded px-5 py-3 text-base font-semibold transition-colors"
+          style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
         >
-          + メニューを追加する
+          ＋ メニューを追加
         </Link>
       </div>
 
-      <ul className="mt-6 flex flex-col gap-3">
-        {rows.map((s) => (
-          <li key={s.menuId}>
-            {/* 一覧の行数分だけ/menus/[id]がプリフェッチされ裏でSupabaseクエリが
-                走ってしまうのを避けるため、ここもprefetchを無効化する */}
+      <div className="overflow-hidden rounded border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+        <div
+          className="hidden grid-cols-[1fr_100px_100px_100px_80px] border-b px-5 py-3 text-xs font-semibold uppercase tracking-wide sm:grid"
+          style={{ borderColor: "var(--border)", color: "var(--muted-foreground)", background: "var(--muted)" }}
+        >
+          <div>メニュー名</div>
+          <div className="text-right">売価</div>
+          <div className="text-right">原価</div>
+          <div className="text-right">原価率</div>
+          <div className="text-right">状態</div>
+        </div>
+
+        {rows.map((s) => {
+          const status = rowStatus(s.overTarget, s.costRate);
+          return (
             <Link
+              key={s.menuId}
+              // 一覧の行数分だけ/menus/[id]がプリフェッチされ裏でSupabaseクエリが
+              // 走ってしまうのを避けるため、ここもprefetchを無効化する
               href={`/menus/${s.menuId}`}
               prefetch={false}
-              className="flex flex-col gap-2 rounded-lg border border-black/15 p-5 hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10 sm:flex-row sm:items-center sm:justify-between"
+              className="flex flex-col gap-2 border-b px-5 py-4 text-left transition-colors last:border-0 hover:bg-[color:var(--muted)]/50 sm:grid sm:grid-cols-[1fr_100px_100px_100px_80px] sm:items-center sm:gap-0"
+              style={{ borderColor: "var(--border)" }}
             >
-              <span className="text-base font-medium">{s.menuName}</span>
-              <span className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-black/60 dark:text-white/60">
-                <span>売価 {formatYen(s.sellingPrice)}</span>
-                <span>原価 {formatYen(s.totalCost)}</span>
-                <span
-                  className={
-                    s.overTarget
-                      ? "font-medium text-red-600 dark:text-red-400"
-                      : s.costRate != null
-                        ? "text-black/70 dark:text-white/70"
-                        : "text-black/30 dark:text-white/30"
-                  }
+              <div className="font-medium" style={{ fontFamily: "var(--font-noto-sans-jp)", color: "var(--foreground)" }}>
+                {s.menuName}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm sm:contents">
+                <div className="font-mono sm:text-right" style={{ color: "var(--foreground)" }}>
+                  {formatYen(s.sellingPrice)}
+                </div>
+                <div className="font-mono sm:text-right" style={{ color: "var(--foreground)" }}>
+                  {formatYen(s.totalCost)}
+                </div>
+                <div
+                  className="font-mono font-semibold sm:text-right"
+                  style={{
+                    color:
+                      status === "danger" ? "var(--status-danger)" : status === "ok" ? "var(--status-ok)" : "var(--muted-foreground)",
+                  }}
                 >
-                  原価率 {s.costRate != null ? `${s.costRate.toFixed(1)}%` : "-"}(目標{s.targetCostRate}%)
-                </span>
-              </span>
+                  {s.costRate != null ? `${s.costRate.toFixed(1)}%` : "-"}
+                  <span className="ml-1 font-sans text-xs font-normal" style={{ color: "var(--muted-foreground)" }}>
+                    (目標{s.targetCostRate}%)
+                  </span>
+                </div>
+                <div className="sm:flex sm:justify-end">
+                  <StatusBadge status={status} label={rowStatusLabel(status)} />
+                </div>
+              </div>
             </Link>
-          </li>
-        ))}
-      </ul>
-    </main>
+          );
+        })}
+      </div>
+    </div>
   );
 }

@@ -75,7 +75,7 @@ export function FlRatioChart({ trend }: { trend: TrendPoint[] }) {
   const hovered = hoverIdx != null ? trend[hoverIdx] : null;
 
   return (
-    <div className="fl-ratio-chart rounded-lg border border-black/10 p-4 dark:border-white/10">
+    <div className="fl-ratio-chart rounded border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
       <style>{`
         .fl-ratio-chart { --fl-color: ${FL_COLOR.light}; --flr-color: ${FLR_COLOR.light}; }
         @media (prefers-color-scheme: dark) {
@@ -95,10 +95,10 @@ export function FlRatioChart({ trend }: { trend: TrendPoint[] }) {
               x2={WIDTH - PADDING.right}
               y1={yFor(v)}
               y2={yFor(v)}
-              className="stroke-black/10 dark:stroke-white/10"
+              stroke="var(--border)"
               strokeWidth={1}
             />
-            <text x={PADDING.left - 6} y={yFor(v) + 3} textAnchor="end" className="fill-black/40 text-[9px] dark:fill-white/40">
+            <text x={PADDING.left - 6} y={yFor(v) + 3} textAnchor="end" fill="var(--muted-foreground)" fontSize={9}>
               {v}%
             </text>
           </g>
@@ -137,7 +137,8 @@ export function FlRatioChart({ trend }: { trend: TrendPoint[] }) {
               x={xFor(idx)}
               y={HEIGHT - 8}
               textAnchor="middle"
-              className="fill-black/40 text-[9px] dark:fill-white/40"
+              fill="var(--muted-foreground)"
+              fontSize={9}
             >
               {t.label.replace(/^\d+年/, "")}
             </text>
@@ -147,7 +148,7 @@ export function FlRatioChart({ trend }: { trend: TrendPoint[] }) {
                 x2={xFor(idx)}
                 y1={PADDING.top}
                 y2={PADDING.top + plotH}
-                className="stroke-black/20 dark:stroke-white/20"
+                stroke="var(--border)"
                 strokeWidth={1}
               />
             )}
@@ -156,7 +157,7 @@ export function FlRatioChart({ trend }: { trend: TrendPoint[] }) {
       </svg>
 
       {hovered && (
-        <div className="mt-2 rounded border border-black/10 bg-black/[0.02] px-3 py-2 text-xs dark:border-white/10 dark:bg-white/[0.03]">
+        <div className="mt-2 rounded border px-3 py-2 text-xs" style={{ borderColor: "var(--border)", background: "var(--muted)", color: "var(--foreground)" }}>
           <span className="font-medium">{hovered.label}</span>
           <span className="ml-3">FL: {hovered.flRate != null ? `${hovered.flRate.toFixed(1)}%` : "-"}</span>
           <span className="ml-3">FLR: {hovered.flrRate != null ? `${hovered.flrRate.toFixed(1)}%` : "-"}</span>
@@ -173,7 +174,7 @@ function LegendSwatch({ colorVar, label }: { colorVar: "--fl-color" | "--flr-col
         className="inline-block h-2.5 w-2.5 rounded-full"
         style={{ backgroundColor: `var(${colorVar})` }}
       />
-      <span className="text-black/70 dark:text-white/70">{label}</span>
+      <span style={{ color: "var(--muted-foreground)" }}>{label}</span>
     </span>
   );
 }
@@ -196,11 +197,12 @@ function ReferenceLine({
         x2={width - padding.right}
         y1={y}
         y2={y}
-        className="stroke-black/25 dark:stroke-white/25"
+        stroke="var(--muted-foreground)"
+        strokeOpacity={0.5}
         strokeWidth={1}
         strokeDasharray="3 3"
       />
-      <text x={width - padding.right} y={y - 3} textAnchor="end" className="fill-black/40 text-[9px] dark:fill-white/40">
+      <text x={width - padding.right} y={y - 3} textAnchor="end" fill="var(--muted-foreground)" fontSize={9}>
         {label}
       </text>
     </g>

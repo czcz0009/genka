@@ -15,6 +15,7 @@ import {
 import { monthToPeriod, currentMonthString, recentMonths, formatMonthLabel } from "@/lib/period/month";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
+import { PageHeader } from "@/components/PageHeader.tsx";
 import { FlRatioView } from "./FlRatioView.tsx";
 
 export const metadata: Metadata = {
@@ -30,12 +31,12 @@ export default async function FlRatioPage({
 }) {
   if (!isSupabaseConfigured()) {
     return (
-      <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
-        <h1 className="text-xl font-bold tracking-tight">FL比率・FLR比率</h1>
-        <p className="mt-4 text-sm text-black/60 dark:text-white/60">
+      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+        <PageHeader eyebrow="FL比率" title="FL比率・FLR比率" />
+        <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           Supabaseが未接続のため、この画面はまだ利用できません。
         </p>
-      </main>
+      </div>
     );
   }
 
@@ -48,9 +49,9 @@ export default async function FlRatioPage({
   const store = await getOrCreateStore(supabase, user.id);
   if (!store) {
     return (
-      <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
+      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
         <StoreLoadError />
-      </main>
+      </div>
     );
   }
 
@@ -69,13 +70,13 @@ export default async function FlRatioPage({
 
   if (!menus || menus.length === 0) {
     return (
-      <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
-        <h1 className="text-xl font-bold tracking-tight">FL比率・FLR比率</h1>
-        <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+        <PageHeader eyebrow="FL比率" title="FL比率・FLR比率" />
+        <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           メニューを登録すると、F比率(食材原価)を含むFL比率がここに表示されます。
         </p>
         <StartHerePrompt />
-      </main>
+      </div>
     );
   }
 
@@ -147,15 +148,21 @@ export default async function FlRatioPage({
   const currentRent = selectApplicableFixedCost(fixedCostRows, "rent", currentPeriod);
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
-      <h1 className="text-xl font-bold tracking-tight">FL比率・FLR比率</h1>
-      <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-        業界目安はFL比率{FL_BENCHMARK_PERCENT}%未満・FLR比率{FLR_BENCHMARK_PERCENT}
-        %未満と言われますが、業態によって適正範囲は大きく異なります。あくまで一般的な目安として、自店の推移の把握に使ってください。
-      </p>
-      <p className="mt-1 text-xs text-black/40 dark:text-white/40">
-        過去月の食材原価は、現在登録されている仕入単価を使って再計算した参考値です(当時の実際の仕入単価とは異なる場合があります)。
-      </p>
+    <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+      <PageHeader
+        eyebrow="FL比率"
+        title="FL比率・FLR比率"
+        description={
+          <>
+            業界目安はFL比率{FL_BENCHMARK_PERCENT}%未満・FLR比率{FLR_BENCHMARK_PERCENT}
+            %未満と言われますが、業態によって適正範囲は大きく異なります。あくまで一般的な目安として、自店の推移の把握に使ってください。
+            <br />
+            <span className="text-xs opacity-80">
+              過去月の食材原価は、現在登録されている仕入単価を使って再計算した参考値です(当時の実際の仕入単価とは異なる場合があります)。
+            </span>
+          </>
+        }
+      />
       <FlRatioView
         storeId={store.id}
         month={month}
@@ -164,6 +171,6 @@ export default async function FlRatioPage({
         currentLabor={currentLabor}
         currentRent={currentRent}
       />
-    </main>
+    </div>
   );
 }

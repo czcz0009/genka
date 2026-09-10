@@ -4,6 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { saveStoreSettings } from "./actions.ts";
 
+const INPUT_CLASS = "rounded border px-4 py-3 text-base focus:outline-none focus:ring-2";
+const inputStyle = { background: "var(--background)", borderColor: "var(--border)", color: "var(--foreground)" };
+const labelStyle = { color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" };
+
 export function SettingsForm({
   storeId,
   initialName,
@@ -52,75 +56,105 @@ export function SettingsForm({
   }
 
   return (
-    <div className="mt-6 flex flex-col gap-6">
-      <label className="flex flex-col gap-2 text-base">
-        店舗名
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="例: 定食屋たろう"
-          className="rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
-        />
-      </label>
+    <div className="flex flex-col gap-4">
+      <div className="rounded border p-5" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+        <p className="mb-4 text-sm font-semibold" style={labelStyle}>
+          店舗情報
+        </p>
+        <label className="flex flex-col gap-2 text-base" style={labelStyle}>
+          店舗名
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="例: 定食屋たろう"
+            className={INPUT_CLASS}
+            style={inputStyle}
+          />
+        </label>
+      </div>
 
-      <label className="flex flex-col gap-2 text-base">
-        目標原価率(%)
-        <input
-          type="number"
-          min={1}
-          max={100}
-          step="1"
-          inputMode="decimal"
-          value={targetCostRate}
-          onChange={(e) => setTargetCostRate(e.target.value)}
-          className="rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
-        />
-        <span className="text-xs text-black/40 dark:text-white/40">
-          この数値を超えると、メニュー一覧や収益ランキングで「値上げ検討」として目立つように表示されます。メニューごとに個別の目標を設定していない場合はこの値が使われます(未設定なら30%)。
-        </span>
-      </label>
+      <div className="rounded border p-5" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+        <p className="mb-4 text-sm font-semibold" style={labelStyle}>
+          目標値
+        </p>
+        <label className="flex flex-col gap-2 text-base" style={labelStyle}>
+          目標原価率(%)
+          <input
+            type="number"
+            min={1}
+            max={100}
+            step="1"
+            inputMode="decimal"
+            value={targetCostRate}
+            onChange={(e) => setTargetCostRate(e.target.value)}
+            className={INPUT_CLASS + " font-mono"}
+            style={inputStyle}
+          />
+          <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+            この数値を超えると、メニュー一覧や収益ランキングで「値上げ検討」として目立つように表示されます。メニューごとに個別の目標を設定していない場合はこの値が使われます(未設定なら30%)。
+          </span>
+        </label>
+      </div>
 
-      <label className="flex flex-col gap-2 text-base">
-        家賃(月額)
-        <input
-          type="number"
-          min={0}
-          step="1"
-          inputMode="decimal"
-          value={rent}
-          onChange={(e) => setRent(e.target.value)}
-          placeholder="例: 180000(未入力なら変更しません)"
-          className="rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
-        />
-        <span className="text-xs text-black/40 dark:text-white/40">
-          一度設定すれば、金額を変えるまで翌月以降も引き継がれます。
-        </span>
-      </label>
+      <div className="rounded border p-5" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+        <p className="mb-4 text-sm font-semibold" style={labelStyle}>
+          固定費(月額)
+        </p>
+        <div className="flex flex-col gap-4">
+          <label className="flex flex-col gap-2 text-base" style={labelStyle}>
+            家賃(月額)
+            <input
+              type="number"
+              min={0}
+              step="1"
+              inputMode="decimal"
+              value={rent}
+              onChange={(e) => setRent(e.target.value)}
+              placeholder="例: 180000(未入力なら変更しません)"
+              className={INPUT_CLASS + " font-mono"}
+              style={inputStyle}
+            />
+            <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+              一度設定すれば、金額を変えるまで翌月以降も引き継がれます。
+            </span>
+          </label>
 
-      <label className="flex flex-col gap-2 text-base">
-        {monthLabel}の人件費
-        <input
-          type="number"
-          min={0}
-          step="1"
-          inputMode="decimal"
-          value={labor}
-          onChange={(e) => setLabor(e.target.value)}
-          placeholder="例: 400000(未入力なら変更しません)"
-          className="rounded-lg border border-black/15 bg-transparent px-4 py-3 text-base dark:border-white/20"
-        />
-        <span className="text-xs text-black/40 dark:text-white/40">
-          人件費は月によって変わるため、今月分だけをここで設定します。過去・翌月以降の分はFL比率画面から月を選んで入力できます。
-        </span>
-      </label>
+          <label className="flex flex-col gap-2 text-base" style={labelStyle}>
+            {monthLabel}の人件費
+            <input
+              type="number"
+              min={0}
+              step="1"
+              inputMode="decimal"
+              value={labor}
+              onChange={(e) => setLabor(e.target.value)}
+              placeholder="例: 400000(未入力なら変更しません)"
+              className={INPUT_CLASS + " font-mono"}
+              style={inputStyle}
+            />
+            <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+              人件費は月によって変わるため、今月分だけをここで設定します。過去・翌月以降の分はFL比率画面から月を選んで入力できます。
+            </span>
+          </label>
+        </div>
+      </div>
 
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-      {saved && !error && <p className="text-sm text-emerald-600 dark:text-emerald-400">保存しました</p>}
+      {error && (
+        <p className="text-sm" style={{ color: "var(--status-danger)" }}>
+          {error}
+        </p>
+      )}
+      {saved && !error && (
+        <p className="text-sm" style={{ color: "var(--status-ok)" }}>
+          保存しました
+        </p>
+      )}
 
       <button
         onClick={handleSave}
         disabled={saving}
-        className="rounded-lg bg-black px-5 py-4 text-base font-medium text-white disabled:opacity-40 dark:bg-white dark:text-black"
+        className="rounded px-5 py-4 text-base font-bold transition-colors disabled:opacity-40"
+        style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
       >
         {saving ? "保存中…" : "保存する"}
       </button>

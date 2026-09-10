@@ -7,6 +7,7 @@ import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient, type Ra
 import { monthToPeriod, currentMonthString } from "@/lib/period/month";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
+import { PageHeader } from "@/components/PageHeader.tsx";
 import { RankingView } from "./RankingView.tsx";
 
 export const metadata: Metadata = {
@@ -20,12 +21,12 @@ export default async function RankingPage({
 }) {
   if (!isSupabaseConfigured()) {
     return (
-      <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
-        <h1 className="text-xl font-bold tracking-tight">メニュー別収益貢献度ランキング</h1>
-        <p className="mt-4 text-sm text-black/60 dark:text-white/60">
+      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+        <PageHeader eyebrow="収益ランキング" title="メニュー別収益貢献度ランキング" />
+        <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           Supabaseが未接続のため、この画面はまだ利用できません。
         </p>
-      </main>
+      </div>
     );
   }
 
@@ -38,9 +39,9 @@ export default async function RankingPage({
   const store = await getOrCreateStore(supabase, user.id);
   if (!store) {
     return (
-      <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
+      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
         <StoreLoadError />
-      </main>
+      </div>
     );
   }
 
@@ -55,13 +56,13 @@ export default async function RankingPage({
 
   if (!menus || menus.length === 0) {
     return (
-      <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
-        <h1 className="text-xl font-bold tracking-tight">メニュー別収益貢献度ランキング</h1>
-        <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+        <PageHeader eyebrow="収益ランキング" title="メニュー別収益貢献度ランキング" />
+        <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           メニューを登録すると、利益貢献度のランキングがここに表示されます。
         </p>
         <StartHerePrompt />
-      </main>
+      </div>
     );
   }
 
@@ -121,11 +122,12 @@ export default async function RankingPage({
   });
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
-      <h1 className="text-xl font-bold tracking-tight">メニュー別収益貢献度ランキング</h1>
-      <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-        「販売数量 ×(売価-原価)」で実際の利益貢献度を算出しています。原価率が高くても数が出ないメニューより、利益への貢献が大きいメニューが上位に来ます。
-      </p>
+    <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+      <PageHeader
+        eyebrow="収益ランキング"
+        title="メニュー別収益貢献度ランキング"
+        description="「販売数量 ×(売価-原価)」で実際の利益貢献度を算出しています。原価率が高くても数が出ないメニューより、利益への貢献が大きいメニューが上位に来ます。"
+      />
       <RankingView
         storeId={store.id}
         month={month}
@@ -133,6 +135,6 @@ export default async function RankingPage({
         summaries={summaries}
         menus={rankingMenus}
       />
-    </main>
+    </div>
   );
 }

@@ -6,6 +6,7 @@ import { getOrCreateStore } from "@/lib/store";
 import { computeStoreAlerts } from "@/lib/marketPrices/computeStoreAlerts";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
+import { PageHeader } from "@/components/PageHeader.tsx";
 import { AlertsView } from "./AlertsView.tsx";
 import { LivestockLinkSettings } from "./LivestockLinkSettings.tsx";
 
@@ -16,12 +17,12 @@ export const metadata: Metadata = {
 export default async function AlertsPage() {
   if (!isSupabaseConfigured()) {
     return (
-      <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
-        <h1 className="text-xl font-bold tracking-tight">仕入れ値変動アラート</h1>
-        <p className="mt-4 text-sm text-black/60 dark:text-white/60">
+      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+        <PageHeader eyebrow="仕入れ値アラート" title="仕入れ値変動アラート" />
+        <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           Supabaseが未接続のため、この画面はまだ利用できません。
         </p>
-      </main>
+      </div>
     );
   }
 
@@ -34,9 +35,9 @@ export default async function AlertsPage() {
   const store = await getOrCreateStore(supabase, user.id);
   if (!store) {
     return (
-      <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
+      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
         <StoreLoadError />
-      </main>
+      </div>
     );
   }
 
@@ -49,13 +50,13 @@ export default async function AlertsPage() {
 
   if (!menus || menus.length === 0) {
     return (
-      <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
-        <h1 className="text-xl font-bold tracking-tight">仕入れ値変動アラート</h1>
-        <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+        <PageHeader eyebrow="仕入れ値アラート" title="仕入れ値変動アラート" />
+        <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           メニューと食材を登録すると、市場価格の変動アラートがここに表示されます。
         </p>
         <StartHerePrompt />
-      </main>
+      </div>
     );
   }
 
@@ -92,11 +93,12 @@ export default async function AlertsPage() {
   } = await computeStoreAlerts(supabase, store, alertIngredients, alertMenus, alertMenuIngredients);
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
-      <h1 className="text-xl font-bold tracking-tight">仕入れ値変動アラート</h1>
-      <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-        農水省「青果物卸売市場調査(旬別結果)」「畜産物卸売価格の推移」の市場価格をもとに、市場価格の変動率がそのまま仕入単価に反映されたと仮定した場合の試算原価率を表示します。実際に仕入単価を変更した結果ではありません。
-      </p>
+    <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+      <PageHeader
+        eyebrow="仕入れ値アラート"
+        title="仕入れ値変動アラート"
+        description="農水省「青果物卸売市場調査(旬別結果)」「畜産物卸売価格の推移」の市場価格をもとに、市場価格の変動率がそのまま仕入単価に反映されたと仮定した場合の試算原価率を表示します。実際に仕入単価を変更した結果ではありません。"
+      />
 
       <AlertsView
         produceAlerts={produceAlerts}
@@ -107,6 +109,6 @@ export default async function AlertsPage() {
       />
 
       <LivestockLinkSettings unlinkedIngredients={unlinkedIngredients} linkedIngredients={linkedIngredients} />
-    </main>
+    </div>
   );
 }

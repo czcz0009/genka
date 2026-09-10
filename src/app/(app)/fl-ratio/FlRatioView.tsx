@@ -5,14 +5,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatMonthLabel } from "@/lib/period/month";
 import type { Severity } from "@/lib/flRatio";
+import { StatusBadge, type BadgeStatus } from "@/components/StatusBadge.tsx";
 import { saveFixedCost } from "./actions.ts";
 import { FlRatioChart, type TrendPoint } from "./FlRatioChart.tsx";
 
-const SEVERITY_STYLE: Record<Severity, string> = {
-  normal: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
-  caution: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  danger: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
-};
+const SEVERITY_STATUS: Record<Severity, BadgeStatus> = { normal: "ok", caution: "warn", danger: "danger" };
 const SEVERITY_LABEL: Record<Severity, string> = { normal: "正常", caution: "注意", danger: "危険" };
 
 function formatPercent(n: number | null): string {
@@ -37,14 +34,15 @@ export function FlRatioView({
   const router = useRouter();
 
   return (
-    <div className="mt-8 flex flex-col gap-6">
-      <label className="flex items-center gap-2 text-sm">
+    <div className="flex flex-col gap-6">
+      <label className="flex items-center gap-2 text-sm" style={{ color: "var(--foreground)" }}>
         対象月:
         <input
           type="month"
           value={month}
           onChange={(e) => router.push(`?month=${e.target.value}`)}
-          className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+          className="rounded border px-3 py-2 text-sm"
+          style={{ background: "var(--background)", borderColor: "var(--border)", color: "var(--foreground)" }}
         />
       </label>
 
@@ -54,14 +52,16 @@ export function FlRatioView({
         <RatioCard label="FL比率" value={formatPercent(current.flRate)} severity={current.flSeverity} />
         <RatioCard label="FLR比率" value={formatPercent(current.flrRate)} severity={current.flrSeverity} />
       </div>
-      <p className="-mt-3 text-xs text-black/40 dark:text-white/40">
+      <p className="-mt-3 text-xs" style={{ color: "var(--muted-foreground)" }}>
         FL比率 = (食材原価 + 人件費)÷ 売上。FLR比率 = そこにさらに家賃を加えたものの割合です。
       </p>
 
       <FixedCostEntry storeId={storeId} month={month} currentLabor={currentLabor} currentRent={currentRent} />
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold">月次推移</h2>
+        <h2 className="mb-2 text-sm font-semibold" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+          月次推移
+        </h2>
         <FlRatioChart trend={trend} />
       </section>
     </div>
@@ -70,15 +70,15 @@ export function FlRatioView({
 
 function RatioCard({ label, value, severity }: { label: string; value: string; severity?: Severity | null }) {
   return (
-    <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
-      <p className="text-2xl font-bold">{value}</p>
+    <div className="rounded border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+      <p className="font-mono text-2xl font-bold" style={{ color: "var(--foreground)" }}>
+        {value}
+      </p>
       <div className="mt-1 flex items-center gap-2">
-        <p className="text-xs text-black/50 dark:text-white/50">{label}</p>
-        {severity && (
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${SEVERITY_STYLE[severity]}`}>
-            {SEVERITY_LABEL[severity]}
-          </span>
-        )}
+        <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+          {label}
+        </p>
+        {severity && <StatusBadge status={SEVERITY_STATUS[severity]} label={SEVERITY_LABEL[severity]} />}
       </div>
     </div>
   );
@@ -125,7 +125,8 @@ function FixedCostEntry({
     return (
       <button
         onClick={() => setOpen(true)}
-        className="self-start rounded-lg border border-black/15 px-4 py-2.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+        className="self-start rounded border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[color:var(--muted)]"
+        style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
       >
         {formatMonthLabel(month)}の家賃・人件費を編集する
       </button>
@@ -133,18 +134,21 @@ function FixedCostEntry({
   }
 
   return (
-    <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+    <div className="rounded border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
       <div className="mb-3 flex items-center justify-between">
-        <p className="text-sm font-semibold">{formatMonthLabel(month)}の固定費</p>
+        <p className="text-sm font-semibold" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+          {formatMonthLabel(month)}の固定費
+        </p>
         <button
           onClick={() => setOpen(false)}
-          className="text-xs text-black/40 underline underline-offset-2 hover:text-black dark:text-white/40 dark:hover:text-white"
+          className="text-xs underline underline-offset-2"
+          style={{ color: "var(--muted-foreground)" }}
         >
           閉じる
         </button>
       </div>
       <div className="flex flex-col gap-3 sm:flex-row">
-        <label className="flex flex-1 flex-col gap-2 text-sm sm:flex-row sm:items-center">
+        <label className="flex flex-1 flex-col gap-2 text-sm sm:flex-row sm:items-center" style={{ color: "var(--foreground)" }}>
           <span className="shrink-0">人件費(月次)</span>
           <div className="flex flex-1 items-center gap-2">
             <input
@@ -153,19 +157,21 @@ function FixedCostEntry({
               value={labor}
               onChange={(e) => setLabor(e.target.value)}
               placeholder="例: 400000"
-              className="w-full min-w-0 rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+              className="w-full min-w-0 rounded border px-3 py-2 font-mono text-sm"
+              style={{ background: "var(--background)", borderColor: "var(--border)", color: "var(--foreground)" }}
             />
             <span className="shrink-0">円</span>
             <button
               onClick={() => handleSave("labor")}
               disabled={saving === "labor"}
-              className="shrink-0 rounded-lg border border-black/15 px-3 py-2 text-sm disabled:opacity-40 dark:border-white/20"
+              className="shrink-0 rounded border px-3 py-2 text-sm disabled:opacity-40"
+              style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
             >
               {saving === "labor" ? "保存中…" : "保存"}
             </button>
           </div>
         </label>
-        <label className="flex flex-1 flex-col gap-2 text-sm sm:flex-row sm:items-center">
+        <label className="flex flex-1 flex-col gap-2 text-sm sm:flex-row sm:items-center" style={{ color: "var(--foreground)" }}>
           <span className="shrink-0">家賃(月額・継続)</span>
           <div className="flex flex-1 items-center gap-2">
             <input
@@ -174,27 +180,33 @@ function FixedCostEntry({
               value={rent}
               onChange={(e) => setRent(e.target.value)}
               placeholder="例: 180000"
-              className="w-full min-w-0 rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+              className="w-full min-w-0 rounded border px-3 py-2 font-mono text-sm"
+              style={{ background: "var(--background)", borderColor: "var(--border)", color: "var(--foreground)" }}
             />
             <span className="shrink-0">円</span>
             <button
               onClick={() => handleSave("rent")}
               disabled={saving === "rent"}
-              className="shrink-0 rounded-lg border border-black/15 px-3 py-2 text-sm disabled:opacity-40 dark:border-white/20"
+              className="shrink-0 rounded border px-3 py-2 text-sm disabled:opacity-40"
+              style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
             >
               {saving === "rent" ? "保存中…" : "保存"}
             </button>
           </div>
         </label>
       </div>
-      <p className="mt-2 text-xs text-black/40 dark:text-white/40">
+      <p className="mt-2 text-xs" style={{ color: "var(--muted-foreground)" }}>
         家賃は一度登録すれば、金額が変わるまで翌月以降にも引き継がれます。人件費は月ごとに入力してください。今月分だけでよければ、
-        <Link href="/settings" className="underline underline-offset-2 hover:text-black dark:hover:text-white">
+        <Link href="/settings" className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
           店舗設定
         </Link>
         からも入力できます。
       </p>
-      {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && (
+        <p className="mt-2 text-sm" style={{ color: "var(--status-danger)" }}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }

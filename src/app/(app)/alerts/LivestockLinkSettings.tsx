@@ -100,23 +100,30 @@ export function LivestockLinkSettings({
   }
 
   return (
-    <section className="rounded-lg border border-black/10 p-4 dark:border-white/10">
-      <h2 className="text-sm font-semibold">畜産物(豚・牛・鶏肉)の価格アラート対象設定</h2>
-      <p className="mt-1 text-xs text-black/50 dark:text-white/50">
+    <section className="rounded border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+      <h2 className="text-sm font-semibold" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+        畜産物(豚・牛・鶏肉)の価格アラート対象設定
+      </h2>
+      <p className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
         「豚肉」「牛肉ロース」のような登録名だけでは、どの規格(和牛A5なのかA4なのか等)の価格に対応するか自動では判断できません。対象にしたい食材があれば、規格を選んで確定してください(未設定の食材は価格アラートの対象になりません)。
       </p>
 
       {localLinked.length > 0 && (
         <ul className="mt-3 flex flex-col gap-2">
           {localLinked.map((i) => (
-            <li key={i.id} className="flex items-center justify-between rounded border border-black/10 px-3 py-2 text-sm dark:border-white/10">
+            <li
+              key={i.id}
+              className="flex items-center justify-between rounded border px-3 py-2 text-sm"
+              style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+            >
               <span>
-                {i.name} <span className="text-black/40 dark:text-white/40">→ {i.itemLabel}</span>
+                {i.name} <span style={{ color: "var(--muted-foreground)" }}>→ {i.itemLabel}</span>
               </span>
               <button
                 onClick={() => handleClear(i.id)}
                 disabled={saving === i.id}
-                className="rounded-lg px-3 py-2 text-sm text-black/50 underline underline-offset-2 hover:bg-black/5 hover:text-black disabled:opacity-40 dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white"
+                className="rounded px-3 py-2 text-sm underline underline-offset-2 transition-colors hover:bg-[color:var(--muted)] disabled:opacity-40"
+                style={{ color: "var(--muted-foreground)" }}
               >
                 解除
               </button>
@@ -128,8 +135,10 @@ export function LivestockLinkSettings({
       {localUnlinked.length > 0 && (
         <ul className="mt-3 flex flex-col gap-3">
           {localUnlinked.map((i) => (
-            <li key={i.id} className="flex flex-col gap-3 rounded-lg border border-black/10 p-4 dark:border-white/10">
-              <p className="text-base font-medium">{i.name}</p>
+            <li key={i.id} className="flex flex-col gap-3 rounded border p-4" style={{ borderColor: "var(--border)" }}>
+              <p className="text-base font-medium" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+                {i.name}
+              </p>
               {/*
                 以前はここに畜産物の全規格(豚・牛・鶏)を無条件に並べており、
                 「牛肉」という食材にまで豚肉の規格が選べてしまう不具合があった。
@@ -153,7 +162,8 @@ export function LivestockLinkSettings({
               <button
                 onClick={() => handleSave(i.id)}
                 disabled={saving === i.id || !selection[i.id]}
-                className="self-start rounded-lg border border-black/15 px-4 py-2.5 text-sm font-medium disabled:opacity-40 dark:border-white/20"
+                className="self-start rounded border px-4 py-2.5 text-sm font-medium disabled:opacity-40"
+                style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
               >
                 確定
               </button>
@@ -162,7 +172,11 @@ export function LivestockLinkSettings({
         </ul>
       )}
 
-      {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && (
+        <p className="mt-3 text-sm" style={{ color: "var(--status-danger)" }}>
+          {error}
+        </p>
+      )}
     </section>
   );
 }

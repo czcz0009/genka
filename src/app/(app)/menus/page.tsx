@@ -55,11 +55,27 @@ export default async function MenusPage() {
     );
   }
 
-  const { data: menus } = await supabase
-    .from("menus")
-    .select("id, name, selling_price, target_cost_rate, created_at")
-    .eq("store_id", store.id)
-    .order("created_at", { ascending: true });
+  // menu_ingredients・ingredientsはmenusの結果に依存せず(store_idだけで絞り込める)、
+  // 以前は「まずmenusだけ取得→空でなければ残り2つをPromise.all」と直列に待っていた。
+  // 3つとも最初から並列で投げることでナビゲーションあたりのDB往復を1回減らしている
+  // (メニューが1件も無い場合はmenu_ingredients/ingredientsの結果を使わず捨てるだけの
+  // 無駄になるが、それは初回登録前だけの一時的な状態であり、登録後の毎回のアクセスが
+  // 速くなる方を優先する)。
+  const [{ data: menus }, { data: menuIngredients }, { data: ingredients }] = await Promise.all([
+    supabase
+      .from("menus")
+      .select("id, name, selling_price, target_cost_rate, created_at")
+      .eq("store_id", store.id)
+      .order("created_at", { ascending: true }),
+    // メニュー一覧に必要なのは「原価・原価率」だけで、販売実績は使わないため
+    // sales は渡さない(渡さなければ利益貢献度は常に0/null扱いになり、ソート順に
+    // 影響しない=登録順のまま表示される)。
+    supabase
+      .from("menu_ingredients")
+      .select("menu_id, ingredient_id, quantity, menus!inner(store_id)")
+      .eq("menus.store_id", store.id),
+    supabase.from("ingredients").select("id, current_purchase_price").eq("store_id", store.id),
+  ]);
 
   if (!menus || menus.length === 0) {
     return (
@@ -72,17 +88,6 @@ export default async function MenusPage() {
       </div>
     );
   }
-
-  // メニュー一覧に必要なのは「原価・原価率」だけで、販売実績は使わないため
-  // sales は渡さない(渡さなければ利益貢献度は常に0/null扱いになり、ソート順に
-  // 影響しない=登録順のまま表示される)。
-  const [{ data: menuIngredients }, { data: ingredients }] = await Promise.all([
-    supabase
-      .from("menu_ingredients")
-      .select("menu_id, ingredient_id, quantity, menus!inner(store_id)")
-      .eq("menus.store_id", store.id),
-    supabase.from("ingredients").select("id, current_purchase_price").eq("store_id", store.id),
-  ]);
 
   const rankingMenus: RankingMenu[] = menus.map((m) => ({
     id: m.id,

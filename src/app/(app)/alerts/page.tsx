@@ -39,11 +39,19 @@ export default async function AlertsPage() {
     );
   }
 
-  // メニューが1件もなければ、食材と紐付ける対象がそもそも無いため、市場データ
-  // (旬別・月別の全履歴)を取得するだけ無駄。ここで打ち切って案内だけ出す。
-  const [{ data: ingredients }, { data: menus }] = await Promise.all([
+  // ingredients・menus・menu_ingredientsはどれもstore_idだけで絞り込め、互いの
+  // 結果に依存しないため最初から並列で投げる(以前は「ingredients+menusを
+  // Promise.all→空でなければmenu_ingredientsを追加取得」と2段階に直列で待っており、
+  // ナビゲーションのたびに無駄な往復が発生していた)。市場データ(旬別・月別の
+  // 全履歴)側の取得はcomputeStoreAlerts内で行うため、メニューが1件も無ければ
+  // その呼び出し自体をスキップして案内だけ出す。
+  const [{ data: ingredients }, { data: menus }, { data: menuIngredients }] = await Promise.all([
     supabase.from("ingredients").select("id, name, current_purchase_price").eq("store_id", store.id),
     supabase.from("menus").select("id, name, selling_price, target_cost_rate").eq("store_id", store.id),
+    supabase
+      .from("menu_ingredients")
+      .select("menu_id, ingredient_id, quantity, menus!inner(store_id)")
+      .eq("menus.store_id", store.id),
   ]);
 
   if (!menus || menus.length === 0) {
@@ -57,11 +65,6 @@ export default async function AlertsPage() {
       </div>
     );
   }
-
-  const { data: menuIngredients } = await supabase
-    .from("menu_ingredients")
-    .select("menu_id, ingredient_id, quantity, menus!inner(store_id)")
-    .eq("menus.store_id", store.id);
 
   const alertIngredients = (ingredients ?? []).map((i) => ({
     id: i.id,

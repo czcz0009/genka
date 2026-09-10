@@ -45,12 +45,26 @@ export default async function RankingPage({
 
   const { month: monthParam } = await searchParams;
 
-  // メニューが1件もなければ、それ以降の重いクエリ(販売実績・食材等)は
-  // 実行するだけ無駄なので、ここで打ち切って「まずはここから」の案内だけ出す。
-  const { data: menus } = await supabase
-    .from("menus")
-    .select("id, name, selling_price, target_cost_rate")
-    .eq("store_id", store.id);
+  // menus・menuSalesPeriods・menu_ingredients・ingredientsはどれもstore_idだけで
+  // 絞り込めて互いの結果に依存しないため、最初から並列で投げる(以前は
+  // 「まずmenusだけ→空でなければmenuSalesPeriods→その後残りをPromise.all」と
+  // 2段階に直列で待っており、ナビゲーションのたびに無駄な往復が発生していた)。
+  // sales(対象月の販売実績)だけはmonthの決定(menuSalesPeriodsの結果が必要)に
+  // 依存するため、これだけは後段で別途取得する。
+  const [{ data: menus }, { data: menuSalesPeriods }, { data: menuIngredients }, { data: ingredients }] =
+    await Promise.all([
+      supabase.from("menus").select("id, name, selling_price, target_cost_rate").eq("store_id", store.id),
+      supabase
+        .from("menu_sales")
+        .select("period_start, menus!inner(store_id)")
+        .eq("menus.store_id", store.id)
+        .order("period_start", { ascending: false }),
+      supabase.from("menu_ingredients").select("menu_id, ingredient_id, quantity, menus!inner(store_id)").eq(
+        "menus.store_id",
+        store.id,
+      ),
+      supabase.from("ingredients").select("id, current_purchase_price").eq("store_id", store.id),
+    ]);
 
   if (!menus || menus.length === 0) {
     return (
@@ -64,12 +78,6 @@ export default async function RankingPage({
     );
   }
 
-  const { data: menuSalesPeriods } = await supabase
-    .from("menu_sales")
-    .select("period_start, menus!inner(store_id)")
-    .eq("menus.store_id", store.id)
-    .order("period_start", { ascending: false });
-
   const availableMonths = Array.from(
     new Set((menuSalesPeriods ?? []).map((r) => (r.period_start as string).slice(0, 7))),
   ).sort();
@@ -77,19 +85,12 @@ export default async function RankingPage({
   const month = monthParam ?? availableMonths[availableMonths.length - 1] ?? currentMonthString();
   const period = monthToPeriod(month);
 
-  const [{ data: menuIngredients }, { data: ingredients }, { data: sales }] = await Promise.all([
-    supabase.from("menu_ingredients").select("menu_id, ingredient_id, quantity, menus!inner(store_id)").eq(
-      "menus.store_id",
-      store.id,
-    ),
-    supabase.from("ingredients").select("id, current_purchase_price").eq("store_id", store.id),
-    supabase
-      .from("menu_sales")
-      .select("menu_id, quantity_sold, menus!inner(store_id)")
-      .eq("menus.store_id", store.id)
-      .eq("period_start", period.start)
-      .eq("period_end", period.end),
-  ]);
+  const { data: sales } = await supabase
+    .from("menu_sales")
+    .select("menu_id, quantity_sold, menus!inner(store_id)")
+    .eq("menus.store_id", store.id)
+    .eq("period_start", period.start)
+    .eq("period_end", period.end);
 
   const rankingMenus: RankingMenu[] = (menus ?? []).map((m) => ({
     id: m.id,

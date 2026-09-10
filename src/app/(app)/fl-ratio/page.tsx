@@ -59,27 +59,13 @@ export default async function FlRatioPage({
   const rangeStart = monthToPeriod(months[0]).start;
   const rangeEnd = monthToPeriod(months[months.length - 1]).end;
 
-  // メニューが1件もなければ、それ以降の重いクエリ(月次推移の再計算等)は
-  // 実行するだけ無駄なので、ここで打ち切って「まずはここから」の案内だけ出す。
-  const { data: menus } = await supabase
-    .from("menus")
-    .select("id, name, selling_price, target_cost_rate")
-    .eq("store_id", store.id);
-
-  if (!menus || menus.length === 0) {
-    return (
-      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
-        <PageHeader eyebrow="FL比率" title="FL比率・FLR比率" />
-        <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-          メニューを登録すると、F比率(食材原価)を含むFL比率がここに表示されます。
-        </p>
-        <StartHerePrompt />
-      </div>
-    );
-  }
-
-  const [{ data: menuIngredients }, { data: ingredients }, { data: sales }, { data: fixedCosts }] =
+  // menus・menu_ingredients・ingredients・sales・fixedCostsはどれもstore_id(と
+  // 期間)だけで絞り込め、menusの結果に依存しないため最初から並列で投げる(以前は
+  // 「まずmenusだけ→空でなければ残り4つをPromise.all」と直列に待っており、
+  // ナビゲーションのたびに無駄な往復が発生していた)。
+  const [{ data: menus }, { data: menuIngredients }, { data: ingredients }, { data: sales }, { data: fixedCosts }] =
     await Promise.all([
+      supabase.from("menus").select("id, name, selling_price, target_cost_rate").eq("store_id", store.id),
       supabase
         .from("menu_ingredients")
         .select("menu_id, ingredient_id, quantity, menus!inner(store_id)")
@@ -96,6 +82,20 @@ export default async function FlRatioPage({
         .select("cost_type, amount, period_start, period_end")
         .eq("store_id", store.id),
     ]);
+
+  // メニューが1件もなければ、上で取得した月次推移用データは使わずに
+  // 「まずはここから」の案内だけ出す。
+  if (!menus || menus.length === 0) {
+    return (
+      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+        <PageHeader eyebrow="FL比率" title="FL比率・FLR比率" />
+        <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+          メニューを登録すると、F比率(食材原価)を含むFL比率がここに表示されます。
+        </p>
+        <StartHerePrompt />
+      </div>
+    );
+  }
 
   const rankingMenus: RankingMenu[] = (menus ?? []).map((m) => ({
     id: m.id,

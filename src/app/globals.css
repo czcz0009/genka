@@ -1,31 +1,101 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-  /* これを指定しないと、ページ自体はダークモードでもselectのポップアップや
-     スクロールバーなどのネイティブUIだけ白背景のまま浮いてしまう
-     (実際に食材選択プルダウンが「見づらい」と指摘され気づいた不具合)。 */
-  color-scheme: light;
-}
-
+/*
+  design-reference/(Figma Make案)の配色・タイポグラフィをそのまま踏襲した
+  デザイントークン。ロジック(データ取得・計算・状態管理)には一切手を
+  入れていない — 各画面のスタイル・レイアウトだけをこのトークンに
+  合わせて作り直している。
+*/
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-status-ok: var(--status-ok);
+  --color-status-warn: var(--status-warn);
+  --color-status-danger: var(--status-danger);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --font-sans: var(--font-inter), var(--font-noto-sans-jp), sans-serif;
+  --font-mono: var(--font-jetbrains-mono), monospace;
+}
+
+:root {
+  --background: #f4f5f7;
+  --foreground: #111827;
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --primary: #1e3a5f;
+  --primary-foreground: #ffffff;
+  --secondary: #e8edf4;
+  --secondary-foreground: #1e3a5f;
+  --muted: #edf0f4;
+  --muted-foreground: #6b7280;
+  --accent: #2563a8;
+  --accent-foreground: #ffffff;
+  --border: #d1d9e6;
+  --ring: #2563a8;
+  --status-ok: #16a34a;
+  --status-warn: #d97706;
+  --status-danger: #dc2626;
+  --radius: 4px;
+  /* これを指定しないと、ページ自体はダークモードでもselectのポップアップや
+     スクロールバーなどのネイティブUIだけ白背景のまま浮いてしまう。 */
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0d1420;
+    --foreground: #e8edf4;
+    --card: #1a2436;
+    --card-foreground: #e8edf4;
+    --primary: #2563a8;
+    --primary-foreground: #ffffff;
+    --secondary: #1e2d42;
+    --secondary-foreground: #a8bdd4;
+    --muted: #1e2d42;
+    --muted-foreground: #7b93ad;
+    --accent: #3b82c4;
+    --accent-foreground: #ffffff;
+    --border: #2a3d58;
+    --ring: #3b82c4;
+    --status-ok: #22c55e;
+    --status-warn: #f59e0b;
+    --status-danger: #ef4444;
     color-scheme: dark;
   }
+}
+
+html,
+body {
+  height: 100%;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+}
+
+.font-mono {
+  font-family: var(--font-mono) !important;
+}
+
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
 }

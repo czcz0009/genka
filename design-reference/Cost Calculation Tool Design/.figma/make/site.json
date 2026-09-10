@@ -1,0 +1,10 @@
+{
+  "description": "Simplifies cost calculation and management for small restaurant owners by tracking menu costs, FL ratios, and market price alerts to optimize profitability.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

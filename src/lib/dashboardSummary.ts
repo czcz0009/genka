@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient, type RankingSales } from "./menuRanking.ts";
 import { aggregateSalesAndFoodCost, calcFlRatios, selectApplicableFixedCost, type FixedCostRow } from "./flRatio.ts";
@@ -84,15 +85,24 @@ export async function buildFastDashboardSummary(
     defaultTargetCostRate: store.defaultTargetCostRate,
   });
 
-  const costRates = summaries.map((s) => s.costRate).filter((r): r is number => r != null);
+  // 売価・原価が未入力のメニューはcostRateがnullになるため、平均の対象から除外する
+  // (Number.isFiniteでの二重チェックは、万一計算過程で不正な値が紛れ込んでも
+  // 画面に「NaN%」を出さないための保険)。
+  const costRates = summaries.map((s) => s.costRate).filter((r): r is number => r != null && Number.isFinite(r));
   const averageCostRate = costRates.length > 0 ? costRates.reduce((a, b) => a + b, 0) / costRates.length : null;
   const overTargetCount = summaries.filter((s) => s.overTarget).length;
 
   return { menuCount: rankingMenus.length, averageCostRate, overTargetCount };
 }
 
-/** 今月のFL比率(食材原価+人件費)。人件費未設定 or 今月の販売実績が無ければnull */
-export async function getCurrentFlRate(
+/**
+ * 今月のFL比率(食材原価+人件費)。人件費未設定 or 今月の販売実績が無ければnull。
+ *
+ * react の cache() で1リクエスト内の呼び出しをメモ化している。ダッシュボードの
+ * KPIカードと「変わったこと」ダイジェストの両方から同じ値が必要になるが、
+ * 同じ内容を2回計算・再取得すると優先度3で直した無駄なクエリが復活してしまう。
+ */
+export const getCurrentFlRate = cache(async function getCurrentFlRate(
   supabase: SupabaseClient,
   store: { id: string; defaultTargetCostRate: number },
 ): Promise<number | null> {
@@ -138,15 +148,32 @@ export async function getCurrentFlRate(
   const rentCost = selectApplicableFixedCost(fixedCostRows, "rent", period);
   const { flRate } = calcFlRatios({ totalSales, totalFoodCost, laborCost, rentCost });
   return flRate;
+});
+
+export interface AlertDigestItem {
+  ingredientName: string;
+  changePercent: number;
+  direction: "up" | "down";
+  affectedMenuNames: string[];
 }
 
-/** 仕入れ値変動アラートの件数(青果物+畜産物)。市場価格データの取得を伴うため相対的に遅い */
-export async function getAlertCount(
+export interface AlertSummary {
+  count: number;
+  /** ダッシュボードの「変わったこと」ダイジェスト用。変動幅が大きい順の上位数件。 */
+  topAlerts: AlertDigestItem[];
+}
+
+/**
+ * 仕入れ値変動アラートの件数・上位内容(青果物+畜産物)。市場価格データの取得を
+ * 伴うため相対的に遅い。cache()でメモ化し、KPIカードとダイジェストの両方から
+ * 呼んでも実際の計算は1リクエストにつき1回で済むようにしている。
+ */
+export const getAlertSummary = cache(async function getAlertSummary(
   supabase: SupabaseClient,
   store: { id: string; defaultTargetCostRate: number },
-): Promise<number> {
+): Promise<AlertSummary> {
   const { rankingMenus, rankingMenuIngredients, alertIngredients } = await fetchRankingInputs(supabase, store);
-  if (rankingMenus.length === 0) return 0;
+  if (rankingMenus.length === 0) return { count: 0, topAlerts: [] };
 
   const { produceAlerts, livestockAlerts } = await computeStoreAlerts(
     supabase,
@@ -155,5 +182,15 @@ export async function getAlertCount(
     rankingMenus,
     rankingMenuIngredients,
   );
-  return produceAlerts.length + livestockAlerts.length;
-}
+  const allAlerts = [...produceAlerts, ...livestockAlerts].sort(
+    (a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent),
+  );
+  const topAlerts: AlertDigestItem[] = allAlerts.slice(0, 2).map((a) => ({
+    ingredientName: a.ingredientName,
+    changePercent: a.changePercent,
+    direction: a.direction,
+    affectedMenuNames: a.affectedMenus.map((m) => m.menuName),
+  }));
+
+  return { count: allAlerts.length, topAlerts };
+});

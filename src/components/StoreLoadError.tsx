@@ -7,11 +7,12 @@
  */
 export function StoreLoadError() {
   return (
-    <div className="text-sm text-red-600 dark:text-red-400">
+    <div className="text-sm" style={{ color: "var(--status-danger)" }}>
       <p>店舗情報の取得に失敗しました。ネットワークが不安定になっている可能性があります。</p>
       <button
         onClick={() => location.reload()}
-        className="mt-3 rounded-lg border border-red-300 px-4 py-2.5 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-900/20"
+        className="mt-3 rounded border px-4 py-2.5 transition-colors"
+        style={{ borderColor: "var(--status-danger)", color: "var(--status-danger)" }}
       >
         再読み込みする
       </button>

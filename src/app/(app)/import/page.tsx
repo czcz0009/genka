@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getOrCreateStore } from "@/lib/store";
 import { ImportWizard } from "./ImportWizard.tsx";
-import { SignOutButton } from "./SignOutButton.tsx";
+import { SignOutButton } from "@/components/SignOutButton.tsx";
 
 export const metadata: Metadata = {
   title: "レシピ・仕入れデータの取り込み",

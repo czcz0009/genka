@@ -13,21 +13,25 @@ export function StartHerePrompt({
   description?: string;
 }) {
   return (
-    <div className="mt-8 rounded-xl border-2 border-dashed border-black/15 p-8 text-center dark:border-white/15">
-      <h2 className="text-lg font-semibold">{heading}</h2>
-      <p className="mt-2 text-sm text-black/60 dark:text-white/60">{description}</p>
+    <div className="mt-8 rounded border-2 border-dashed p-8 text-center" style={{ borderColor: "var(--border)" }}>
+      <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-noto-sans-jp)", color: "var(--foreground)" }}>
+        {heading}
+      </h2>
+      <p className="mt-2 text-sm" style={{ color: "var(--muted-foreground)" }}>{description}</p>
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
         <Link
           href="/import"
           prefetch={false}
-          className="rounded-lg border border-black/15 px-6 py-4 text-base font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+          className="rounded border px-6 py-4 text-base font-semibold transition-colors hover:border-[color:var(--accent)]"
+          style={{ borderColor: "var(--border)", color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
         >
           Excelで管理してる表がある場合はこちら
         </Link>
         <Link
           href="/menus/new"
           prefetch={false}
-          className="rounded-lg bg-black px-6 py-4 text-base font-medium text-white hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/80"
+          className="rounded px-6 py-4 text-base font-bold"
+          style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
         >
           手入力で始める
         </Link>

@@ -31,7 +31,7 @@ export default async function FlRatioPage({
 }) {
   if (!isSupabaseConfigured()) {
     return (
-      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+      <div className="max-w-4xl space-y-6 p-6 md:p-8">
         <PageHeader eyebrow="FL比率" title="FL比率・FLR比率" />
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           Supabaseが未接続のため、この画面はまだ利用できません。
@@ -47,7 +47,7 @@ export default async function FlRatioPage({
   const store = await getOrCreateStore(supabase, user.id);
   if (!store) {
     return (
-      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+      <div className="max-w-4xl space-y-6 p-6 md:p-8">
         <StoreLoadError />
       </div>
     );
@@ -87,7 +87,7 @@ export default async function FlRatioPage({
   // 「まずはここから」の案内だけ出す。
   if (!menus || menus.length === 0) {
     return (
-      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+      <div className="max-w-4xl space-y-6 p-6 md:p-8">
         <PageHeader eyebrow="FL比率" title="FL比率・FLR比率" />
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           メニューを登録すると、F比率(食材原価)を含むFL比率がここに表示されます。
@@ -146,7 +146,7 @@ export default async function FlRatioPage({
   const currentRent = selectApplicableFixedCost(fixedCostRows, "rent", currentPeriod);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+    <div className="max-w-4xl space-y-6 p-6 md:p-8">
       <PageHeader
         eyebrow="FL比率"
         title="FL比率・FLR比率"

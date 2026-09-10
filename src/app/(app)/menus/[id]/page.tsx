@@ -21,7 +21,7 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
   const store = await getOrCreateStore(supabase, user.id);
   if (!store) {
     return (
-      <div className="mx-auto max-w-2xl p-6 md:p-8">
+      <div className="max-w-2xl p-6 md:p-8">
         <StoreLoadError />
       </div>
     );
@@ -58,7 +58,7 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
   });
 
   return (
-    <div className="mx-auto max-w-2xl p-6 md:p-8">
+    <div className="max-w-2xl p-6 md:p-8">
       <PageHeader
         eyebrow="メニュー管理"
         title={`${menu.name}を編集`}

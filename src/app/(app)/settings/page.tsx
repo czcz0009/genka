@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 export default async function SettingsPage() {
   if (!isSupabaseConfigured()) {
     return (
-      <div className="mx-auto max-w-xl space-y-6 p-6 md:p-8">
+      <div className="max-w-xl space-y-6 p-6 md:p-8">
         <PageHeader eyebrow="設定" title="店舗設定" />
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           Supabaseが未接続のため、この画面はまだ利用できません。
@@ -32,7 +32,7 @@ export default async function SettingsPage() {
   const store = await getOrCreateStore(supabase, user.id);
   if (!store) {
     return (
-      <div className="mx-auto max-w-xl space-y-6 p-6 md:p-8">
+      <div className="max-w-xl space-y-6 p-6 md:p-8">
         <StoreLoadError />
       </div>
     );
@@ -55,7 +55,7 @@ export default async function SettingsPage() {
   const currentLabor = selectApplicableFixedCost(fixedCostRows, "labor", period);
 
   return (
-    <div className="mx-auto max-w-xl space-y-6 p-6 md:p-8">
+    <div className="max-w-xl space-y-6 p-6 md:p-8">
       <PageHeader
         eyebrow="設定"
         title="店舗設定"

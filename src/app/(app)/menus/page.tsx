@@ -33,7 +33,7 @@ function rowStatusLabel(status: BadgeStatus): string {
 export default async function MenusPage() {
   if (!isSupabaseConfigured()) {
     return (
-      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+      <div className="max-w-4xl space-y-6 p-6 md:p-8">
         <PageHeader eyebrow="メニュー管理" title="メニュー一覧" />
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           Supabaseが未接続のため、この画面はまだ利用できません。
@@ -49,7 +49,7 @@ export default async function MenusPage() {
   const store = await getOrCreateStore(supabase, user.id);
   if (!store) {
     return (
-      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+      <div className="max-w-4xl space-y-6 p-6 md:p-8">
         <StoreLoadError />
       </div>
     );
@@ -79,7 +79,7 @@ export default async function MenusPage() {
 
   if (!menus || menus.length === 0) {
     return (
-      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+      <div className="max-w-4xl space-y-6 p-6 md:p-8">
         <PageHeader eyebrow="メニュー管理" title="メニュー一覧" />
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           登録したメニューの原価・原価率がここに一覧で表示されます。
@@ -117,7 +117,7 @@ export default async function MenusPage() {
   const rows = [...summaries].sort((a, b) => (orderById.get(a.menuId) ?? 0) - (orderById.get(b.menuId) ?? 0));
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+    <div className="max-w-4xl space-y-6 p-6 md:p-8">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <PageHeader
           eyebrow="メニュー管理"
@@ -136,7 +136,7 @@ export default async function MenusPage() {
 
       <div className="overflow-hidden rounded border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
         <div
-          className="hidden grid-cols-[1fr_100px_100px_100px_80px] border-b px-5 py-3 text-xs font-semibold uppercase tracking-wide sm:grid"
+          className="hidden grid-cols-[1fr_96px_96px_128px_80px] border-b px-5 py-3 text-xs font-semibold uppercase tracking-wide sm:grid"
           style={{ borderColor: "var(--border)", color: "var(--muted-foreground)", background: "var(--muted)" }}
         >
           <div>メニュー名</div>
@@ -155,7 +155,7 @@ export default async function MenusPage() {
               // 走ってしまうのを避けるため、ここもprefetchを無効化する
               href={`/menus/${s.menuId}`}
               prefetch={false}
-              className="flex flex-col gap-2 border-b px-5 py-4 text-left transition-colors last:border-0 hover:bg-[color:var(--muted)]/50 sm:grid sm:grid-cols-[1fr_100px_100px_100px_80px] sm:items-center sm:gap-0"
+              className="flex flex-col gap-2 border-b px-5 py-4 text-left transition-colors last:border-0 hover:bg-[color:var(--muted)]/50 sm:grid sm:grid-cols-[1fr_96px_96px_128px_80px] sm:items-center sm:gap-0"
               style={{ borderColor: "var(--border)" }}
             >
               <div className="font-medium" style={{ fontFamily: "var(--font-noto-sans-jp)", color: "var(--foreground)" }}>
@@ -168,6 +168,14 @@ export default async function MenusPage() {
                 <div className="font-mono sm:text-right" style={{ color: "var(--foreground)" }}>
                   {formatYen(s.totalCost)}
                 </div>
+                {/*
+                  不具合修正: 以前は「19.2%(目標25%)」のように原価率と目標値を
+                  1行に横並びで詰め込んでおり、桁数によっては固定幅(100px)の
+                  グリッド列に収まりきらず、隣の列とテキストが重なって表示される
+                  不具合があった(例:「焼き魚定食」の8.7%だけ崩れる、といった
+                  桁数依存の再現しにくいレイアウト崩れ)。原価率と目標値を別行に
+                  縦積みすることで、桁数に関わらず横方向にはみ出さないようにする。
+                */}
                 <div
                   className="font-mono font-semibold sm:text-right"
                   style={{
@@ -175,10 +183,10 @@ export default async function MenusPage() {
                       status === "danger" ? "var(--status-danger)" : status === "ok" ? "var(--status-ok)" : "var(--muted-foreground)",
                   }}
                 >
-                  {s.costRate != null ? `${s.costRate.toFixed(1)}%` : "-"}
-                  <span className="ml-1 font-sans text-xs font-normal" style={{ color: "var(--muted-foreground)" }}>
+                  <div>{s.costRate != null ? `${s.costRate.toFixed(1)}%` : "-"}</div>
+                  <div className="font-sans text-xs font-normal" style={{ color: "var(--muted-foreground)" }}>
                     (目標{s.targetCostRate}%)
-                  </span>
+                  </div>
                 </div>
                 <div className="sm:flex sm:justify-end">
                   <StatusBadge status={status} label={rowStatusLabel(status)} />

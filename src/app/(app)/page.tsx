@@ -123,7 +123,7 @@ export default async function Home() {
   const monthLabel = `${now.getFullYear()}年${now.getMonth() + 1}月`;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+    <div className="max-w-4xl space-y-6 p-6 md:p-8">
       <div>
         <div className="text-xs font-medium tracking-widest uppercase" style={{ color: "var(--muted-foreground)" }}>
           {monthLabel} — {dashboardTitle}

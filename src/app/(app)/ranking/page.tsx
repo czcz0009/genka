@@ -21,7 +21,7 @@ export default async function RankingPage({
 }) {
   if (!isSupabaseConfigured()) {
     return (
-      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+      <div className="max-w-4xl space-y-6 p-6 md:p-8">
         <PageHeader eyebrow="収益ランキング" title="メニュー別収益貢献度ランキング" />
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           Supabaseが未接続のため、この画面はまだ利用できません。
@@ -37,7 +37,7 @@ export default async function RankingPage({
   const store = await getOrCreateStore(supabase, user.id);
   if (!store) {
     return (
-      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+      <div className="max-w-4xl space-y-6 p-6 md:p-8">
         <StoreLoadError />
       </div>
     );
@@ -68,7 +68,7 @@ export default async function RankingPage({
 
   if (!menus || menus.length === 0) {
     return (
-      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+      <div className="max-w-4xl space-y-6 p-6 md:p-8">
         <PageHeader eyebrow="収益ランキング" title="メニュー別収益貢献度ランキング" />
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           メニューを登録すると、利益貢献度のランキングがここに表示されます。
@@ -121,7 +121,7 @@ export default async function RankingPage({
   });
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+    <div className="max-w-4xl space-y-6 p-6 md:p-8">
       <PageHeader
         eyebrow="収益ランキング"
         title="メニュー別収益貢献度ランキング"

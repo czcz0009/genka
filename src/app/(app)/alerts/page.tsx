@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 export default async function AlertsPage() {
   if (!isSupabaseConfigured()) {
     return (
-      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+      <div className="max-w-4xl space-y-6 p-6 md:p-8">
         <PageHeader eyebrow="仕入れ値アラート" title="仕入れ値変動アラート" />
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           Supabaseが未接続のため、この画面はまだ利用できません。
@@ -33,7 +33,7 @@ export default async function AlertsPage() {
   const store = await getOrCreateStore(supabase, user.id);
   if (!store) {
     return (
-      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+      <div className="max-w-4xl space-y-6 p-6 md:p-8">
         <StoreLoadError />
       </div>
     );
@@ -56,7 +56,7 @@ export default async function AlertsPage() {
 
   if (!menus || menus.length === 0) {
     return (
-      <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+      <div className="max-w-4xl space-y-6 p-6 md:p-8">
         <PageHeader eyebrow="仕入れ値アラート" title="仕入れ値変動アラート" />
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           メニューと食材を登録すると、市場価格の変動アラートがここに表示されます。
@@ -94,7 +94,7 @@ export default async function AlertsPage() {
   } = await computeStoreAlerts(supabase, store, alertIngredients, alertMenus, alertMenuIngredients);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-6 md:p-8">
+    <div className="max-w-4xl space-y-6 p-6 md:p-8">
       <PageHeader
         eyebrow="仕入れ値アラート"
         title="仕入れ値変動アラート"

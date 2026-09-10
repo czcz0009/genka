@@ -197,7 +197,7 @@ function FixedCostEntry({
       </div>
       <p className="mt-2 text-xs" style={{ color: "var(--muted-foreground)" }}>
         家賃は一度登録すれば、金額が変わるまで翌月以降にも引き継がれます。人件費は月ごとに入力してください。今月分だけでよければ、
-        <Link href="/settings" className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
+        <Link href="/settings" prefetch={false} className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
           店舗設定
         </Link>
         からも入力できます。

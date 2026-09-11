@@ -9,6 +9,7 @@ import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
 import { AlertsView } from "./AlertsView.tsx";
 import { LivestockLinkSettings } from "./LivestockLinkSettings.tsx";
+import { IngredientOverview } from "./IngredientOverview.tsx";
 
 export const metadata: Metadata = {
   title: "仕入れ値変動アラート",
@@ -77,12 +78,12 @@ export default async function AlertsPage() {
 
   const {
     produceAlerts,
-    produceNeedsReview,
     livestockAlerts,
     hasProduceComparison,
     hasLivestockComparison,
     unlinkedIngredients,
     linkedIngredients,
+    ingredientOverview,
   } = await computeStoreAlerts(supabase, store, alertIngredients, alertMenus, alertMenuIngredients);
 
   return (
@@ -93,9 +94,15 @@ export default async function AlertsPage() {
         description="農水省「青果物卸売市場調査(旬別結果)」「畜産物卸売価格の推移」の市場価格をもとに、市場価格の変動率がそのまま仕入単価に反映されたと仮定した場合の試算原価率を表示します。実際に仕入単価を変更した結果ではありません。"
       />
 
+      {/*
+        まずこの一覧で「登録している食材が追跡対象になっているか・今の相場はどうか」を
+        全体把握できるようにし、その中で大きく変動したものを色で強調する。
+        変動の詳細(影響メニュー・原価率試算)は下の「価格変動アラート」セクションで見る。
+      */}
+      <IngredientOverview rows={ingredientOverview} />
+
       <AlertsView
         produceAlerts={produceAlerts}
-        produceNeedsReview={produceNeedsReview}
         livestockAlerts={livestockAlerts}
         hasProduceComparison={hasProduceComparison}
         hasLivestockComparison={hasLivestockComparison}

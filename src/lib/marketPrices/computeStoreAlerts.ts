@@ -8,6 +8,7 @@ import { CHIKUSAN_COLUMNS, type ChikusanItemCode } from "./livestock/chikusanCol
 import { suggestChikusanItems } from "./livestock/suggestChikusanItem.ts";
 import { previousPeriod, type Period } from "./period.ts";
 import type { SyuyoItem } from "./parseSyuyoCsv.ts";
+import { buildIngredientOverview, type IngredientOverviewRow } from "./buildIngredientOverview.ts";
 
 /**
  * 仕入れ値変動アラートの算出(/alerts画面と、ホームのダッシュボード要約の両方から使う)。
@@ -29,6 +30,8 @@ export interface StoreAlertsResult {
   hasLivestockComparison: boolean;
   unlinkedIngredients: { id: string; name: string; suggestions: ReturnType<typeof suggestChikusanItems> }[];
   linkedIngredients: { id: string; name: string; itemCode: ChikusanItemCode; itemLabel: string }[];
+  /** 登録済み食材1件ごとの追跡状況一覧(「まず一覧で全体を把握する」画面用) */
+  ingredientOverview: IngredientOverviewRow[];
 }
 
 function toSyuyoItem(r: { item_code: string; item_name: string; price_per_kg: number | null }): SyuyoItem {
@@ -120,15 +123,19 @@ export async function computeStoreAlerts(
     supabase.from("ingredient_market_links").select("ingredient_id, item_code").eq("source", "chikusan"),
   ]);
 
-  // --- 青果物: 直近2期分の観測データから前期比較する ---
+  // --- 青果物: 食材名⇔市場品目の対応づけ自体は、前期比較ができるかどうかに
+  // 関わらず常に行う(一覧画面で「今この食材は追跡対象になっているか」を
+  // 出すには、変動が無くても・比較データがまだ無くても対応関係が要るため)。
+  const produceMatches = matchIngredientsToItems(
+    alertIngredients.map((i) => ({ id: i.id, name: i.name })),
+    produce.current,
+  );
+
+  // --- 青果物のアラート(閾値を超える変動の通知)は、直近2期分の比較ができる時だけ ---
   let produceAlerts: StoreAlertsResult["produceAlerts"] = [];
   let produceNeedsReview: StoreAlertsResult["produceNeedsReview"] = [];
   if (produce.hasComparison) {
     const produceChanges = detectPriceChanges(produce.current, produce.previous);
-    const produceMatches = matchIngredientsToItems(
-      alertIngredients.map((i) => ({ id: i.id, name: i.name })),
-      produce.current,
-    );
     const result = generateMarketPriceAlerts({
       priceChanges: produceChanges,
       matches: produceMatches,
@@ -181,6 +188,17 @@ export async function computeStoreAlerts(
       itemLabel: CHIKUSAN_COLUMNS.find((c) => c.itemCode === linkByIngredientId.get(i.id))?.label ?? "",
     }));
 
+  const ingredientOverview = buildIngredientOverview({
+    ingredients: alertIngredients.map((i) => ({ id: i.id, name: i.name })),
+    produceMatches,
+    produceCurrent: produce.current,
+    producePrevious: produce.previous,
+    linkedLivestock: linkedIngredients,
+    livestockCandidateIds: unlinkedIngredients.map((i) => i.id),
+    livestockCurrent: livestock.current,
+    livestockPrevious: livestock.previous,
+  });
+
   return {
     produceAlerts,
     produceNeedsReview,
@@ -189,5 +207,6 @@ export async function computeStoreAlerts(
     hasLivestockComparison: livestock.hasComparison,
     unlinkedIngredients,
     linkedIngredients,
+    ingredientOverview,
   };
 }

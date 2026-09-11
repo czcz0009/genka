@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { calcCostRate } from "@/lib/costCalc";
+import { normalizeForDedupe } from "@/lib/normalize.ts";
 import { saveMenuWithIngredients, type SaveMenuLineInput } from "./actions.ts";
 
 export interface IngredientOption {
@@ -10,6 +11,14 @@ export interface IngredientOption {
   name: string;
   unit: string;
   currentPurchasePrice: number;
+  /**
+   * true = このメニュー編集セッション中に「新規食材」として追加した、
+   * まだサーバーに保存されていない食材(idはこの画面内だけで使う仮のもの)。
+   * 保存前に同じ食材名をもう一度使いたい時、候補として出すためだけに使う。
+   * この食材を選んでも、実際の保存時には常に「新規食材」として扱う
+   * (サーバー側で名前が重複していれば自動的に1つの食材にまとめられる)。
+   */
+  isLocalDraft?: boolean;
 }
 
 /** 画面内だけで完結するローカルな食材行。保存ボタンを押すまでサーバーには送らない。 */
@@ -40,6 +49,22 @@ function formatYen(n: number): string {
 function formatUnitPrice(n: number): string {
   const rounded = Math.round(n * 100) / 100;
   return `¥${rounded}`;
+}
+
+/**
+ * 「1kgで800円」のようなパック単位の仕入れ情報から、レシピで使う単位
+ * (g/ml/個など)1つあたりの単価を計算する。数量が0以下、または数値でない
+ * 場合はnull(まだ計算できない)を返す。
+ */
+function computeUnitPriceFromPackage(purchaseQuantity: number, purchasePrice: number): number | null {
+  if (!Number.isFinite(purchaseQuantity) || purchaseQuantity <= 0) return null;
+  if (!Number.isFinite(purchasePrice) || purchasePrice < 0) return null;
+  return purchasePrice / purchaseQuantity;
+}
+
+/** 食材名の絞り込み検索用(全角/半角・大文字小文字のゆれを吸収する) */
+function normalizeQuery(s: string): string {
+  return s.normalize("NFKC").toLowerCase();
 }
 
 const inputStyle: React.CSSProperties = {
@@ -91,6 +116,15 @@ export function MenuEditor({
   const [lines, setLines] = useState<LocalLine[]>(initialLines);
   const [saving, setSaving] = useState<"save" | "saveAndNew" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // このメニュー編集中に「新規食材」として追加した食材の下書き一覧。
+  // 保存前でも、次に同じ食材名を使いたい時に候補として出せるようにするため保持する
+  // (「新規食材の追加が食材リストに反映されない」という指摘の対応)。
+  const [localNewIngredients, setLocalNewIngredients] = useState<IngredientOption[]>([]);
+
+  const combinedIngredients = useMemo(
+    () => [...allIngredients, ...localNewIngredients],
+    [allIngredients, localNewIngredients],
+  );
 
   const totalCost = useMemo(
     () => lines.reduce((sum, l) => sum + (Number(l.quantity) || 0) * l.unitPrice, 0),
@@ -102,6 +136,19 @@ export function MenuEditor({
 
   function addLine(line: LocalLine) {
     setLines((prev) => [...prev, line]);
+    if (line.source.type === "new") {
+      const key = normalizeForDedupe(line.ingredientName);
+      setLocalNewIngredients((prev) => {
+        const alreadyKnown =
+          allIngredients.some((i) => normalizeForDedupe(i.name) === key) ||
+          prev.some((i) => normalizeForDedupe(i.name) === key);
+        if (alreadyKnown) return prev;
+        return [
+          ...prev,
+          { id: `draft-${line.key}`, name: line.ingredientName, unit: line.unit, currentPurchasePrice: line.unitPrice, isLocalDraft: true },
+        ];
+      });
+    }
   }
 
   function removeLine(key: string) {
@@ -200,31 +247,67 @@ export function MenuEditor({
         </div>
       </div>
 
-      {lines.length > 0 && (
-        <ul className="flex flex-col gap-2">
-          {lines.map((l) => (
-            <li
-              key={l.key}
-              className="flex items-center justify-between rounded border px-4 py-3"
-              style={{ borderColor: "var(--border)" }}
-            >
-              <span className="text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
-                {l.ingredientName} {l.quantity || 0}
-                {l.unit}
-              </span>
-              <button
-                onClick={() => removeLine(l.key)}
-                className="rounded px-3 py-2 text-sm underline underline-offset-2 transition-colors hover:bg-[color:var(--muted)]"
-                style={{ color: "var(--muted-foreground)" }}
-              >
-                削除
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <IngredientLineForm
+        allIngredients={combinedIngredients}
+        existingNames={new Set(lines.map((l) => l.ingredientName))}
+        onAdd={addLine}
+      />
 
-      <AddIngredientForm allIngredients={allIngredients} existingNames={new Set(lines.map((l) => l.ingredientName))} onAdd={addLine} />
+      {/*
+        追加済みの食材一覧。以前は食材名+分量のみで、いくら原価に効いているかが
+        分からず「確認しづらい」との指摘を受けたため、単価と小計(円)を明示する。
+        1件も無い時は空リストを黙って隠すのではなく、次に何をすればいいか案内する。
+        「食材を追加」フォームのすぐ下に置き、追加した結果がその場で確認できるようにする。
+      */}
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-medium" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+          追加した食材{lines.length > 0 ? `(${lines.length}件)` : ""}
+        </p>
+        {lines.length > 0 ? (
+          <ul className="flex flex-col gap-2">
+            {lines.map((l) => {
+              const qty = Number(l.quantity) || 0;
+              const subtotal = qty * l.unitPrice;
+              return (
+                <li
+                  key={l.key}
+                  className="flex items-center justify-between gap-3 rounded border px-4 py-3"
+                  style={{ borderColor: "var(--border)", background: "var(--card)" }}
+                >
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-base font-medium" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+                      {l.ingredientName}
+                    </span>
+                    <span className="font-mono text-sm" style={{ color: "var(--muted-foreground)" }}>
+                      {qty}
+                      {l.unit} × {formatUnitPrice(l.unitPrice)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="font-mono text-base font-semibold" style={{ color: "var(--foreground)" }}>
+                      {formatYen(subtotal)}
+                    </span>
+                    <button
+                      onClick={() => removeLine(l.key)}
+                      className="shrink-0 rounded px-3 py-2 text-sm underline underline-offset-2 transition-colors hover:bg-[color:var(--muted)]"
+                      style={{ color: "var(--muted-foreground)" }}
+                    >
+                      削除
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p
+            className="rounded border border-dashed px-4 py-6 text-center text-sm"
+            style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
+          >
+            まだ食材が追加されていません。上のフォームから追加してください。
+          </p>
+        )}
+      </div>
 
       {error && (
         <p className="text-sm" style={{ color: "var(--status-danger)" }}>
@@ -257,8 +340,22 @@ export function MenuEditor({
 /**
  * 食材の追加フォーム。押した瞬間にローカルのlinesへ追加するだけで、
  * サーバーへは一切問い合わせない(即座に反映される)。
+ *
+ * 食材名は自由入力のテキストボックス1本にまとめている。入力中、登録済みの
+ * 食材名と部分一致するものがあればすぐ下に候補を出し、クリックすればその
+ * 食材を使う(既存食材)。候補を選ばずそのまま追加すると、一致する登録済み
+ * 食材が無ければ新しい食材として登録される。「既存か新規か」を事前に
+ * ユーザーが意識して切り替える必要がないようにするための設計。
+ * また、分量の入力欄は食材名の入力欄のすぐ横に並べて置き、
+ * 「食材を選ぶ」と「量を決める」が離れて分かりにくいという指摘に対応している。
+ *
+ * 食材名の欄はテキストボックスとプルダウンのハイブリッド: カーソルを
+ * 合わせた(フォーカスした)時点で登録済み食材の一覧を候補として出し、
+ * 文字を打つと絞り込まれる。候補をクリックした時にblurが先に発火して
+ * リストが消え、クリックが成立しなくなる問題を避けるため、blur時は
+ * 少し待ってから候補を隠すようにしている。
  */
-function AddIngredientForm({
+function IngredientLineForm({
   allIngredients,
   existingNames,
   onAdd,
@@ -267,65 +364,162 @@ function AddIngredientForm({
   existingNames: Set<string>;
   onAdd: (line: LocalLine) => void;
 }) {
-  const [mode, setMode] = useState<"existing" | "new">(allIngredients.length > 0 ? "existing" : "new");
-  const [existingId, setExistingId] = useState<string>(allIngredients[0]?.id ?? "");
-  const [newName, setNewName] = useState("");
+  const [nameInput, setNameInput] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newUnit, setNewUnit] = useState("g");
+  // 仕入単価の入力方法: "calc" = パック等の仕入れ数量・仕入れ価格から自動計算(既定)、
+  // "direct" = 単位1つあたりの金額をすでに知っている場合に直接入力。
+  const [priceMode, setPriceMode] = useState<"calc" | "direct">("calc");
+  const [purchaseQuantity, setPurchaseQuantity] = useState("");
+  const [purchasePriceTotal, setPurchasePriceTotal] = useState("");
   const [newPrice, setNewPrice] = useState("");
   const [quantity, setQuantity] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // 「本当に追加されたのか分かりづらい」という指摘への対応。追加が成功したら
+  // 一定時間ここにメッセージを出す(操作のたびに消える一時的なフィードバック)。
+  const [justAdded, setJustAdded] = useState<string | null>(null);
+  // 食材名欄にカーソルがある(フォーカスしている)かどうか。
+  // ここがtrueの間はプルダウン(候補一覧)を表示する。
+  const [isNameFocused, setIsNameFocused] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
+  const quantityInputRef = useRef<HTMLInputElement | null>(null);
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const pickedExisting = allIngredients.find((i) => i.id === existingId);
-  const effectiveUnit = mode === "existing" ? (pickedExisting?.unit ?? "") : newUnit;
+  useEffect(() => {
+    if (!justAdded) return;
+    const timer = setTimeout(() => setJustAdded(null), 2500);
+    return () => clearTimeout(timer);
+  }, [justAdded]);
+
+  // blur用のタイマーはアンマウント時に必ず片付ける
+  useEffect(() => () => {
+    if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+  }, []);
+
+  const trimmedName = nameInput.trim();
+
+  const selectedById = selectedId ? (allIngredients.find((i) => i.id === selectedId) ?? null) : null;
+  // 候補をクリックしていなくても、入力した名前が登録済みの食材名と(表記ゆれを
+  // 吸収した上で)完全に一致するなら、自動的に既存食材として扱う。
+  // 「既存か新規かを事前に意識しなくても自然に正しい方に振り分けられる」ための鍵。
+  const exactMatch =
+    !selectedById && trimmedName
+      ? (allIngredients.find((i) => normalizeForDedupe(i.name) === normalizeForDedupe(trimmedName)) ?? null)
+      : null;
+  const effectiveExisting = selectedById ?? exactMatch;
+
+  // 食材名にカーソルを合わせた時点(まだ何も入力していない状態)では全件、
+  // 文字を入力し始めたら部分一致するものだけに絞り込む(テキストボックスと
+  // プルダウンのハイブリッド)。
+  const suggestions = useMemo(() => {
+    if (effectiveExisting) return [];
+    if (!trimmedName) return allIngredients;
+    const q = normalizeQuery(trimmedName);
+    return allIngredients.filter((i) => normalizeQuery(i.name).includes(q));
+  }, [trimmedName, effectiveExisting, allIngredients]);
+
+  // フォーカスが外れたら候補を隠す。ただし候補をクリックした瞬間は
+  // 「クリックによるblur」→「候補のonClick」の順でイベントが起きるため、
+  // ここで即座に隠すとクリックが成立しなくなる。少し待ってから隠すことで、
+  // クリック処理(handleSelectSuggestion)が先に完了できるようにしている。
+  const showDropdown = isNameFocused && !effectiveExisting && suggestions.length > 0;
+
+  const effectiveUnit = effectiveExisting ? effectiveExisting.unit : newUnit;
+  const computedUnitPrice = computeUnitPriceFromPackage(Number(purchaseQuantity), Number(purchasePriceTotal));
+
+  function handleNameChange(value: string) {
+    setNameInput(value);
+    // 入力し直したら選択状態は一旦解除する(上のexactMatch判定で再度自動判定される)
+    setSelectedId(null);
+    setError(null);
+  }
+
+  function handleNameFocus() {
+    if (blurTimerRef.current) {
+      clearTimeout(blurTimerRef.current);
+      blurTimerRef.current = null;
+    }
+    setIsNameFocused(true);
+  }
+
+  function handleNameBlur() {
+    blurTimerRef.current = setTimeout(() => setIsNameFocused(false), 150);
+  }
+
+  function handleSelectSuggestion(i: IngredientOption) {
+    setSelectedId(i.id);
+    setNameInput(i.name);
+    setError(null);
+    setIsNameFocused(false);
+    // 食材を選んだら、そのまま続けて分量を入力できるようにフォーカスを移す
+    quantityInputRef.current?.focus();
+  }
+
+  function clearSelection() {
+    setSelectedId(null);
+    setNameInput("");
+    nameInputRef.current?.focus();
+  }
 
   function handleAdd() {
     setError(null);
+    if (!trimmedName) {
+      setError("食材名を入力してください");
+      return;
+    }
     const qty = Number(quantity);
     if (!Number.isFinite(qty) || qty <= 0) {
       setError("分量は0より大きい数値で入力してください");
       return;
     }
 
-    if (mode === "existing") {
-      if (!pickedExisting) {
-        setError("食材を選んでください");
-        return;
-      }
+    if (effectiveExisting) {
+      // 「新規食材」として追加した下書きの候補を選んだ場合、実体はまだサーバーに
+      // 保存されていないため、送信時は常に newIngredient として扱う
+      // (サーバー側で同じ名前の食材は自動的に1つにまとめられるので重複はしない)。
       onAdd({
         key: nextKey(),
         quantity,
-        unit: pickedExisting.unit,
-        ingredientName: pickedExisting.name,
-        unitPrice: pickedExisting.currentPurchasePrice,
-        source: { type: "existing", ingredientId: pickedExisting.id },
+        unit: effectiveExisting.unit,
+        ingredientName: effectiveExisting.name,
+        unitPrice: effectiveExisting.currentPurchasePrice,
+        source: effectiveExisting.isLocalDraft
+          ? { type: "new", name: effectiveExisting.name, unit: effectiveExisting.unit, purchasePrice: effectiveExisting.currentPurchasePrice }
+          : { type: "existing", ingredientId: effectiveExisting.id },
       });
+      setJustAdded(`${effectiveExisting.name} ${quantity}${effectiveExisting.unit}`);
     } else {
-      const name = newName.trim();
-      const price = Number(newPrice);
-      if (!name) {
-        setError("食材名を入力してください");
-        return;
-      }
       if (!newUnit.trim()) {
         setError("単位を入力してください");
         return;
       }
-      if (!Number.isFinite(price) || price < 0) {
-        setError("仕入単価は0以上の数値で入力してください");
+      const price = priceMode === "calc" ? computedUnitPrice : Number(newPrice);
+      if (price == null || !Number.isFinite(price) || price < 0) {
+        setError(
+          priceMode === "calc"
+            ? "仕入れ数量と仕入れ価格を入力してください"
+            : "仕入単価は0以上の数値で入力してください",
+        );
         return;
       }
       onAdd({
         key: nextKey(),
         quantity,
         unit: newUnit,
-        ingredientName: name,
+        ingredientName: trimmedName,
         unitPrice: price,
-        source: { type: "new", name, unit: newUnit, purchasePrice: price },
+        source: { type: "new", name: trimmedName, unit: newUnit, purchasePrice: price },
       });
-      setNewName("");
-      setNewPrice("");
+      setJustAdded(`${trimmedName} ${quantity}${newUnit}(新規食材として登録)`);
     }
+
+    // フォームをリセットして、続けて次の食材をすぐ追加できるようにする
+    setNameInput("");
+    setSelectedId(null);
     setQuantity("");
+    setNewPrice("");
+    setPurchaseQuantity("");
+    setPurchasePriceTotal("");
   }
 
   return (
@@ -334,110 +528,218 @@ function AddIngredientForm({
         食材を追加
       </p>
 
-      {allIngredients.length > 0 && (
-        <div>
-          <p className="mb-2 text-sm" style={{ color: "var(--muted-foreground)" }}>
-            使う食材は?
-          </p>
-          <div className="flex gap-2 text-sm">
-            <TabButton active={mode === "existing"} onClick={() => setMode("existing")}>
-              登録済みの食材から選ぶ
-            </TabButton>
-            <TabButton active={mode === "new"} onClick={() => setMode("new")}>
-              新しく食材を登録する
-            </TabButton>
-          </div>
-        </div>
-      )}
-
-      {mode === "existing" ? (
-        <div className="flex flex-col gap-2">
-          <p className="text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
-            食材を選ぶ
-          </p>
-          <ExistingIngredientPicker
-            allIngredients={allIngredients}
-            selectedId={existingId}
-            onSelect={(id) => setExistingId(id)}
-            alreadyAddedNames={existingNames}
-          />
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4 rounded p-4" style={{ background: "var(--muted)" }}>
-          <p className="text-sm font-medium" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
-            新しい食材の情報
-          </p>
-          <label className="flex flex-col gap-2 text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+      <div className="flex flex-col gap-2">
+        <div className="flex gap-3">
+          <label
+            className="flex flex-1 flex-col gap-2 text-base"
+            style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
+          >
             食材名
             <input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="例: 豚肉"
+              ref={nameInputRef}
+              value={nameInput}
+              onChange={(e) => handleNameChange(e.target.value)}
+              onFocus={handleNameFocus}
+              onBlur={handleNameBlur}
+              placeholder="例: 豚肉(クリックすると候補が出ます)"
               className={INPUT_CLASS}
               style={inputStyle}
             />
           </label>
-          <div className="flex gap-3">
-            <label
-              className="flex flex-1 flex-col gap-2 text-base"
-              style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
+          <label
+            className="flex w-24 flex-col gap-2 text-base"
+            style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
+          >
+            分量({effectiveUnit || "g"})
+            <input
+              ref={quantityInputRef}
+              type="number"
+              min={0}
+              step="0.01"
+              inputMode="decimal"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              placeholder="例: 150"
+              className={INPUT_CLASS + " font-mono"}
+              style={inputStyle}
+            />
+          </label>
+        </div>
+
+        {effectiveExisting ? (
+          <div
+            className="flex items-center justify-between gap-3 rounded border px-4 py-3 text-sm"
+            style={{ borderColor: "var(--status-ok)", background: "var(--card)" }}
+          >
+            <span style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+              ✓ 登録済みの「{effectiveExisting.name}」を使います({effectiveExisting.unit}あたり
+              {formatUnitPrice(effectiveExisting.currentPurchasePrice)})
+              {existingNames.has(effectiveExisting.name) && (
+                <span className="ml-2" style={{ color: "var(--muted-foreground)" }}>
+                  (このメニューに追加済み)
+                </span>
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="shrink-0 rounded px-3 py-2 text-sm underline underline-offset-2"
+              style={{ color: "var(--muted-foreground)" }}
             >
-              仕入単価(円)
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                inputMode="decimal"
-                value={newPrice}
-                onChange={(e) => setNewPrice(e.target.value)}
-                placeholder="例: 0.7"
-                className={INPUT_CLASS + " font-mono"}
-                style={inputStyle}
-              />
-            </label>
-            <label
-              className="flex w-28 flex-col gap-2 text-base"
-              style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
-            >
-              単位
-              <input
-                value={newUnit}
-                onChange={(e) => setNewUnit(e.target.value)}
-                placeholder="g"
-                className={INPUT_CLASS}
-                style={inputStyle}
-              />
-            </label>
+              変更する
+            </button>
           </div>
+        ) : (
+          showDropdown && (
+            <div className="max-h-48 overflow-y-auto rounded border" style={{ borderColor: "var(--border)" }}>
+              {suggestions.map((i) => (
+                <button
+                  key={i.id}
+                  type="button"
+                  onClick={() => handleSelectSuggestion(i)}
+                  className="flex w-full items-center justify-between border-b px-4 py-3 text-left text-base transition-colors last:border-0 hover:bg-[color:var(--muted)]"
+                  style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+                >
+                  <span style={{ fontFamily: "var(--font-noto-sans-jp)" }}>
+                    {i.name}
+                    {existingNames.has(i.name) && (
+                      <span className="ml-2 text-xs" style={{ color: "var(--muted-foreground)" }}>
+                        (追加済み)
+                      </span>
+                    )}
+                  </span>
+                  <span className="font-mono text-sm" style={{ color: "var(--muted-foreground)" }}>
+                    {i.unit}あたり{formatUnitPrice(i.currentPurchasePrice)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )
+        )}
+
+        {!effectiveExisting && trimmedName && suggestions.length === 0 && (
           <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-            仕入単価は「単位1つあたりの金額」です。例:1kg800円のお肉をgで使うなら、800÷1000=0.8円と入力してください。この単位は、下の「このメニューで使う分量」でもそのまま使います。
+            一致する登録済み食材が見つからないため、「{trimmedName}」を新しい食材として登録します。
           </p>
+        )}
+      </div>
+
+      {!effectiveExisting && trimmedName && (
+        <div className="flex flex-col gap-4 rounded p-4" style={{ background: "var(--muted)" }}>
+          <p className="text-sm font-medium" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+            新しい食材として登録します
+          </p>
+          <label
+            className="flex w-28 flex-col gap-2 text-base"
+            style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
+          >
+            単位
+            <input
+              value={newUnit}
+              onChange={(e) => setNewUnit(e.target.value)}
+              placeholder="g"
+              className={INPUT_CLASS}
+              style={inputStyle}
+            />
+          </label>
+          <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+            レシピでこの食材を使う時の単位です(上の「分量」の単位もこれに合わせて変わります)。
+          </p>
+
+          <div className="flex gap-2 text-sm">
+            <TabButton active={priceMode === "calc"} onClick={() => setPriceMode("calc")}>
+              仕入れ価格から計算する
+            </TabButton>
+            <TabButton active={priceMode === "direct"} onClick={() => setPriceMode("direct")}>
+              単価を直接入力する
+            </TabButton>
+          </div>
+
+          {priceMode === "calc" ? (
+            <>
+              <div className="flex gap-3">
+                <label
+                  className="flex flex-1 flex-col gap-2 text-base"
+                  style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
+                >
+                  仕入れ数量({newUnit.trim() || "単位"})
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    value={purchaseQuantity}
+                    onChange={(e) => setPurchaseQuantity(e.target.value)}
+                    placeholder="例: 1000"
+                    className={INPUT_CLASS + " font-mono"}
+                    style={inputStyle}
+                  />
+                </label>
+                <label
+                  className="flex flex-1 flex-col gap-2 text-base"
+                  style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
+                >
+                  仕入れ価格(円)
+                  <input
+                    type="number"
+                    min={0}
+                    step="1"
+                    inputMode="decimal"
+                    value={purchasePriceTotal}
+                    onChange={(e) => setPurchasePriceTotal(e.target.value)}
+                    placeholder="例: 800"
+                    className={INPUT_CLASS + " font-mono"}
+                    style={inputStyle}
+                  />
+                </label>
+              </div>
+              <div
+                className="rounded px-4 py-3 text-sm"
+                style={{ background: "var(--card)", color: computedUnitPrice != null ? "var(--foreground)" : "var(--muted-foreground)" }}
+              >
+                {computedUnitPrice != null
+                  ? `→ ${newUnit.trim() || "単位"}1つあたり ${formatUnitPrice(computedUnitPrice)}`
+                  : "仕入れ数量と仕入れ価格を入力すると、単価を自動で計算します"}
+              </div>
+              <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                例:1kg(=1000g)を800円で仕入れた場合、単位を「g」、仕入れ数量を「1000」、仕入れ価格を「800」と入力してください。
+              </p>
+            </>
+          ) : (
+            <>
+              <label
+                className="flex flex-col gap-2 text-base"
+                style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
+              >
+                仕入単価(円)
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  inputMode="decimal"
+                  value={newPrice}
+                  onChange={(e) => setNewPrice(e.target.value)}
+                  placeholder="例: 0.7"
+                  className={INPUT_CLASS + " font-mono"}
+                  style={inputStyle}
+                />
+              </label>
+              <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                「単位1つあたりの金額」を直接入力します。
+              </p>
+            </>
+          )}
         </div>
       )}
-
-      <label className="flex flex-col gap-2 text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
-        このメニューで使う分量
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            min={0}
-            step="0.01"
-            inputMode="decimal"
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-            placeholder="例: 150"
-            className={INPUT_CLASS + " flex-1"}
-            style={inputStyle}
-          />
-          <span className="min-w-10 text-base" style={{ color: "var(--muted-foreground)" }}>
-            {effectiveUnit || "-"}
-          </span>
-        </div>
-      </label>
 
       {error && (
         <p className="text-sm" style={{ color: "var(--status-danger)" }}>
           {error}
+        </p>
+      )}
+      {justAdded && !error && (
+        <p className="text-sm font-medium" style={{ color: "var(--status-ok)" }}>
+          ✓ 「{justAdded}」を追加しました
         </p>
       )}
 
@@ -447,110 +749,8 @@ function AddIngredientForm({
         className="rounded px-5 py-4 text-base font-bold transition-colors"
         style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
       >
-        この食材を追加する
+        この食材をメニューに追加する
       </button>
-    </div>
-  );
-}
-
-/**
- * 既存食材から選ぶための一覧。ネイティブの<select>は開いたポップアップの
- * デザインをアプリ側で制御できず(ダークモードでも白背景で開くなどして
- * 「見づらい」との指摘を受けた)、自前の絞り込みリストに置き換えている。
- */
-function ExistingIngredientPicker({
-  allIngredients,
-  selectedId,
-  onSelect,
-  alreadyAddedNames,
-}: {
-  allIngredients: IngredientOption[];
-  selectedId: string;
-  onSelect: (id: string) => void;
-  alreadyAddedNames: Set<string>;
-}) {
-  const [query, setQuery] = useState("");
-  // メニュー名や売価など、この一覧と無関係な入力欄を触るたびに親(MenuEditor)が
-  // 再レンダリングされ、そのたびにこの絞り込みが再計算されるのは無駄なため
-  // useMemoで、query・allIngredientsが実際に変わった時だけ計算し直すようにする。
-  const filtered = useMemo(() => {
-    // 全角/半角・大文字小文字のゆれを吸収して絞り込む
-    const normalize = (s: string) => s.normalize("NFKC").toLowerCase();
-    const trimmedQuery = normalize(query.trim());
-    return trimmedQuery ? allIngredients.filter((i) => normalize(i.name).includes(trimmedQuery)) : allIngredients;
-  }, [query, allIngredients]);
-  const selectedIngredient = useMemo(
-    () => allIngredients.find((i) => i.id === selectedId),
-    [allIngredients, selectedId],
-  );
-
-  return (
-    <div className="flex flex-col gap-2">
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="食材名で絞り込む"
-        className={INPUT_CLASS}
-        style={inputStyle}
-      />
-      <div className="max-h-56 overflow-y-auto rounded border" style={{ borderColor: "var(--border)" }}>
-        {filtered.length === 0 && (
-          <p className="p-4 text-sm" style={{ color: "var(--muted-foreground)" }}>
-            見つかりませんでした
-          </p>
-        )}
-        {filtered.map((i) => {
-          const selected = i.id === selectedId;
-          return (
-            <button
-              key={i.id}
-              type="button"
-              onClick={() => onSelect(i.id)}
-              className="flex w-full items-center justify-between border-b px-4 py-3 text-left text-base transition-colors last:border-0"
-              style={{
-                borderColor: "var(--border)",
-                background: selected ? "var(--primary)" : "transparent",
-                color: selected ? "var(--primary-foreground)" : "var(--foreground)",
-              }}
-            >
-              <span style={{ fontFamily: "var(--font-noto-sans-jp)" }}>
-                {i.name}
-                {alreadyAddedNames.has(i.name) && (
-                  <span className="ml-2 text-xs" style={{ opacity: selected ? 0.8 : 0.6 }}>
-                    (追加済み)
-                  </span>
-                )}
-              </span>
-              <span className="font-mono text-sm" style={{ opacity: selected ? 0.8 : 1, color: selected ? undefined : "var(--muted-foreground)" }}>
-                {i.unit}あたり{formatUnitPrice(i.currentPurchasePrice)}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/*
-        一覧の中でハイライトされているだけでは「本当に選ばれているか分からない」
-        という指摘を受けたため、選んだ食材名をテキストボックスにもはっきり
-        表示する(読み取り専用。編集したい場合は上の絞り込み欄や一覧から選び直す)。
-      */}
-      <label className="flex flex-col gap-1 text-sm" style={{ color: "var(--muted-foreground)" }}>
-        選択中の食材
-        <input
-          readOnly
-          value={
-            selectedIngredient
-              ? `${selectedIngredient.name}(${selectedIngredient.unit}あたり${formatUnitPrice(selectedIngredient.currentPurchasePrice)})`
-              : "(未選択)"
-          }
-          className="rounded border px-4 py-3 text-base"
-          style={
-            selectedIngredient
-              ? { borderColor: "var(--border)", background: "var(--muted)", color: "var(--foreground)", fontWeight: 500 }
-              : { borderColor: "var(--border)", background: "transparent", color: "var(--muted-foreground)" }
-          }
-        />
-      </label>
     </div>
   );
 }

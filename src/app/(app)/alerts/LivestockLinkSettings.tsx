@@ -100,7 +100,7 @@ export function LivestockLinkSettings({
   }
 
   return (
-    <section className="rounded border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+    <section id="livestock-settings" className="rounded border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
       <h2 className="text-sm font-semibold" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
         畜産物(豚・牛・鶏肉)の価格アラート対象設定
       </h2>

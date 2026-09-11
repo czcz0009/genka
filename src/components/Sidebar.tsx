@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { SignOutButton } from "./SignOutButton.tsx";
 
 interface NavItem {
@@ -91,7 +91,44 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/settings", label: "設定", icon: IconSettings },
 ];
 
+/**
+ * ナビリンクのprefetchについて(重要な経緯):
+ *
+ * Next.jsのLinkの自動prefetch(prefetch={true}相当)は、サイドバーのように
+ * 常時表示されているリンクがビューポートに入った瞬間、7個すべてを同時に
+ * バックグラウンド取得しようとする。実機検証したところ、この「複数リクエストが
+ * ほぼ同時にSupabaseの認証セッションを読みに行く」状況で、セッションの
+ * トークン更新が競合し、ナビゲーション中に強制ログアウトされる不具合を
+ * 実際に再現した(過去の「優先度3」でprefetchを無効化した理由もこれと同じ)。
+ *
+ * この競合は「同時に投げるリクエストの本数」を減らせば実質的に避けられる
+ * (トークン更新はCookieに書き込まれた古いトークンを複数リクエストが同時に
+ * 使い回そうとした時だけ起きる)。そこで、常時全リンクを自動prefetchするのではなく
+ * 「マウスが実際にホバーしたリンク1つだけ」を、かつ共有の1つのタイマーで
+ * 遅延実行することで、同時に走るprefetchリクエストが実質的に1本を超えない
+ * ようにしている(タイマーが1つしかないため、複数リンクに素早くカーソルを
+ * 動かしても直前のタイマーはキャンセルされ、常に最後にホバーしたリンクの分だけが
+ * 予約される)。サーバー側でのロック等による修正は、Cookieがリクエストごとの
+ * スナップショットである以上原理的に効果がないため採用していない。
+ */
 function NavList({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
+  const router = useRouter();
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleMouseEnter(href: string) {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    hoverTimer.current = setTimeout(() => {
+      router.prefetch(href);
+    }, 150);
+  }
+
+  function handleMouseLeave() {
+    if (hoverTimer.current) {
+      clearTimeout(hoverTimer.current);
+      hoverTimer.current = null;
+    }
+  }
+
   return (
     <div className="flex-1 overflow-y-auto py-3">
       {NAV_ITEMS.map((item) => {
@@ -102,6 +139,8 @@ function NavList({ pathname, onNavigate }: { pathname: string; onNavigate?: () =
             key={item.href}
             href={item.href}
             prefetch={false}
+            onMouseEnter={() => handleMouseEnter(item.href)}
+            onMouseLeave={handleMouseLeave}
             onClick={onNavigate}
             className={`relative flex items-center gap-3 px-5 py-3 text-sm transition-colors ${
               active ? "bg-white/15 font-semibold" : "font-medium opacity-75 hover:bg-white/8 hover:opacity-100"

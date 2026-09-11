@@ -55,3 +55,122 @@ export const getSessionStore = cache(async function getSessionStore(
     store: { id: row.id, name: row.name, defaultTargetCostRate: row.default_target_cost_rate },
   };
 });
+
+export interface StoreDataMenu {
+  id: string;
+  name: string;
+  sellingPrice: number | null;
+  targetCostRate: number | null;
+  createdAt: string;
+}
+
+export interface StoreDataIngredient {
+  id: string;
+  name: string;
+  currentPurchasePrice: number;
+}
+
+export interface StoreDataMenuIngredient {
+  menuId: string;
+  ingredientId: string;
+  quantity: number;
+}
+
+export interface StoreDataSale {
+  menuId: string;
+  quantitySold: number;
+  periodStart: string;
+  periodEnd: string;
+}
+
+export interface StoreDataFixedCost {
+  costType: string;
+  amount: number;
+  periodStart: string;
+  periodEnd: string;
+}
+
+export interface StoreData {
+  store: StoreInfo;
+  menus: StoreDataMenu[];
+  ingredients: StoreDataIngredient[];
+  menuIngredients: StoreDataMenuIngredient[];
+  sales: StoreDataSale[];
+  fixedCosts: StoreDataFixedCost[];
+}
+
+interface RawStoreDataRow {
+  store: { id: string; name: string; default_target_cost_rate: number };
+  menus: { id: string; name: string; selling_price: number | null; target_cost_rate: number | null; created_at: string }[];
+  ingredients: { id: string; name: string; current_purchase_price: number }[];
+  menu_ingredients: { menu_id: string; ingredient_id: string; quantity: number }[];
+  sales: { menu_id: string; quantity_sold: number; period_start: string; period_end: string }[];
+  fixed_costs: { cost_type: string; amount: number; period_start: string; period_end: string }[];
+}
+
+/**
+ * メニュー一覧・収益ランキング・FL比率・仕入れ値アラートが共通して必要とする
+ * store配下のデータ(menus・ingredients・menu_ingredients・menu_sales・
+ * store_fixed_costs)を1回のRPC(get_store_data、0008マイグレーション)で
+ * まとめて取得する。
+ *
+ * 実機計測の経緯: VercelとSupabaseが別リージョンだったことが判明・是正した後も
+ * (0007のRPC化だけでは)各画面が持つ3〜5テーブルのPromise.all並列取得の分だけ
+ * 往復が発生していた。並列化されていても「一番遅いクエリの時間」は待つ必要が
+ * あるため、往復そのものを1回にまとめてさらに削減する。
+ *
+ * salesFrom/salesToは販売実績(menu_sales)の絞り込み用(FL比率画面は直近
+ * 6ヶ月分だけで良いため)。省略すると全期間を返す。
+ *
+ * cache()でラップし、同一リクエスト内で同じ引数の呼び出しが重複しないようにする
+ * (例: ダッシュボードの複数の集計関数が同じ範囲を必要とする場合)。
+ */
+export const getStoreData = cache(async function getStoreData(
+  supabase: SupabaseClient,
+  salesFrom?: string | null,
+  salesTo?: string | null,
+): Promise<StoreData | null> {
+  const { data, error } = await supabase.rpc("get_store_data", {
+    p_sales_from: salesFrom ?? null,
+    p_sales_to: salesTo ?? null,
+  });
+  if (error || !data) return null;
+
+  const raw = data as RawStoreDataRow;
+  return {
+    store: {
+      id: raw.store.id,
+      name: raw.store.name,
+      defaultTargetCostRate: raw.store.default_target_cost_rate,
+    },
+    menus: raw.menus.map((m) => ({
+      id: m.id,
+      name: m.name,
+      sellingPrice: m.selling_price,
+      targetCostRate: m.target_cost_rate,
+      createdAt: m.created_at,
+    })),
+    ingredients: raw.ingredients.map((i) => ({
+      id: i.id,
+      name: i.name,
+      currentPurchasePrice: i.current_purchase_price,
+    })),
+    menuIngredients: raw.menu_ingredients.map((mi) => ({
+      menuId: mi.menu_id,
+      ingredientId: mi.ingredient_id,
+      quantity: mi.quantity,
+    })),
+    sales: raw.sales.map((s) => ({
+      menuId: s.menu_id,
+      quantitySold: s.quantity_sold,
+      periodStart: s.period_start,
+      periodEnd: s.period_end,
+    })),
+    fixedCosts: raw.fixed_costs.map((f) => ({
+      costType: f.cost_type,
+      amount: f.amount,
+      periodStart: f.period_start,
+      periodEnd: f.period_end,
+    })),
+  };
+});

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { getSessionStore } from "@/lib/store";
+import { getSessionStore, getStoreData } from "@/lib/store";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient } from "@/lib/menuRanking";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
@@ -55,29 +55,15 @@ export default async function MenusPage() {
   }
   const { store } = session;
 
-  // menu_ingredients・ingredientsはmenusの結果に依存せず(store_idだけで絞り込める)、
-  // 以前は「まずmenusだけ取得→空でなければ残り2つをPromise.all」と直列に待っていた。
-  // 3つとも最初から並列で投げることでナビゲーションあたりのDB往復を1回減らしている
-  // (メニューが1件も無い場合はmenu_ingredients/ingredientsの結果を使わず捨てるだけの
-  // 無駄になるが、それは初回登録前だけの一時的な状態であり、登録後の毎回のアクセスが
-  // 速くなる方を優先する)。
-  const [{ data: menus }, { data: menuIngredients }, { data: ingredients }] = await Promise.all([
-    supabase
-      .from("menus")
-      .select("id, name, selling_price, target_cost_rate, created_at")
-      .eq("store_id", store.id)
-      .order("created_at", { ascending: true }),
-    // メニュー一覧に必要なのは「原価・原価率」だけで、販売実績は使わないため
-    // sales は渡さない(渡さなければ利益貢献度は常に0/null扱いになり、ソート順に
-    // 影響しない=登録順のまま表示される)。
-    supabase
-      .from("menu_ingredients")
-      .select("menu_id, ingredient_id, quantity, menus!inner(store_id)")
-      .eq("menus.store_id", store.id),
-    supabase.from("ingredients").select("id, current_purchase_price").eq("store_id", store.id),
-  ]);
+  // menus・ingredients・menu_ingredientsを1回のRPC(get_store_data)でまとめて
+  // 取得する(以前は最大3クエリの並列取得だったが、往復そのものを1回に減らす)。
+  // メニュー一覧に必要なのは「原価・原価率」だけで、販売実績は使わないため
+  // sales は渡さない(渡さなければ利益貢献度は常に0/null扱いになり、ソート順に
+  // 影響しない=登録順のまま表示される)。
+  const storeData = await getStoreData(supabase);
+  const menus = storeData?.menus ?? [];
 
-  if (!menus || menus.length === 0) {
+  if (menus.length === 0) {
     return (
       <div className="max-w-4xl space-y-6 p-6 md:p-8">
         <PageHeader eyebrow="メニュー管理" title="メニュー一覧" />
@@ -92,17 +78,17 @@ export default async function MenusPage() {
   const rankingMenus: RankingMenu[] = menus.map((m) => ({
     id: m.id,
     name: m.name,
-    sellingPrice: m.selling_price,
-    targetCostRate: m.target_cost_rate,
+    sellingPrice: m.sellingPrice,
+    targetCostRate: m.targetCostRate,
   }));
-  const rankingMenuIngredients: RankingMenuIngredient[] = (menuIngredients ?? []).map((mi) => ({
-    menuId: mi.menu_id,
-    ingredientId: mi.ingredient_id,
+  const rankingMenuIngredients: RankingMenuIngredient[] = (storeData?.menuIngredients ?? []).map((mi) => ({
+    menuId: mi.menuId,
+    ingredientId: mi.ingredientId,
     quantity: mi.quantity,
   }));
-  const rankingIngredients = (ingredients ?? []).map((i) => ({
+  const rankingIngredients = (storeData?.ingredients ?? []).map((i) => ({
     id: i.id,
-    currentPurchasePrice: i.current_purchase_price,
+    currentPurchasePrice: i.currentPurchasePrice,
   }));
 
   const summaries = buildMenuRanking({

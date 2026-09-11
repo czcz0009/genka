@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { getSessionStore } from "@/lib/store";
+import { getSessionStore, getStoreData } from "@/lib/store";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient, type RankingSales } from "@/lib/menuRanking";
 import { monthToPeriod, currentMonthString } from "@/lib/period/month";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
@@ -45,28 +45,14 @@ export default async function RankingPage({
 
   const { month: monthParam } = await searchParams;
 
-  // menus・menuSalesPeriods・menu_ingredients・ingredientsはどれもstore_idだけで
-  // 絞り込めて互いの結果に依存しないため、最初から並列で投げる(以前は
-  // 「まずmenusだけ→空でなければmenuSalesPeriods→その後残りをPromise.all」と
-  // 2段階に直列で待っており、ナビゲーションのたびに無駄な往復が発生していた)。
-  // sales(対象月の販売実績)だけはmonthの決定(menuSalesPeriodsの結果が必要)に
-  // 依存するため、これだけは後段で別途取得する。
-  const [{ data: menus }, { data: menuSalesPeriods }, { data: menuIngredients }, { data: ingredients }] =
-    await Promise.all([
-      supabase.from("menus").select("id, name, selling_price, target_cost_rate").eq("store_id", store.id),
-      supabase
-        .from("menu_sales")
-        .select("period_start, menus!inner(store_id)")
-        .eq("menus.store_id", store.id)
-        .order("period_start", { ascending: false }),
-      supabase.from("menu_ingredients").select("menu_id, ingredient_id, quantity, menus!inner(store_id)").eq(
-        "menus.store_id",
-        store.id,
-      ),
-      supabase.from("ingredients").select("id, current_purchase_price").eq("store_id", store.id),
-    ]);
+  // menus・ingredients・menu_ingredients・menu_sales(全期間)を1回のRPC
+  // (get_store_data)でまとめて取得する(以前は最大5回のクエリに分かれていた)。
+  // 「対象月の絞り込み」「利用可能な月の一覧」はどちらもこの1回の取得結果から
+  // JS側で計算するため、月ごとの追加クエリは発生しない。
+  const storeData = await getStoreData(supabase);
+  const menus = storeData?.menus ?? [];
 
-  if (!menus || menus.length === 0) {
+  if (menus.length === 0) {
     return (
       <div className="max-w-4xl space-y-6 p-6 md:p-8">
         <PageHeader eyebrow="収益ランキング" title="メニュー別収益貢献度ランキング" />
@@ -78,38 +64,29 @@ export default async function RankingPage({
     );
   }
 
-  const availableMonths = Array.from(
-    new Set((menuSalesPeriods ?? []).map((r) => (r.period_start as string).slice(0, 7))),
-  ).sort();
+  const allSales = storeData?.sales ?? [];
+  const availableMonths = Array.from(new Set(allSales.map((s) => s.periodStart.slice(0, 7)))).sort();
 
   const month = monthParam ?? availableMonths[availableMonths.length - 1] ?? currentMonthString();
   const period = monthToPeriod(month);
 
-  const { data: sales } = await supabase
-    .from("menu_sales")
-    .select("menu_id, quantity_sold, menus!inner(store_id)")
-    .eq("menus.store_id", store.id)
-    .eq("period_start", period.start)
-    .eq("period_end", period.end);
-
-  const rankingMenus: RankingMenu[] = (menus ?? []).map((m) => ({
+  const rankingMenus: RankingMenu[] = menus.map((m) => ({
     id: m.id,
     name: m.name,
-    sellingPrice: m.selling_price,
-    targetCostRate: m.target_cost_rate,
+    sellingPrice: m.sellingPrice,
+    targetCostRate: m.targetCostRate,
   }));
-  const rankingMenuIngredients: RankingMenuIngredient[] = (menuIngredients ?? []).map((mi) => ({
-    menuId: mi.menu_id,
-    ingredientId: mi.ingredient_id,
+  const rankingMenuIngredients: RankingMenuIngredient[] = (storeData?.menuIngredients ?? []).map((mi) => ({
+    menuId: mi.menuId,
+    ingredientId: mi.ingredientId,
     quantity: mi.quantity,
   }));
-  const rankingSales: RankingSales[] = (sales ?? []).map((s) => ({
-    menuId: s.menu_id,
-    quantitySold: s.quantity_sold,
-  }));
-  const rankingIngredients = (ingredients ?? []).map((i) => ({
+  const rankingSales: RankingSales[] = allSales
+    .filter((s) => s.periodStart === period.start && s.periodEnd === period.end)
+    .map((s) => ({ menuId: s.menuId, quantitySold: s.quantitySold }));
+  const rankingIngredients = (storeData?.ingredients ?? []).map((i) => ({
     id: i.id,
-    currentPurchasePrice: i.current_purchase_price,
+    currentPurchasePrice: i.currentPurchasePrice,
   }));
 
   const summaries = buildMenuRanking({

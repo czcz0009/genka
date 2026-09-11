@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { getSessionStore } from "@/lib/store";
+import { getSessionStore, getStoreData } from "@/lib/store";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient, type RankingSales } from "@/lib/menuRanking";
 import {
   aggregateSalesAndFoodCost,
@@ -11,6 +11,7 @@ import {
   FL_BENCHMARK_PERCENT,
   FLR_BENCHMARK_PERCENT,
   type FixedCostRow,
+  type FixedCostType,
 } from "@/lib/flRatio";
 import { monthToPeriod, currentMonthString, recentMonths, formatMonthLabel } from "@/lib/period/month";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
@@ -59,33 +60,15 @@ export default async function FlRatioPage({
   const rangeStart = monthToPeriod(months[0]).start;
   const rangeEnd = monthToPeriod(months[months.length - 1]).end;
 
-  // menus・menu_ingredients・ingredients・sales・fixedCostsはどれもstore_id(と
-  // 期間)だけで絞り込め、menusの結果に依存しないため最初から並列で投げる(以前は
-  // 「まずmenusだけ→空でなければ残り4つをPromise.all」と直列に待っており、
-  // ナビゲーションのたびに無駄な往復が発生していた)。
-  const [{ data: menus }, { data: menuIngredients }, { data: ingredients }, { data: sales }, { data: fixedCosts }] =
-    await Promise.all([
-      supabase.from("menus").select("id, name, selling_price, target_cost_rate").eq("store_id", store.id),
-      supabase
-        .from("menu_ingredients")
-        .select("menu_id, ingredient_id, quantity, menus!inner(store_id)")
-        .eq("menus.store_id", store.id),
-      supabase.from("ingredients").select("id, current_purchase_price").eq("store_id", store.id),
-      supabase
-        .from("menu_sales")
-        .select("menu_id, quantity_sold, period_start, period_end, menus!inner(store_id)")
-        .eq("menus.store_id", store.id)
-        .gte("period_start", rangeStart)
-        .lte("period_end", rangeEnd),
-      supabase
-        .from("store_fixed_costs")
-        .select("cost_type, amount, period_start, period_end")
-        .eq("store_id", store.id),
-    ]);
+  // menus・menu_ingredients・ingredients・sales(直近6ヶ月分)・fixedCostsを
+  // 1回のRPC(get_store_data)でまとめて取得する(以前は最大5クエリの並列取得
+  // だったが、往復そのものを1回に減らす)。
+  const storeData = await getStoreData(supabase, rangeStart, rangeEnd);
+  const menus = storeData?.menus ?? [];
 
   // メニューが1件もなければ、上で取得した月次推移用データは使わずに
   // 「まずはここから」の案内だけ出す。
-  if (!menus || menus.length === 0) {
+  if (menus.length === 0) {
     return (
       <div className="max-w-4xl space-y-6 p-6 md:p-8">
         <PageHeader eyebrow="FL比率" title="FL比率・FLR比率" />
@@ -97,33 +80,36 @@ export default async function FlRatioPage({
     );
   }
 
-  const rankingMenus: RankingMenu[] = (menus ?? []).map((m) => ({
+  const rankingMenus: RankingMenu[] = menus.map((m) => ({
     id: m.id,
     name: m.name,
-    sellingPrice: m.selling_price,
-    targetCostRate: m.target_cost_rate,
+    sellingPrice: m.sellingPrice,
+    targetCostRate: m.targetCostRate,
   }));
-  const rankingMenuIngredients: RankingMenuIngredient[] = (menuIngredients ?? []).map((mi) => ({
-    menuId: mi.menu_id,
-    ingredientId: mi.ingredient_id,
+  const rankingMenuIngredients: RankingMenuIngredient[] = (storeData?.menuIngredients ?? []).map((mi) => ({
+    menuId: mi.menuId,
+    ingredientId: mi.ingredientId,
     quantity: mi.quantity,
   }));
-  const fixedCostRows: FixedCostRow[] = (fixedCosts ?? []).map((f) => ({
-    costType: f.cost_type,
+  const fixedCostRows: FixedCostRow[] = (storeData?.fixedCosts ?? []).map((f) => ({
+    // store_fixed_costs.cost_typeはDBのcheck制約で'rent'|'labor'のみ許可されている
+    // (0005_ranking_and_fl_ratio.sql)。RPCのJSON経由では型情報が失われるため、
+    // ここで明示的に絞り込む。
+    costType: f.costType as FixedCostType,
     amount: f.amount,
-    periodStart: f.period_start,
-    periodEnd: f.period_end,
+    periodStart: f.periodStart,
+    periodEnd: f.periodEnd,
   }));
-  const rankingIngredients = (ingredients ?? []).map((i) => ({
+  const rankingIngredients = (storeData?.ingredients ?? []).map((i) => ({
     id: i.id,
-    currentPurchasePrice: i.current_purchase_price,
+    currentPurchasePrice: i.currentPurchasePrice,
   }));
 
   const trend = months.map((m) => {
     const period = monthToPeriod(m);
-    const monthSales: RankingSales[] = (sales ?? [])
-      .filter((s) => s.period_start === period.start && s.period_end === period.end)
-      .map((s) => ({ menuId: s.menu_id, quantitySold: s.quantity_sold }));
+    const monthSales: RankingSales[] = (storeData?.sales ?? [])
+      .filter((s) => s.periodStart === period.start && s.periodEnd === period.end)
+      .map((s) => ({ menuId: s.menuId, quantitySold: s.quantitySold }));
 
     const summaries = buildMenuRanking({
       menus: rankingMenus,

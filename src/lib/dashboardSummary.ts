@@ -2,9 +2,16 @@ import "server-only";
 import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient, type RankingSales } from "./menuRanking.ts";
-import { aggregateSalesAndFoodCost, calcFlRatios, selectApplicableFixedCost, type FixedCostRow } from "./flRatio.ts";
+import {
+  aggregateSalesAndFoodCost,
+  calcFlRatios,
+  selectApplicableFixedCost,
+  type FixedCostRow,
+  type FixedCostType,
+} from "./flRatio.ts";
 import { monthToPeriod, currentMonthString } from "./period/month.ts";
 import { computeStoreAlerts } from "./marketPrices/computeStoreAlerts.ts";
+import { getStoreData } from "./store.ts";
 
 /**
  * ホーム画面(ダッシュボード)の経営状況サマリー。
@@ -29,42 +36,43 @@ export interface FastDashboardSummary {
   overTargetCount: number;
 }
 
-async function fetchRankingInputs(supabase: SupabaseClient, store: { id: string }) {
-  // menu_ingredientsの取得はmenus/ingredientsの結果に依存しない(自分のフィルタだけで
-  // 完結する)ため、以前は「menus+ingredients→その後menu_ingredients」と2段階に
-  // 分かれていたのを1つのPromise.allにまとめ、3クエリとも並列で待つようにした
-  // (優先度3のパフォーマンス改善: 待たなくていい直列待ちを無くす)。
-  const [{ data: menus }, { data: ingredients }, { data: menuIngredients }] = await Promise.all([
-    supabase.from("menus").select("id, name, selling_price, target_cost_rate").eq("store_id", store.id),
-    supabase.from("ingredients").select("id, name, current_purchase_price").eq("store_id", store.id),
-    supabase
-      .from("menu_ingredients")
-      .select("menu_id, ingredient_id, quantity, menus!inner(store_id)")
-      .eq("menus.store_id", store.id),
-  ]);
+/**
+ * menus/ingredients/menu_ingredients/menu_sales/store_fixed_costsを
+ * 1回のRPC(get_store_data)でまとめて取得し、ランキング計算用の形に変換する。
+ *
+ * cache()でラップされたgetStoreData()を経由するため、buildFastDashboardSummary・
+ * getCurrentFlRate・getAlertSummaryの3つが同じリクエスト内で呼んでも、実際の
+ * RPC呼び出しは1回で済む(以前は3クエリのPromise.allをこの3関数が個別に
+ * 呼んでおり、さらにgetCurrentFlRateは固定費・当月販売実績を別途もう1往復
+ * 取得していた)。
+ */
+async function fetchRankingInputs(supabase: SupabaseClient) {
+  const storeData = await getStoreData(supabase);
 
-  const rankingMenus: RankingMenu[] = (menus ?? []).map((m) => ({
+  const rankingMenus: RankingMenu[] = (storeData?.menus ?? []).map((m) => ({
     id: m.id,
     name: m.name,
-    sellingPrice: m.selling_price,
-    targetCostRate: m.target_cost_rate,
+    sellingPrice: m.sellingPrice,
+    targetCostRate: m.targetCostRate,
   }));
-  const rankingMenuIngredients: RankingMenuIngredient[] = (menuIngredients ?? []).map((mi) => ({
-    menuId: mi.menu_id,
-    ingredientId: mi.ingredient_id,
+  const rankingMenuIngredients: RankingMenuIngredient[] = (storeData?.menuIngredients ?? []).map((mi) => ({
+    menuId: mi.menuId,
+    ingredientId: mi.ingredientId,
     quantity: mi.quantity,
   }));
-  const rankingIngredients = (ingredients ?? []).map((i) => ({
+  const rankingIngredients = (storeData?.ingredients ?? []).map((i) => ({
     id: i.id,
-    currentPurchasePrice: i.current_purchase_price,
+    currentPurchasePrice: i.currentPurchasePrice,
   }));
-  const alertIngredients = (ingredients ?? []).map((i) => ({
+  const alertIngredients = (storeData?.ingredients ?? []).map((i) => ({
     id: i.id,
     name: i.name,
-    currentPurchasePrice: i.current_purchase_price,
+    currentPurchasePrice: i.currentPurchasePrice,
   }));
+  const sales = storeData?.sales ?? [];
+  const fixedCosts = storeData?.fixedCosts ?? [];
 
-  return { rankingMenus, rankingMenuIngredients, rankingIngredients, alertIngredients };
+  return { rankingMenus, rankingMenuIngredients, rankingIngredients, alertIngredients, sales, fixedCosts };
 }
 
 /** 登録メニュー数・平均原価率・値上げ検討数(速い。市場価格データやFL比率は含まない) */
@@ -72,7 +80,7 @@ export async function buildFastDashboardSummary(
   supabase: SupabaseClient,
   store: { id: string; defaultTargetCostRate: number },
 ): Promise<FastDashboardSummary> {
-  const { rankingMenus, rankingMenuIngredients, rankingIngredients } = await fetchRankingInputs(supabase, store);
+  const { rankingMenus, rankingMenuIngredients, rankingIngredients } = await fetchRankingInputs(supabase);
   if (rankingMenus.length === 0) {
     return { menuCount: 0, averageCostRate: null, overTargetCount: 0 };
   }
@@ -106,29 +114,18 @@ export const getCurrentFlRate = cache(async function getCurrentFlRate(
   supabase: SupabaseClient,
   store: { id: string; defaultTargetCostRate: number },
 ): Promise<number | null> {
-  const { rankingMenus, rankingMenuIngredients, rankingIngredients } = await fetchRankingInputs(supabase, store);
+  const { rankingMenus, rankingMenuIngredients, rankingIngredients, sales, fixedCosts } =
+    await fetchRankingInputs(supabase);
   if (rankingMenus.length === 0) return null;
 
   const currentMonth = currentMonthString();
   const period = monthToPeriod(currentMonth);
 
-  const [{ data: fixedCosts }, { data: sales }] = await Promise.all([
-    supabase.from("store_fixed_costs").select("cost_type, amount, period_start, period_end").eq(
-      "store_id",
-      store.id,
-    ),
-    supabase
-      .from("menu_sales")
-      .select("menu_id, quantity_sold, menus!inner(store_id)")
-      .eq("menus.store_id", store.id)
-      .eq("period_start", period.start)
-      .eq("period_end", period.end),
-  ]);
-
-  const rankingSales: RankingSales[] = (sales ?? []).map((s) => ({
-    menuId: s.menu_id,
-    quantitySold: s.quantity_sold,
-  }));
+  // fetchRankingInputsが既に(cache()経由で)取得済みのsales/fixedCostsを
+  // その場でフィルタするだけで済むため、ここでの追加のDB往復は発生しない。
+  const rankingSales: RankingSales[] = sales
+    .filter((s) => s.periodStart === period.start && s.periodEnd === period.end)
+    .map((s) => ({ menuId: s.menuId, quantitySold: s.quantitySold }));
   const summaries = buildMenuRanking({
     menus: rankingMenus,
     menuIngredients: rankingMenuIngredients,
@@ -137,11 +134,14 @@ export const getCurrentFlRate = cache(async function getCurrentFlRate(
     defaultTargetCostRate: store.defaultTargetCostRate,
   });
 
-  const fixedCostRows: FixedCostRow[] = (fixedCosts ?? []).map((f) => ({
-    costType: f.cost_type,
+  const fixedCostRows: FixedCostRow[] = fixedCosts.map((f) => ({
+    // store_fixed_costs.cost_typeはDBのcheck制約で'rent'|'labor'のみ許可されている
+    // (0005_ranking_and_fl_ratio.sql)。RPCのJSON経由では型情報が失われるため、
+    // ここで明示的に絞り込む。
+    costType: f.costType as FixedCostType,
     amount: f.amount,
-    periodStart: f.period_start,
-    periodEnd: f.period_end,
+    periodStart: f.periodStart,
+    periodEnd: f.periodEnd,
   }));
   const { totalSales, totalFoodCost } = aggregateSalesAndFoodCost(summaries);
   const laborCost = selectApplicableFixedCost(fixedCostRows, "labor", period);
@@ -172,7 +172,7 @@ export const getAlertSummary = cache(async function getAlertSummary(
   supabase: SupabaseClient,
   store: { id: string; defaultTargetCostRate: number },
 ): Promise<AlertSummary> {
-  const { rankingMenus, rankingMenuIngredients, alertIngredients } = await fetchRankingInputs(supabase, store);
+  const { rankingMenus, rankingMenuIngredients, alertIngredients } = await fetchRankingInputs(supabase);
   if (rankingMenus.length === 0) return { count: 0, topAlerts: [] };
 
   const { produceAlerts, livestockAlerts } = await computeStoreAlerts(

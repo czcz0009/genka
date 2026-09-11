@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { getSessionStore } from "@/lib/store";
+import { getSessionStore, getStoreData } from "@/lib/store";
 import { computeStoreAlerts } from "@/lib/marketPrices/computeStoreAlerts";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
@@ -39,22 +39,14 @@ export default async function AlertsPage() {
   }
   const { store } = session;
 
-  // ingredients・menus・menu_ingredientsはどれもstore_idだけで絞り込め、互いの
-  // 結果に依存しないため最初から並列で投げる(以前は「ingredients+menusを
-  // Promise.all→空でなければmenu_ingredientsを追加取得」と2段階に直列で待っており、
-  // ナビゲーションのたびに無駄な往復が発生していた)。市場データ(旬別・月別の
-  // 全履歴)側の取得はcomputeStoreAlerts内で行うため、メニューが1件も無ければ
-  // その呼び出し自体をスキップして案内だけ出す。
-  const [{ data: ingredients }, { data: menus }, { data: menuIngredients }] = await Promise.all([
-    supabase.from("ingredients").select("id, name, current_purchase_price").eq("store_id", store.id),
-    supabase.from("menus").select("id, name, selling_price, target_cost_rate").eq("store_id", store.id),
-    supabase
-      .from("menu_ingredients")
-      .select("menu_id, ingredient_id, quantity, menus!inner(store_id)")
-      .eq("menus.store_id", store.id),
-  ]);
+  // ingredients・menus・menu_ingredientsを1回のRPC(get_store_data)でまとめて
+  // 取得する(以前は3クエリの並列取得だったが、往復そのものを1回に減らす)。
+  // 市場データ(旬別・月別の全履歴)側の取得はcomputeStoreAlerts内で行うため、
+  // メニューが1件も無ければその呼び出し自体をスキップして案内だけ出す。
+  const storeData = await getStoreData(supabase);
+  const menus = storeData?.menus ?? [];
 
-  if (!menus || menus.length === 0) {
+  if (menus.length === 0) {
     return (
       <div className="max-w-4xl space-y-6 p-6 md:p-8">
         <PageHeader eyebrow="仕入れ値アラート" title="仕入れ値変動アラート" />
@@ -66,20 +58,20 @@ export default async function AlertsPage() {
     );
   }
 
-  const alertIngredients = (ingredients ?? []).map((i) => ({
+  const alertIngredients = (storeData?.ingredients ?? []).map((i) => ({
     id: i.id,
     name: i.name,
-    currentPurchasePrice: i.current_purchase_price,
+    currentPurchasePrice: i.currentPurchasePrice,
   }));
-  const alertMenus = (menus ?? []).map((m) => ({
+  const alertMenus = menus.map((m) => ({
     id: m.id,
     name: m.name,
-    sellingPrice: m.selling_price,
-    targetCostRate: m.target_cost_rate,
+    sellingPrice: m.sellingPrice,
+    targetCostRate: m.targetCostRate,
   }));
-  const alertMenuIngredients = (menuIngredients ?? []).map((mi) => ({
-    menuId: mi.menu_id,
-    ingredientId: mi.ingredient_id,
+  const alertMenuIngredients = (storeData?.menuIngredients ?? []).map((mi) => ({
+    menuId: mi.menuId,
+    ingredientId: mi.ingredientId,
     quantity: mi.quantity,
   }));
 

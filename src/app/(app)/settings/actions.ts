@@ -4,9 +4,13 @@ import { monthToPeriod } from "@/lib/period/month";
 import { requireAuthedClient } from "@/lib/supabase/requireAuthedClient";
 
 /**
- * 店舗設定(店名・目標原価率・家賃・当月の人件費)をまとめて1回の保存で反映する。
- * 家賃・人件費は空欄なら「変更しない」扱いにする(未入力=クリアではなく、
+ * 店舗設定(店名・目標原価率・家賃)をまとめて1回の保存で反映する。
+ * 家賃は空欄なら「変更しない」扱いにする(未入力=クリアではなく、
  * 触っていない項目は既存の値をそのまま残す方が安全で分かりやすいため)。
+ *
+ * 人件費は月ごとに金額が変わるため、ここでは扱わない(FL比率画面で
+ * 月を選んで入力する運用に一本化している。「設定」に月次の値を置くと、
+ * 一度きりの設定のように見えて紛らわしいという指摘を受けての変更)。
  */
 export interface SaveStoreSettingsInput {
   storeId: string;
@@ -14,9 +18,7 @@ export interface SaveStoreSettingsInput {
   defaultTargetCostRate: number;
   /** nullなら変更しない */
   rentAmount: number | null;
-  /** nullなら変更しない */
-  laborAmount: number | null;
-  /** 人件費を適用する対象月("YYYY-MM") */
+  /** 家賃を適用する対象月("YYYY-MM") */
   month: string;
 }
 
@@ -43,7 +45,7 @@ export async function saveStoreSettings(input: SaveStoreSettingsInput): Promise<
     .eq("id", input.storeId);
   if (storeError) return { success: false, error: `店舗情報の保存に失敗しました: ${storeError.message}` };
 
-  const { start, end } = monthToPeriod(input.month);
+  const { start } = monthToPeriod(input.month);
 
   if (input.rentAmount != null) {
     if (!Number.isFinite(input.rentAmount) || input.rentAmount < 0) {
@@ -54,17 +56,6 @@ export async function saveStoreSettings(input: SaveStoreSettingsInput): Promise<
       { onConflict: "store_id,cost_type,period_start" },
     );
     if (error) return { success: false, error: `家賃の保存に失敗しました: ${error.message}` };
-  }
-
-  if (input.laborAmount != null) {
-    if (!Number.isFinite(input.laborAmount) || input.laborAmount < 0) {
-      return { success: false, error: "人件費は0以上の数値で入力してください" };
-    }
-    const { error } = await supabase.from("store_fixed_costs").upsert(
-      { store_id: input.storeId, cost_type: "labor", amount: input.laborAmount, period_start: start, period_end: end },
-      { onConflict: "store_id,cost_type,period_start" },
-    );
-    if (error) return { success: false, error: `人件費の保存に失敗しました: ${error.message}` };
   }
 
   return { success: true };

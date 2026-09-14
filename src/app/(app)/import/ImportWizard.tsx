@@ -146,7 +146,7 @@ export function ImportWizard({ storeId }: { storeId: string | null }) {
             </button>
           </div>
 
-          <MappingTable headers={headers} mapping={mapping} setMapping={setMapping} suggestions={suggestions} />
+          <MappingTable headers={headers} rows={rows} mapping={mapping} setMapping={setMapping} suggestions={suggestions} />
 
           <PreviewTable headers={headers} rows={rows.slice(0, 5)} mapping={mapping} />
 
@@ -283,13 +283,28 @@ function SampleTableHelp() {
   );
 }
 
+/** 選択中の列に、実際どんな値が入っているかを2〜3件だけ拾う(空欄はスキップ)。 */
+function sampleColumnValues(rows: string[][], colIdx: number, count = 3): string[] {
+  const samples: string[] = [];
+  for (const row of rows) {
+    const v = row[colIdx]?.trim();
+    if (v) {
+      samples.push(v);
+      if (samples.length >= count) break;
+    }
+  }
+  return samples;
+}
+
 function MappingTable({
   headers,
+  rows,
   mapping,
   setMapping,
   suggestions,
 }: {
   headers: string[];
+  rows: string[][];
   mapping: FinalMapping;
   setMapping: (m: FinalMapping) => void;
   suggestions: ReturnType<typeof suggestColumnMapping>;
@@ -333,6 +348,24 @@ function MappingTable({
                 searchPlaceholder="列名で絞り込む"
                 selectedLabelPrefix="対応する列"
               />
+              {/*
+                「この列を選んで合っているか分からない」という指摘への対応。
+                列名(見出し)だけでなく、実際にその列に入っている値を見せることで
+                選んだ列が正しいかその場で確認できるようにする。
+              */}
+              {value != null && (
+                <p className="mt-2 text-xs" style={{ color: "var(--muted-foreground)" }}>
+                  この列の実際のデータ例:{" "}
+                  {(() => {
+                    const samples = sampleColumnValues(rows, value);
+                    return samples.length > 0 ? (
+                      <span className="font-mono">{samples.join("、 ")}</span>
+                    ) : (
+                      "(この列は空欄が多いようです)"
+                    );
+                  })()}
+                </p>
+              )}
             </div>
           </div>
         );

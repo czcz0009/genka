@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getSessionStore } from "@/lib/store";
 import { selectApplicableFixedCost, type FixedCostRow } from "@/lib/flRatio";
-import { monthToPeriod, currentMonthString, formatMonthLabel } from "@/lib/period/month";
+import { monthToPeriod, currentMonthString } from "@/lib/period/month";
 import { SettingsForm } from "./SettingsForm.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
@@ -52,7 +52,6 @@ export default async function SettingsPage() {
     periodEnd: f.period_end,
   }));
   const currentRent = selectApplicableFixedCost(fixedCostRows, "rent", period);
-  const currentLabor = selectApplicableFixedCost(fixedCostRows, "labor", period);
 
   return (
     <div className="max-w-xl space-y-6 p-6 md:p-8">
@@ -67,9 +66,7 @@ export default async function SettingsPage() {
         initialName={store.name}
         initialDefaultTargetCostRate={store.defaultTargetCostRate}
         initialRent={currentRent}
-        initialLabor={currentLabor}
         month={month}
-        monthLabel={formatMonthLabel(month)}
       />
     </div>
   );

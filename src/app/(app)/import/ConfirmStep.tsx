@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { ImportPlan, MenuNameFill } from "@/lib/mapping/applyMapping";
 import type { FinalMapping } from "@/lib/mapping/applyMapping";
 import { FIELD_DEFS } from "@/lib/mapping/fields";
@@ -178,9 +179,16 @@ export function ConfirmStep({
       )}
 
       {configured && saveState.status === "done" && (
-        <Notice tone="ok">
-          保存しました。メニュー{saveState.menuCount}件・食材{saveState.ingredientCount}件を登録/更新しました。
-          既存の食材・メニューは名前で突き合わせて重複登録せず更新しています。
+        <Notice tone="ok" title="✓ 保存が完了しました">
+          <p>
+            メニュー{saveState.menuCount}件・食材{saveState.ingredientCount}件を登録/更新しました。
+            既存の食材・メニューは名前で突き合わせて重複登録せず更新しています。
+          </p>
+          <p className="mt-2">
+            <Link href="/menus" className="font-medium underline underline-offset-2">
+              登録したメニュー一覧を確認する →
+            </Link>
+          </p>
         </Notice>
       )}
       {configured && saveState.status === "error" && (

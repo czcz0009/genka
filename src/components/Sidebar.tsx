@@ -45,6 +45,16 @@ function IconUpload({ className }: { className?: string }) {
   );
 }
 
+function IconBox({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+      <path d="m3.3 7 8.7 5 8.7-5" />
+      <line x1="12" y1="22" x2="12" y2="12" />
+    </svg>
+  );
+}
+
 function IconTrendingUp({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -84,6 +94,7 @@ function IconSettings({ className }: { className?: string }) {
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "ダッシュボード", icon: IconGrid },
   { href: "/menus", label: "原価計算", icon: IconList },
+  { href: "/ingredients", label: "食材", icon: IconBox },
   { href: "/import", label: "CSV取り込み", icon: IconUpload },
   { href: "/ranking", label: "今見直すべきメニュー", icon: IconTrendingUp },
   { href: "/fl-ratio", label: "FL比率", icon: IconActivity },

@@ -84,4 +84,11 @@ export interface MenuCostSummary {
   profitContribution: number | null;
   /** 目標原価率を満たすための値上げ目安額(切り上げ) */
   suggestedPriceIncrease: number | null;
+  /**
+   * 仕入単価が1つ前の記録から変わったことによる、月間の利益への影響額(円)。
+   * (従来の原価 - 現在の原価) × 月間販売数量。マイナス=値上がりで利益が減った、
+   * プラス=値下がりで利益が増えた。販売数量が未登録(0件)の場合はnull
+   * (「販売数量を登録すると表示されます」という案内をUI側で出す)。
+   */
+  monthlyProfitImpact: number | null;
 }

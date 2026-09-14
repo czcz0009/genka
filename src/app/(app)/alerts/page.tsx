@@ -52,7 +52,7 @@ export default async function AlertsPage() {
       <div className="max-w-4xl space-y-6 p-6 md:p-8">
         <PageHeader eyebrow="仕入れ値アラート" title="仕入れ値変動アラート" />
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-          メニューと食材を登録すると、市場価格の変動アラートがここに表示されます。
+          メニューと食材を登録すると、市場価格の変動アラートがここに表示されます。電話・FAXでの仕入れなど、どんな仕入れ方法のお店でも、特別なシステム連携なしで使えます。
         </p>
         <StartHerePrompt />
       </div>
@@ -91,7 +91,7 @@ export default async function AlertsPage() {
       <PageHeader
         eyebrow="仕入れ値アラート"
         title="仕入れ値変動アラート"
-        description="農水省「青果物卸売市場調査(旬別結果)」「畜産物卸売価格の推移」の市場価格をもとに、市場価格の変動率がそのまま仕入単価に反映されたと仮定した場合の試算原価率を表示します。実際に仕入単価を変更した結果ではありません。"
+        description="農水省「青果物卸売市場調査(旬別結果)」「畜産物卸売価格の推移」の市場価格をもとに、市場価格の変動率がそのまま仕入単価に反映されたと仮定した場合の試算原価率を表示します。実際に仕入単価を変更した結果ではありません。電話・FAXでの仕入れなど、どんな仕入れ方法のお店でも使えます。特別なシステム連携は不要です。"
       />
 
       {/*

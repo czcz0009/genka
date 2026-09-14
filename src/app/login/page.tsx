@@ -26,6 +26,9 @@ export default function LoginPage() {
           <div className="mt-4 text-sm leading-relaxed opacity-70" style={{ fontFamily: "var(--font-noto-sans-jp)" }}>
             メニューごとの原価率計算、仕入れ値変動アラート、FL比率の月次管理。毎日使える、信頼できる道具。
           </div>
+          <div className="mt-4 text-sm leading-relaxed opacity-70" style={{ fontFamily: "var(--font-noto-sans-jp)" }}>
+            電話・FAXでの仕入れでも、特別なシステム連携なしでそのまま使えます。
+          </div>
         </div>
         <div className="text-xs opacity-40">© 2026 Genka Kanri</div>
       </div>

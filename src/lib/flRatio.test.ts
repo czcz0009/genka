@@ -14,6 +14,7 @@ function summary(partial: Partial<MenuCostSummary> & { menuId: string }): MenuCo
     quantitySold: 0,
     profitContribution: null,
     suggestedPriceIncrease: null,
+    monthlyProfitImpact: null,
     ...partial,
   };
 }

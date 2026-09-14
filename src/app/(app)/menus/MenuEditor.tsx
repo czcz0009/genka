@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { calcCostRate } from "@/lib/costCalc";
+import { calcCostRate, calcRequiredSellingPrice } from "@/lib/costCalc";
 import { normalizeForDedupe } from "@/lib/normalize.ts";
 import { saveMenuWithIngredients, type SaveMenuLineInput } from "./actions.ts";
 
@@ -39,6 +39,12 @@ function nextKey(): string {
 
 function formatYen(n: number): string {
   return `¥${Math.round(n).toLocaleString()}`;
+}
+
+/** マイナスになりうる金額(値上げシミュレーションの利益等)専用。"¥-50"ではなく"-¥50"と表示する。 */
+function formatProfitYen(n: number): string {
+  const rounded = Math.round(n);
+  return rounded < 0 ? `-¥${Math.abs(rounded).toLocaleString()}` : formatYen(rounded);
 }
 
 /**
@@ -101,6 +107,7 @@ export function MenuEditor({
   initialLines,
   allIngredients,
   targetCostRate,
+  currentMonthQuantitySold,
 }: {
   storeId: string;
   menuId?: string;
@@ -109,6 +116,8 @@ export function MenuEditor({
   initialLines: LocalLine[];
   allIngredients: IngredientOption[];
   targetCostRate: number;
+  /** 今月の販売数量。値上げシミュレーションの月間利益試算に使う(未登録ならnull)。 */
+  currentMonthQuantitySold: number | null;
 }) {
   const router = useRouter();
   const [name, setName] = useState(initialName);
@@ -247,6 +256,13 @@ export function MenuEditor({
         </div>
       </div>
 
+      <PriceSimulation
+        totalCost={totalCost}
+        targetCostRate={targetCostRate}
+        currentSellingPrice={sellingPriceNumber}
+        monthlyQuantitySold={currentMonthQuantitySold}
+      />
+
       <IngredientLineForm
         allIngredients={combinedIngredients}
         existingNames={new Set(lines.map((l) => l.ingredientName))}
@@ -332,6 +348,127 @@ export function MenuEditor({
         >
           {saving === "saveAndNew" ? "保存中…" : "保存して別のメニューを追加する"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 値上げシミュレーション。実際に保存される「売価(円)」とは別に、
+ * 「仮にこの値段にしたら」という試算専用の売価を入力できるようにし、
+ * 原価率・1食あたり利益・(販売数量が分かれば)月間利益をその場で試算する。
+ * また、目標原価率ちょうどにするための必要売価を逆算して案内する
+ * (「この価格を試算に使う」ボタンで、そのままシミュレーション欄に反映できる)。
+ */
+function PriceSimulation({
+  totalCost,
+  targetCostRate,
+  currentSellingPrice,
+  monthlyQuantitySold,
+}: {
+  totalCost: number;
+  targetCostRate: number;
+  /** 実際に保存される売価(未入力ならnull)。試算欄の初期値に使うだけで、以後は連動しない。 */
+  currentSellingPrice: number | null;
+  monthlyQuantitySold: number | null;
+}) {
+  const [simulatedPrice, setSimulatedPrice] = useState(
+    currentSellingPrice != null ? String(currentSellingPrice) : "",
+  );
+
+  const simulatedPriceNumber = simulatedPrice.trim() ? Number(simulatedPrice) : null;
+  const simulatedCostRate = calcCostRate(totalCost, simulatedPriceNumber);
+  const simulatedOverTarget = simulatedCostRate != null && simulatedCostRate > targetCostRate;
+  const profitPerUnit = simulatedPriceNumber != null ? simulatedPriceNumber - totalCost : null;
+  const monthlyProfit =
+    profitPerUnit != null && monthlyQuantitySold != null ? profitPerUnit * monthlyQuantitySold : null;
+  const requiredPrice = calcRequiredSellingPrice(totalCost, targetCostRate);
+
+  return (
+    <div className="flex flex-col gap-4 rounded border p-5" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+      <p className="text-base font-semibold" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+        値上げシミュレーション
+      </p>
+      <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+        実際の売価は変えずに、「仮にこの値段だったら」を試算できます。
+      </p>
+
+      {requiredPrice != null && requiredPrice > 0 && (
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 rounded px-4 py-3 text-sm"
+          style={{ background: "var(--muted)" }}
+        >
+          <span style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+            目標原価率{targetCostRate}%にするには、売価を
+            <span className="font-mono font-semibold">{formatYen(requiredPrice)}</span>
+            にしてください
+          </span>
+          <button
+            type="button"
+            onClick={() => setSimulatedPrice(String(requiredPrice))}
+            className="shrink-0 rounded border px-3 py-2 text-sm transition-colors"
+            style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+          >
+            この価格を試算に使う
+          </button>
+        </div>
+      )}
+
+      <label className="flex flex-col gap-2 text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+        試算売価(円)
+        <input
+          type="number"
+          min={0}
+          step="1"
+          inputMode="decimal"
+          value={simulatedPrice}
+          onChange={(e) => setSimulatedPrice(e.target.value)}
+          placeholder="例: 950"
+          className={INPUT_CLASS + " font-mono"}
+          style={inputStyle}
+        />
+      </label>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div>
+          <div className="text-xs font-medium" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+            原価率(試算)
+          </div>
+          <div
+            className="mt-1 font-mono text-xl font-bold"
+            style={{ color: simulatedOverTarget ? "var(--status-danger)" : simulatedCostRate != null ? "var(--status-ok)" : "var(--muted-foreground)" }}
+          >
+            {simulatedCostRate != null ? `${simulatedCostRate.toFixed(1)}%` : "-"}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs font-medium" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+            1食あたり利益(試算)
+          </div>
+          <div
+            className="mt-1 font-mono text-xl font-bold"
+            style={{ color: profitPerUnit == null ? "var(--muted-foreground)" : profitPerUnit < 0 ? "var(--status-danger)" : "var(--foreground)" }}
+          >
+            {profitPerUnit != null ? formatProfitYen(profitPerUnit) : "-"}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs font-medium" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+            月間利益(試算)
+          </div>
+          {monthlyQuantitySold == null ? (
+            <div className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+              販売数量を登録すると表示されます
+            </div>
+          ) : (
+            <div
+              className="mt-1 font-mono text-xl font-bold"
+              style={{ color: monthlyProfit == null ? "var(--muted-foreground)" : monthlyProfit < 0 ? "var(--status-danger)" : "var(--foreground)" }}
+            >
+              {monthlyProfit != null ? formatProfitYen(monthlyProfit) : "-"}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

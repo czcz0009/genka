@@ -53,6 +53,7 @@ export default async function NewMenuPage() {
           currentPurchasePrice: i.current_purchase_price,
         }))}
         targetCostRate={store.defaultTargetCostRate}
+        currentMonthQuantitySold={null}
       />
     </div>
   );

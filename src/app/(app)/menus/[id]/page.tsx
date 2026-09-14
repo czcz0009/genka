@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getSessionStore } from "@/lib/store";
+import { currentMonthString, monthToPeriod } from "@/lib/period/month.ts";
 import { MenuEditor, type LocalLine } from "../MenuEditor.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
@@ -28,20 +29,31 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
   const { store } = session;
 
   const { id: menuId } = await params;
+  const currentPeriod = monthToPeriod(currentMonthString());
 
-  const [{ data: menu }, { data: menuIngredients }, { data: allIngredients }] = await Promise.all([
-    supabase.from("menus").select("id, name, selling_price, target_cost_rate").eq("id", menuId).eq(
-      "store_id",
-      store.id,
-    ).maybeSingle(),
-    supabase
-      .from("menu_ingredients")
-      .select("id, ingredient_id, quantity, unit, ingredients(name, unit, current_purchase_price)")
-      .eq("menu_id", menuId),
-    supabase.from("ingredients").select("id, name, unit, current_purchase_price").eq("store_id", store.id).order(
-      "name",
-    ),
-  ]);
+  const [{ data: menu }, { data: menuIngredients }, { data: allIngredients }, { data: currentMonthSales }] =
+    await Promise.all([
+      supabase.from("menus").select("id, name, selling_price, target_cost_rate").eq("id", menuId).eq(
+        "store_id",
+        store.id,
+      ).maybeSingle(),
+      supabase
+        .from("menu_ingredients")
+        .select("id, ingredient_id, quantity, unit, ingredients(name, unit, current_purchase_price)")
+        .eq("menu_id", menuId),
+      supabase.from("ingredients").select("id, name, unit, current_purchase_price").eq("store_id", store.id).order(
+        "name",
+      ),
+      // 値上げシミュレーションで「月間利益」を試算するための、今月の販売数量。
+      // このメニュー1件分だけの絞り込みなので、store全体を取るget_store_dataは使わない。
+      supabase
+        .from("menu_sales")
+        .select("quantity_sold")
+        .eq("menu_id", menuId)
+        .eq("period_start", currentPeriod.start)
+        .eq("period_end", currentPeriod.end)
+        .maybeSingle(),
+    ]);
 
   if (!menu) notFound();
 
@@ -78,6 +90,7 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
           currentPurchasePrice: i.current_purchase_price,
         }))}
         targetCostRate={menu.target_cost_rate ?? store.defaultTargetCostRate}
+        currentMonthQuantitySold={currentMonthSales?.quantity_sold ?? null}
       />
     </div>
   );

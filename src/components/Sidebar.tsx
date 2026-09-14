@@ -85,7 +85,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "ダッシュボード", icon: IconGrid },
   { href: "/menus", label: "原価計算", icon: IconList },
   { href: "/import", label: "CSV取り込み", icon: IconUpload },
-  { href: "/ranking", label: "収益ランキング", icon: IconTrendingUp },
+  { href: "/ranking", label: "今見直すべきメニュー", icon: IconTrendingUp },
   { href: "/fl-ratio", label: "FL比率", icon: IconActivity },
   { href: "/alerts", label: "仕入れ値アラート", icon: IconAlertTriangle },
   { href: "/settings", label: "設定", icon: IconSettings },

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calcMenuTotalCost, calcCostRate, calcSuggestedPriceIncrease } from "./costCalc.ts";
+import { calcMenuTotalCost, calcCostRate, calcSuggestedPriceIncrease, calcRequiredSellingPrice } from "./costCalc.ts";
 
 test("calcMenuTotalCost: 各食材の分量×単価を合計する", () => {
   const lines = [
@@ -53,4 +53,34 @@ test("calcSuggestedPriceIncrease: 売価未設定・目標原価率が0以下な
 test("calcSuggestedPriceIncrease: roundToを変更できる", () => {
   assert.equal(calcSuggestedPriceIncrease(300, 900, 30, 50), 100);
   assert.equal(calcSuggestedPriceIncrease(310, 900, 30, 50), 150);
+});
+
+test("calcRequiredSellingPrice: 原価÷(目標原価率/100)を10円単位で切り上げる", () => {
+  // 原価300円・目標30% -> 必要売価は300/0.3=1000円(すでにちょうど10円単位)
+  assert.equal(calcRequiredSellingPrice(300, 30), 1000);
+});
+
+test("calcRequiredSellingPrice: 端数は必ず切り上げる(切り捨てると未達になるため)", () => {
+  // 原価310円・目標30% -> 必要売価は310/0.3=1033.33...円 -> 切り上げて1040円
+  assert.equal(calcRequiredSellingPrice(310, 30), 1040);
+});
+
+test("calcRequiredSellingPrice: 現在の売価には依存しない(calcSuggestedPriceIncreaseとの違い)", () => {
+  // 売価が905円(10円の倍数でない)でも、必要売価そのものは常に同じ1000円になる
+  const required = calcRequiredSellingPrice(300, 30);
+  assert.equal(required, 1000);
+});
+
+test("calcRequiredSellingPrice: 原価が0円なら必要売価も0円", () => {
+  assert.equal(calcRequiredSellingPrice(0, 30), 0);
+});
+
+test("calcRequiredSellingPrice: 目標原価率が0以下、または原価が負ならnull(計算不能)", () => {
+  assert.equal(calcRequiredSellingPrice(300, 0), null);
+  assert.equal(calcRequiredSellingPrice(-100, 30), null);
+});
+
+test("calcRequiredSellingPrice: roundToを変更できる", () => {
+  assert.equal(calcRequiredSellingPrice(300, 30, 50), 1000);
+  assert.equal(calcRequiredSellingPrice(310, 30, 50), 1050);
 });

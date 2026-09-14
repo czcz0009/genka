@@ -8,6 +8,7 @@ import {
   buildFastDashboardSummary,
   getCurrentFlRate,
   getAlertSummary,
+  getOverTargetMonthlyImpact,
   type FastDashboardSummary,
 } from "@/lib/dashboardSummary";
 import { FL_BENCHMARK_PERCENT } from "@/lib/flRatio";
@@ -28,6 +29,12 @@ type Status = "ok" | "warn" | "danger";
 function formatPercent(n: number | null): string {
   if (n == null || !Number.isFinite(n)) return "-";
   return `${n.toFixed(1)}%`;
+}
+
+/** 「前回から変わったこと」の目標超過メニュー行に添える、月間の利益への影響額(円)の表示用。 */
+function formatMonthlyImpactYen(n: number): string {
+  const rounded = Math.round(Math.abs(n));
+  return `約¥${rounded.toLocaleString()}`;
 }
 
 function statusColor(rate: number, target: number): Status {
@@ -74,6 +81,9 @@ export default async function Home() {
         </h1>
         <p className="mt-2 text-sm" style={{ color: "var(--muted-foreground)" }}>
           個人飲食店向けの原価計算・メニュー値付けツール。メニューの原価率をすぐに見える化できます。
+        </p>
+        <p className="mt-2 text-sm" style={{ color: "var(--muted-foreground)" }}>
+          どこから仕入れていても、市場価格の変動を自動でお知らせします。受発注システムなどの連携は不要です。
         </p>
       </div>
       <Link
@@ -165,7 +175,7 @@ export default async function Home() {
           </div>
         </div>
         <Link
-          href="/menus"
+          href="/ranking"
           prefetch={false}
           className="rounded border p-4 text-left transition-colors hover:border-[color:var(--accent)]"
           style={{ background: "var(--card)", borderColor: "var(--border)" }}
@@ -205,7 +215,7 @@ export default async function Home() {
             className="rounded border p-4 text-sm font-semibold transition-colors hover:border-[color:var(--accent)]"
             style={{ background: "var(--card)", borderColor: "var(--border)", color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
           >
-            収益ランキングを見る
+            今見直すべきメニューを見る
           </Link>
           <Link
             href="/fl-ratio"
@@ -271,19 +281,30 @@ async function ChangesDigest({
 }) {
   // getAlertSummary/getCurrentFlRateはreactのcache()でメモ化されているため、
   // 下のKPIカード側からも同じ引数で呼ばれるが実際の計算・再取得は1回で済む。
-  const [alertSummary, flRate] = await Promise.all([
+  const [alertSummary, flRate, overTargetImpact] = await Promise.all([
     getAlertSummary(supabase, store),
     getCurrentFlRate(supabase, store),
+    getOverTargetMonthlyImpact(supabase, store),
   ]);
 
   const rows: DigestRow[] = [];
 
   if (summary.overTargetCount > 0) {
+    // 販売数量が登録されていて計算できた場合だけ、円建ての影響額を添える
+    // (登録が無い場合は「値上げを検討した方がよい」という案内のみ)。
+    const impactText =
+      overTargetImpact == null
+        ? ""
+        : overTargetImpact < 0
+          ? `月間で${formatMonthlyImpactYen(overTargetImpact)}の利益が失われている見込みです。`
+          : overTargetImpact > 0
+            ? `値下がりの影響もあり、月間で${formatMonthlyImpactYen(overTargetImpact)}の利益改善が見込まれます。`
+            : "";
     rows.push({
       status: "danger",
       title: `${summary.overTargetCount}品が目標原価率を超えています`,
-      description: "値上げを検討した方がよいメニューがあります。メニュー一覧で確認してください。",
-      href: "/menus",
+      description: `${impactText}値上げを検討した方がよいメニューがあります。「今見直すべきメニュー」で確認してください。`,
+      href: "/ranking",
     });
   }
 

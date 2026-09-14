@@ -54,3 +54,24 @@ export function calcSuggestedPriceIncrease(
   if (rawIncrease <= 0) return 0;
   return Math.ceil(rawIncrease / roundTo) * roundTo;
 }
+
+/**
+ * 目標原価率ちょうどにするための必要売価そのもの(円)を逆算する。
+ * calcSuggestedPriceIncreaseは「現在の売価からの値上げ額」を切り上げるが、
+ * こちらは現在の売価に関係なく「原価率を目標以下にするための売価」を
+ * roundTo単位で切り上げて直接返す(値上げシミュレーション画面向け)。
+ *
+ * 必要売価 = 原価 ÷ (目標原価率 / 100)。原価が0円なら0を返す。
+ */
+export function calcRequiredSellingPrice(
+  totalCost: number,
+  targetCostRatePercent: number,
+  roundTo = 10,
+): number | null {
+  if (targetCostRatePercent <= 0) return null;
+  if (totalCost < 0) return null;
+  if (totalCost === 0) return 0;
+
+  const requiredPrice = totalCost / (targetCostRatePercent / 100);
+  return Math.ceil(requiredPrice / roundTo) * roundTo;
+}

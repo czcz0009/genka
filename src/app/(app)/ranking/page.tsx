@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { getSessionStore, getStoreData } from "@/lib/store";
+import { getSessionStore, getStoreData, getIngredientPreviousPrices } from "@/lib/store";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient, type RankingSales } from "@/lib/menuRanking";
 import { monthToPeriod, currentMonthString } from "@/lib/period/month";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
@@ -11,7 +11,7 @@ import { PageHeader } from "@/components/PageHeader.tsx";
 import { RankingView } from "./RankingView.tsx";
 
 export const metadata: Metadata = {
-  title: "メニュー別収益貢献度ランキング",
+  title: "今見直すべきメニュー",
 };
 
 export default async function RankingPage({
@@ -22,7 +22,7 @@ export default async function RankingPage({
   if (!isSupabaseConfigured()) {
     return (
       <div className="max-w-4xl space-y-6 p-6 md:p-8">
-        <PageHeader eyebrow="収益ランキング" title="メニュー別収益貢献度ランキング" />
+        <PageHeader eyebrow="メニュー診断" title="今見直すべきメニュー" />
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           Supabaseが未接続のため、この画面はまだ利用できません。
         </p>
@@ -49,15 +49,20 @@ export default async function RankingPage({
   // (get_store_data)でまとめて取得する(以前は最大5回のクエリに分かれていた)。
   // 「対象月の絞り込み」「利用可能な月の一覧」はどちらもこの1回の取得結果から
   // JS側で計算するため、月ごとの追加クエリは発生しない。
-  const storeData = await getStoreData(supabase);
+  // 食材の「1つ前の仕入単価」(月間の利益への影響額の計算用)はこの画面でしか
+  // 使わないため、get_store_dataとは別のRPCで並行して取得する。
+  const [storeData, previousPrices] = await Promise.all([
+    getStoreData(supabase),
+    getIngredientPreviousPrices(supabase),
+  ]);
   const menus = storeData?.menus ?? [];
 
   if (menus.length === 0) {
     return (
       <div className="max-w-4xl space-y-6 p-6 md:p-8">
-        <PageHeader eyebrow="収益ランキング" title="メニュー別収益貢献度ランキング" />
+        <PageHeader eyebrow="メニュー診断" title="今見直すべきメニュー" />
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-          メニューを登録すると、利益貢献度のランキングがここに表示されます。
+          メニューを登録すると、見直しの優先度が高いメニューからここに表示されます。
         </p>
         <StartHerePrompt />
       </div>
@@ -87,6 +92,7 @@ export default async function RankingPage({
   const rankingIngredients = (storeData?.ingredients ?? []).map((i) => ({
     id: i.id,
     currentPurchasePrice: i.currentPurchasePrice,
+    previousPurchasePrice: previousPrices.get(i.id) ?? null,
   }));
 
   const summaries = buildMenuRanking({
@@ -100,9 +106,9 @@ export default async function RankingPage({
   return (
     <div className="max-w-4xl space-y-6 p-6 md:p-8">
       <PageHeader
-        eyebrow="収益ランキング"
-        title="メニュー別収益貢献度ランキング"
-        description="「販売数量 ×(売価-原価)」で実際の利益貢献度を算出しています。原価率が高くても数が出ないメニューより、利益への貢献が大きいメニューが上位に来ます。"
+        eyebrow="メニュー診断"
+        title="今見直すべきメニュー"
+        description="対応の優先度が高い順に並んでいます。原価率が目標を超えているメニューを優先して表示し、その中では値上げした場合の月間効果が大きいものから順に並べます。目標内のメニューは、利益貢献度(販売数量×(売価-原価))が高い順です。"
       />
       <RankingView
         storeId={store.id}

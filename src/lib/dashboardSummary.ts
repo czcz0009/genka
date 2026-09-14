@@ -11,7 +11,7 @@ import {
 } from "./flRatio.ts";
 import { monthToPeriod, currentMonthString } from "./period/month.ts";
 import { computeStoreAlerts } from "./marketPrices/computeStoreAlerts.ts";
-import { getStoreData } from "./store.ts";
+import { getStoreData, getIngredientPreviousPrices } from "./store.ts";
 
 /**
  * ホーム画面(ダッシュボード)の経営状況サマリー。
@@ -193,4 +193,49 @@ export const getAlertSummary = cache(async function getAlertSummary(
   }));
 
   return { count: allAlerts.length, topAlerts };
+});
+
+/**
+ * 目標原価率を超えているメニューの、今月の利益への影響額の合計(円)。
+ * 「前回から変わったこと」ダイジェストにだけ添える追加情報のため、
+ * 高速表示用のbuildFastDashboardSummaryとは別の独立した取得にしている
+ * (食材の「1つ前の仕入単価」を別RPC(get_ingredient_previous_prices)で
+ * 取得する必要があり、その分だけ他の2つの遅い集計と同様にSuspenseで
+ * 非同期表示させる)。該当メニューが無い、またはどのメニューも販売数量
+ * 未登録で影響額を計算できない場合はnull。
+ */
+export const getOverTargetMonthlyImpact = cache(async function getOverTargetMonthlyImpact(
+  supabase: SupabaseClient,
+  store: { id: string; defaultTargetCostRate: number },
+): Promise<number | null> {
+  const [{ rankingMenus, rankingMenuIngredients, rankingIngredients, sales }, previousPrices] = await Promise.all([
+    fetchRankingInputs(supabase),
+    getIngredientPreviousPrices(supabase),
+  ]);
+  if (rankingMenus.length === 0) return null;
+
+  const currentMonth = currentMonthString();
+  const period = monthToPeriod(currentMonth);
+  const rankingSales: RankingSales[] = sales
+    .filter((s) => s.periodStart === period.start && s.periodEnd === period.end)
+    .map((s) => ({ menuId: s.menuId, quantitySold: s.quantitySold }));
+  const ingredientsWithHistory = rankingIngredients.map((i) => ({
+    ...i,
+    previousPurchasePrice: previousPrices.get(i.id) ?? null,
+  }));
+
+  const summaries = buildMenuRanking({
+    menus: rankingMenus,
+    menuIngredients: rankingMenuIngredients,
+    ingredients: ingredientsWithHistory,
+    sales: rankingSales,
+    defaultTargetCostRate: store.defaultTargetCostRate,
+  });
+
+  const impacts = summaries
+    .filter((s) => s.overTarget)
+    .map((s) => s.monthlyProfitImpact)
+    .filter((v): v is number => v != null);
+  if (impacts.length === 0) return null;
+  return impacts.reduce((a, b) => a + b, 0);
 });

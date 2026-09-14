@@ -7,12 +7,21 @@ import type { RankingMenu } from "@/lib/menuRanking";
 import { formatMonthLabel } from "@/lib/period/month";
 import { SearchablePicker } from "@/components/SearchablePicker.tsx";
 import { Notice } from "@/components/Notice.tsx";
+import { StatusBadge } from "@/components/StatusBadge.tsx";
 import { saveManualSales } from "./actions.ts";
 import { SalesImportPanel } from "./SalesImportPanel.tsx";
 
 function formatYen(n: number | null): string {
   if (n == null) return "-";
   return `¥${Math.round(n).toLocaleString()}`;
+}
+
+/** 月間の利益への影響額(円)専用のフォーマッタ。符号を明示する(+値上がり損/-値下がり得、ではなくその逆)。 */
+function formatSignedYen(n: number): string {
+  const rounded = Math.round(n);
+  if (rounded === 0) return "¥0";
+  const sign = rounded > 0 ? "+" : "-";
+  return `${sign}¥${Math.abs(rounded).toLocaleString()}`;
 }
 
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
@@ -130,7 +139,9 @@ export function RankingView({
       )}
 
       {overTargetCount > 0 && (
-        <Notice tone="warn">{overTargetCount}品が目標原価率を超えています。「値上げ検討」の目安額を確認してください。</Notice>
+        <Notice tone="warn">
+          {overTargetCount}品が目標原価率を超えています。対応の優先度が高い順に上から並んでいるので、上のメニューから確認してください。
+        </Notice>
       )}
 
       <div className="overflow-hidden rounded border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
@@ -150,7 +161,14 @@ export function RankingView({
                 >
                   利益貢献度
                 </th>
-                <th className="whitespace-nowrap px-3 py-2.5 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted-foreground)" }}>値上げ検討</th>
+                <th
+                  className="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: "var(--muted-foreground)" }}
+                  title="仕入単価が前回の記録から変わったことによる、月間の利益への影響額。(従来の原価-現在の原価)×月間販売数量"
+                >
+                  月間影響額
+                </th>
+                <th className="whitespace-nowrap px-3 py-2.5 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted-foreground)" }}>値上げ目安</th>
               </tr>
             </thead>
             <tbody>
@@ -195,14 +213,30 @@ export function RankingView({
                       </div>
                     )}
                   </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono">
+                    {s.monthlyProfitImpact == null ? (
+                      <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                        販売数量を登録すると表示されます
+                      </span>
+                    ) : (
+                      <span
+                        className="font-semibold"
+                        style={{
+                          color:
+                            s.monthlyProfitImpact < 0
+                              ? "var(--status-danger)"
+                              : s.monthlyProfitImpact > 0
+                                ? "var(--status-ok)"
+                                : "var(--muted-foreground)",
+                        }}
+                      >
+                        {formatSignedYen(s.monthlyProfitImpact)}
+                      </span>
+                    )}
+                  </td>
                   <td className="whitespace-nowrap px-3 py-2.5">
                     {s.overTarget && s.suggestedPriceIncrease ? (
-                      <span
-                        className="rounded-full px-2 py-0.5 text-xs font-medium"
-                        style={{ background: "color-mix(in srgb, var(--status-warn) 15%, var(--card))", color: "var(--status-warn)" }}
-                      >
-                        +{s.suggestedPriceIncrease}円が目安
-                      </span>
+                      <StatusBadge status="danger" label={`+${s.suggestedPriceIncrease}円が目安`} />
                     ) : (
                       ""
                     )}

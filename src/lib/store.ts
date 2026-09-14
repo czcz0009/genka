@@ -174,3 +174,22 @@ export const getStoreData = cache(async function getStoreData(
     })),
   };
 });
+
+/**
+ * 食材ごとの「1つ前の仕入単価」(現在の単価より前に記録されていた単価)を
+ * まとめて取得する。「今見直すべきメニュー」画面の月間の利益への影響額
+ * (monthlyProfitImpact)の計算にのみ使う、その画面専用のデータのため、
+ * 他の画面でも使う get_store_data には含めず、別のRPC(0009マイグレーション)
+ * にしている。一度も値上げ・値下げされていない食材はキーとして含まれない
+ * (呼び出し側は「含まれていない=変化なし」として扱う)。
+ *
+ * cache()でラップし、同一リクエスト内での重複呼び出しを避ける。
+ */
+export const getIngredientPreviousPrices = cache(async function getIngredientPreviousPrices(
+  supabase: SupabaseClient,
+): Promise<Map<string, number>> {
+  const { data, error } = await supabase.rpc("get_ingredient_previous_prices");
+  if (error || !data) return new Map();
+  const rows = data as { ingredient_id: string; previous_price: number }[];
+  return new Map(rows.map((r) => [r.ingredient_id, r.previous_price]));
+});

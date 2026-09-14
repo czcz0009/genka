@@ -16,7 +16,13 @@
  * 「(従来の原価-現在の原価)×月間販売数量」で月間の利益への影響額(monthlyProfitImpact)も
  * 計算する。マイナス=値上がりで利益が減った、プラス=値下がりで利益が増えた。
  */
-import { calcMenuTotalCost, calcCostRate, calcSuggestedPriceIncrease, type UnitPriceMap } from "./costCalc.ts";
+import {
+  calcMenuTotalCost,
+  calcCostRate,
+  calcSuggestedPriceIncrease,
+  calcEffectiveUnitPrice,
+  type UnitPriceMap,
+} from "./costCalc.ts";
 import type { MenuCostSummary } from "./types.ts";
 
 export interface RankingMenu {
@@ -42,6 +48,8 @@ export interface RankingIngredient {
    * 価格が変わっていないものとして扱う=影響額の計算に0円として寄与する)。
    */
   previousPurchasePrice?: number | null;
+  /** 歩留まり率(%)。未指定・100なら仕入単価をそのまま使う(従来通り)。 */
+  yieldRatePercent?: number | null;
 }
 
 /** 対象期間に集計済みの、メニューごとの販売数量 */
@@ -95,10 +103,17 @@ function compareByReviewPriority(a: MenuCostSummary, b: MenuCostSummary): number
 export function buildMenuRanking(input: BuildMenuRankingInput): MenuCostSummary[] {
   const { menus, menuIngredients, ingredients, sales, defaultTargetCostRate, priceRoundTo = 10 } = input;
 
-  const unitPrices: UnitPriceMap = new Map(ingredients.map((i) => [i.id, i.currentPurchasePrice]));
+  // 歩留まり率(仕入れた量のうち実際に使える割合)を考慮した実質単価を使う。
+  // 歩留まり率は価格変更で変わるものではないので、現在・1つ前どちらの単価にも同じ率を適用する。
+  const unitPrices: UnitPriceMap = new Map(
+    ingredients.map((i) => [i.id, calcEffectiveUnitPrice(i.currentPurchasePrice, i.yieldRatePercent)]),
+  );
   // 「1つ前の単価」が分からない食材は、現在の単価と同じ(=変化なし)として扱う
   const previousUnitPrices: UnitPriceMap = new Map(
-    ingredients.map((i) => [i.id, i.previousPurchasePrice ?? i.currentPurchasePrice]),
+    ingredients.map((i) => [
+      i.id,
+      calcEffectiveUnitPrice(i.previousPurchasePrice ?? i.currentPurchasePrice, i.yieldRatePercent),
+    ]),
   );
   const salesByMenuId = new Map(sales.map((s) => [s.menuId, s.quantitySold]));
   const linesByMenuId = new Map<string, RankingMenuIngredient[]>();

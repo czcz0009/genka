@@ -39,11 +39,12 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
       ).maybeSingle(),
       supabase
         .from("menu_ingredients")
-        .select("id, ingredient_id, quantity, unit, ingredients(name, unit, current_purchase_price)")
+        .select("id, ingredient_id, quantity, unit, ingredients(name, unit, current_purchase_price, yield_rate_percent)")
         .eq("menu_id", menuId),
-      supabase.from("ingredients").select("id, name, unit, current_purchase_price").eq("store_id", store.id).order(
-        "name",
-      ),
+      supabase.from("ingredients").select("id, name, unit, current_purchase_price, yield_rate_percent").eq(
+        "store_id",
+        store.id,
+      ).order("name"),
       // 値上げシミュレーションで「月間利益」を試算するための、今月の販売数量。
       // このメニュー1件分だけの絞り込みなので、store全体を取るget_store_dataは使わない。
       supabase
@@ -58,13 +59,16 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
   if (!menu) notFound();
 
   const initialLines: LocalLine[] = (menuIngredients ?? []).map((mi) => {
-    const ing = mi.ingredients as unknown as { name: string; unit: string; current_purchase_price: number } | null;
+    const ing = mi.ingredients as unknown as
+      | { name: string; unit: string; current_purchase_price: number; yield_rate_percent: number }
+      | null;
     return {
       key: mi.id,
       quantity: String(mi.quantity),
       unit: mi.unit,
       ingredientName: ing?.name ?? "(不明な食材)",
       unitPrice: ing?.current_purchase_price ?? 0,
+      yieldRatePercent: ing?.yield_rate_percent ?? 100,
       source: { type: "existing", ingredientId: mi.ingredient_id },
     };
   });
@@ -88,9 +92,11 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
           name: i.name,
           unit: i.unit,
           currentPurchasePrice: i.current_purchase_price,
+          yieldRatePercent: i.yield_rate_percent,
         }))}
         targetCostRate={menu.target_cost_rate ?? store.defaultTargetCostRate}
         currentMonthQuantitySold={currentMonthSales?.quantity_sold ?? null}
+        ingredientPriceTaxMode={store.ingredientPriceTaxMode}
       />
     </div>
   );

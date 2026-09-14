@@ -63,11 +63,13 @@ async function fetchRankingInputs(supabase: SupabaseClient) {
   const rankingIngredients = (storeData?.ingredients ?? []).map((i) => ({
     id: i.id,
     currentPurchasePrice: i.currentPurchasePrice,
+    yieldRatePercent: i.yieldRatePercent,
   }));
   const alertIngredients = (storeData?.ingredients ?? []).map((i) => ({
     id: i.id,
     name: i.name,
     currentPurchasePrice: i.currentPurchasePrice,
+    yieldRatePercent: i.yieldRatePercent,
   }));
   const sales = storeData?.sales ?? [];
   const fixedCosts = storeData?.fixedCosts ?? [];

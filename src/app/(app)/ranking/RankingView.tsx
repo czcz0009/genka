@@ -152,7 +152,13 @@ export function RankingView({
                 <th className="whitespace-nowrap px-3 py-2.5 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted-foreground)" }}>#</th>
                 <th className="whitespace-nowrap px-3 py-2.5 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted-foreground)" }}>メニュー</th>
                 <th className="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted-foreground)" }}>販売数</th>
-                <th className="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted-foreground)" }}>売価</th>
+                <th
+                  className="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: "var(--muted-foreground)" }}
+                  title="売価は税込金額として扱います"
+                >
+                  売価
+                </th>
                 <th className="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted-foreground)" }}>原価率</th>
                 <th
                   className="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide"

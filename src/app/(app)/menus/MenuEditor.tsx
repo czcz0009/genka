@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { calcCostRate, calcRequiredSellingPrice } from "@/lib/costCalc";
+import { calcCostRate, calcRequiredSellingPrice, calcEffectiveUnitPrice } from "@/lib/costCalc";
 import { normalizeForDedupe } from "@/lib/normalize.ts";
+import { ingredientPriceTaxModeLabel, type IngredientPriceTaxMode } from "@/lib/taxMode.ts";
 import { saveMenuWithIngredients, type SaveMenuLineInput } from "./actions.ts";
 
 export interface IngredientOption {
@@ -11,6 +12,8 @@ export interface IngredientOption {
   name: string;
   unit: string;
   currentPurchasePrice: number;
+  /** 歩留まり率(%)。100(既定)なら歩留まりなし=従来通りの計算。 */
+  yieldRatePercent: number;
   /**
    * true = このメニュー編集セッション中に「新規食材」として追加した、
    * まだサーバーに保存されていない食材(idはこの画面内だけで使う仮のもの)。
@@ -28,7 +31,11 @@ export interface LocalLine {
   unit: string;
   ingredientName: string;
   unitPrice: number;
-  source: { type: "existing"; ingredientId: string } | { type: "new"; name: string; unit: string; purchasePrice: number };
+  /** 歩留まり率(%)。100(既定)なら歩留まりなし。原価計算はcalcEffectiveUnitPriceで補正する。 */
+  yieldRatePercent: number;
+  source:
+    | { type: "existing"; ingredientId: string }
+    | { type: "new"; name: string; unit: string; purchasePrice: number; yieldRatePercent: number };
 }
 
 let keySeq = 0;
@@ -108,6 +115,7 @@ export function MenuEditor({
   allIngredients,
   targetCostRate,
   currentMonthQuantitySold,
+  ingredientPriceTaxMode,
 }: {
   storeId: string;
   menuId?: string;
@@ -118,6 +126,8 @@ export function MenuEditor({
   targetCostRate: number;
   /** 今月の販売数量。値上げシミュレーションの月間利益試算に使う(未登録ならnull)。 */
   currentMonthQuantitySold: number | null;
+  /** 仕入単価の入力欄ラベルを「税込」「税抜」どちらで出すか(店舗設定より)。計算式には影響しない。 */
+  ingredientPriceTaxMode: IngredientPriceTaxMode;
 }) {
   const router = useRouter();
   const [name, setName] = useState(initialName);
@@ -136,7 +146,11 @@ export function MenuEditor({
   );
 
   const totalCost = useMemo(
-    () => lines.reduce((sum, l) => sum + (Number(l.quantity) || 0) * l.unitPrice, 0),
+    () =>
+      lines.reduce(
+        (sum, l) => sum + (Number(l.quantity) || 0) * calcEffectiveUnitPrice(l.unitPrice, l.yieldRatePercent),
+        0,
+      ),
     [lines],
   );
   const sellingPriceNumber = sellingPrice.trim() ? Number(sellingPrice) : null;
@@ -154,7 +168,14 @@ export function MenuEditor({
         if (alreadyKnown) return prev;
         return [
           ...prev,
-          { id: `draft-${line.key}`, name: line.ingredientName, unit: line.unit, currentPurchasePrice: line.unitPrice, isLocalDraft: true },
+          {
+            id: `draft-${line.key}`,
+            name: line.ingredientName,
+            unit: line.unit,
+            currentPurchasePrice: line.unitPrice,
+            yieldRatePercent: line.yieldRatePercent,
+            isLocalDraft: true,
+          },
         ];
       });
     }
@@ -177,7 +198,12 @@ export function MenuEditor({
       existingIngredientId: l.source.type === "existing" ? l.source.ingredientId : undefined,
       newIngredient:
         l.source.type === "new"
-          ? { name: l.source.name, unit: l.source.unit, purchasePrice: l.source.purchasePrice }
+          ? {
+              name: l.source.name,
+              unit: l.source.unit,
+              purchasePrice: l.source.purchasePrice,
+              yieldRatePercent: l.source.yieldRatePercent,
+            }
           : undefined,
     }));
     const result = await saveMenuWithIngredients({
@@ -215,7 +241,7 @@ export function MenuEditor({
       </label>
 
       <label className="flex flex-col gap-2 text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
-        売価(円)
+        売価(円・税込)
         <input
           type="number"
           min={0}
@@ -267,6 +293,7 @@ export function MenuEditor({
         allIngredients={combinedIngredients}
         existingNames={new Set(lines.map((l) => l.ingredientName))}
         onAdd={addLine}
+        ingredientPriceTaxMode={ingredientPriceTaxMode}
       />
 
       {/*
@@ -283,7 +310,9 @@ export function MenuEditor({
           <ul className="flex flex-col gap-2">
             {lines.map((l) => {
               const qty = Number(l.quantity) || 0;
-              const subtotal = qty * l.unitPrice;
+              const hasYieldLoss = l.yieldRatePercent < 100;
+              const effectivePrice = calcEffectiveUnitPrice(l.unitPrice, l.yieldRatePercent);
+              const subtotal = qty * effectivePrice;
               return (
                 <li
                   key={l.key}
@@ -297,6 +326,7 @@ export function MenuEditor({
                     <span className="font-mono text-sm" style={{ color: "var(--muted-foreground)" }}>
                       {qty}
                       {l.unit} × {formatUnitPrice(l.unitPrice)}
+                      {hasYieldLoss && ` (歩留まり${l.yieldRatePercent}%→実質${formatUnitPrice(effectivePrice)})`}
                     </span>
                   </div>
                   <div className="flex items-center gap-4">
@@ -415,7 +445,7 @@ function PriceSimulation({
       )}
 
       <label className="flex flex-col gap-2 text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
-        試算売価(円)
+        試算売価(円・税込)
         <input
           type="number"
           min={0}
@@ -496,10 +526,12 @@ function IngredientLineForm({
   allIngredients,
   existingNames,
   onAdd,
+  ingredientPriceTaxMode,
 }: {
   allIngredients: IngredientOption[];
   existingNames: Set<string>;
   onAdd: (line: LocalLine) => void;
+  ingredientPriceTaxMode: IngredientPriceTaxMode;
 }) {
   const [nameInput, setNameInput] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -510,6 +542,7 @@ function IngredientLineForm({
   const [purchaseQuantity, setPurchaseQuantity] = useState("");
   const [purchasePriceTotal, setPurchasePriceTotal] = useState("");
   const [newPrice, setNewPrice] = useState("");
+  const [newYieldRate, setNewYieldRate] = useState("");
   const [quantity, setQuantity] = useState("");
   const [error, setError] = useState<string | null>(null);
   // 「本当に追加されたのか分かりづらい」という指摘への対応。追加が成功したら
@@ -620,8 +653,15 @@ function IngredientLineForm({
         unit: effectiveExisting.unit,
         ingredientName: effectiveExisting.name,
         unitPrice: effectiveExisting.currentPurchasePrice,
+        yieldRatePercent: effectiveExisting.yieldRatePercent,
         source: effectiveExisting.isLocalDraft
-          ? { type: "new", name: effectiveExisting.name, unit: effectiveExisting.unit, purchasePrice: effectiveExisting.currentPurchasePrice }
+          ? {
+              type: "new",
+              name: effectiveExisting.name,
+              unit: effectiveExisting.unit,
+              purchasePrice: effectiveExisting.currentPurchasePrice,
+              yieldRatePercent: effectiveExisting.yieldRatePercent,
+            }
           : { type: "existing", ingredientId: effectiveExisting.id },
       });
       setJustAdded(`${effectiveExisting.name} ${quantity}${effectiveExisting.unit}`);
@@ -639,13 +679,19 @@ function IngredientLineForm({
         );
         return;
       }
+      const yieldRatePercent = newYieldRate.trim() ? Number(newYieldRate) : 100;
+      if (!Number.isFinite(yieldRatePercent) || yieldRatePercent <= 0 || yieldRatePercent > 100) {
+        setError("歩留まり率は0より大きく100以下の数値で入力してください");
+        return;
+      }
       onAdd({
         key: nextKey(),
         quantity,
         unit: newUnit,
         ingredientName: trimmedName,
         unitPrice: price,
-        source: { type: "new", name: trimmedName, unit: newUnit, purchasePrice: price },
+        yieldRatePercent,
+        source: { type: "new", name: trimmedName, unit: newUnit, purchasePrice: price, yieldRatePercent },
       });
       setJustAdded(`${trimmedName} ${quantity}${newUnit}(新規食材として登録)`);
     }
@@ -655,6 +701,7 @@ function IngredientLineForm({
     setSelectedId(null);
     setQuantity("");
     setNewPrice("");
+    setNewYieldRate("");
     setPurchaseQuantity("");
     setPurchasePriceTotal("");
   }
@@ -710,7 +757,8 @@ function IngredientLineForm({
           >
             <span style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
               ✓ 登録済みの「{effectiveExisting.name}」を使います({effectiveExisting.unit}あたり
-              {formatUnitPrice(effectiveExisting.currentPurchasePrice)})
+              {formatUnitPrice(effectiveExisting.currentPurchasePrice)}
+              {effectiveExisting.yieldRatePercent < 100 && `・歩留まり${effectiveExisting.yieldRatePercent}%`})
               {existingNames.has(effectiveExisting.name) && (
                 <span className="ml-2" style={{ color: "var(--muted-foreground)" }}>
                   (このメニューに追加済み)
@@ -747,6 +795,7 @@ function IngredientLineForm({
                   </span>
                   <span className="font-mono text-sm" style={{ color: "var(--muted-foreground)" }}>
                     {i.unit}あたり{formatUnitPrice(i.currentPurchasePrice)}
+                    {i.yieldRatePercent < 100 && `(歩留まり${i.yieldRatePercent}%)`}
                   </span>
                 </button>
               ))}
@@ -816,7 +865,7 @@ function IngredientLineForm({
                   className="flex flex-1 flex-col gap-2 text-base"
                   style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
                 >
-                  仕入れ価格(円)
+                  仕入れ価格(円・{ingredientPriceTaxModeLabel(ingredientPriceTaxMode)})
                   <input
                     type="number"
                     min={0}
@@ -848,7 +897,7 @@ function IngredientLineForm({
                 className="flex flex-col gap-2 text-base"
                 style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
               >
-                仕入単価(円)
+                仕入単価(円・{ingredientPriceTaxModeLabel(ingredientPriceTaxMode)})
                 <input
                   type="number"
                   min={0}
@@ -866,6 +915,28 @@ function IngredientLineForm({
               </p>
             </>
           )}
+
+          <label
+            className="flex w-32 flex-col gap-2 text-base"
+            style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
+          >
+            歩留まり率(%)
+            <input
+              type="number"
+              min={1}
+              max={100}
+              step="1"
+              inputMode="decimal"
+              value={newYieldRate}
+              onChange={(e) => setNewYieldRate(e.target.value)}
+              placeholder="例: 70(空欄なら100%)"
+              className={INPUT_CLASS + " font-mono"}
+              style={inputStyle}
+            />
+          </label>
+          <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+            仕入れた量のうち、実際に料理に使える割合です(例: 魚を捌いて骨や皮を除いた後の割合)。分からない・気にしない場合は空欄のままで大丈夫です(100%として扱います)。
+          </p>
         </div>
       )}
 

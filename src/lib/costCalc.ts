@@ -11,8 +11,21 @@ export interface CostCalcMenuIngredient {
   quantity: number;
 }
 
-/** ingredientId -> 現在の仕入単価(単位あたり) */
+/** ingredientId -> 現在の仕入単価(単位あたり、歩留まり調整済み) */
 export type UnitPriceMap = Map<string, number>;
+
+/**
+ * 歩留まり率(仕入れた量のうち実際に料理に使える割合)を考慮した、実質の仕入単価。
+ * 例: 1尾800円(1000gあたり)で仕入れた魚の歩留まり率が70%なら、可食部100gあたりの
+ * 実質単価は 800÷0.7 = 約1,143円(1000gあたり)とみなす。
+ *
+ * yieldRatePercentが未指定・100(または不正な値)なら仕入単価をそのまま返す
+ * (歩留まりを入力していない食材は従来通りの計算になる、という要件)。
+ */
+export function calcEffectiveUnitPrice(purchasePrice: number, yieldRatePercent?: number | null): number {
+  if (yieldRatePercent == null || yieldRatePercent <= 0 || yieldRatePercent > 100) return purchasePrice;
+  return purchasePrice / (yieldRatePercent / 100);
+}
 
 /** メニュー1品分の合計原価。単価が見つからない食材は0円として計算から除外する。 */
 export function calcMenuTotalCost(

@@ -1,11 +1,16 @@
 import "server-only";
 import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { IngredientPriceTaxMode } from "./taxMode.ts";
+import type { PriceHistoryEntry } from "./ingredientPriceHistory.ts";
+
+export type { IngredientPriceTaxMode } from "./taxMode.ts";
 
 export interface StoreInfo {
   id: string;
   name: string;
   defaultTargetCostRate: number;
+  ingredientPriceTaxMode: IngredientPriceTaxMode;
 }
 
 export type SessionStoreResult =
@@ -52,7 +57,12 @@ export const getSessionStore = cache(async function getSessionStore(
 
   return {
     status: "ok",
-    store: { id: row.id, name: row.name, defaultTargetCostRate: row.default_target_cost_rate },
+    store: {
+      id: row.id,
+      name: row.name,
+      defaultTargetCostRate: row.default_target_cost_rate,
+      ingredientPriceTaxMode: (row.ingredient_price_tax_mode as IngredientPriceTaxMode | null) ?? "exclusive",
+    },
   };
 });
 
@@ -68,6 +78,8 @@ export interface StoreDataIngredient {
   id: string;
   name: string;
   currentPurchasePrice: number;
+  /** 歩留まり率(%)。100(初期値)なら歩留まりなし=従来通りの計算。 */
+  yieldRatePercent: number;
 }
 
 export interface StoreDataMenuIngredient {
@@ -100,9 +112,9 @@ export interface StoreData {
 }
 
 interface RawStoreDataRow {
-  store: { id: string; name: string; default_target_cost_rate: number };
+  store: { id: string; name: string; default_target_cost_rate: number; ingredient_price_tax_mode: string };
   menus: { id: string; name: string; selling_price: number | null; target_cost_rate: number | null; created_at: string }[];
-  ingredients: { id: string; name: string; current_purchase_price: number }[];
+  ingredients: { id: string; name: string; current_purchase_price: number; yield_rate_percent: number }[];
   menu_ingredients: { menu_id: string; ingredient_id: string; quantity: number }[];
   sales: { menu_id: string; quantity_sold: number; period_start: string; period_end: string }[];
   fixed_costs: { cost_type: string; amount: number; period_start: string; period_end: string }[];
@@ -142,6 +154,7 @@ export const getStoreData = cache(async function getStoreData(
       id: raw.store.id,
       name: raw.store.name,
       defaultTargetCostRate: raw.store.default_target_cost_rate,
+      ingredientPriceTaxMode: (raw.store.ingredient_price_tax_mode as IngredientPriceTaxMode | null) ?? "exclusive",
     },
     menus: raw.menus.map((m) => ({
       id: m.id,
@@ -154,6 +167,7 @@ export const getStoreData = cache(async function getStoreData(
       id: i.id,
       name: i.name,
       currentPurchasePrice: i.current_purchase_price,
+      yieldRatePercent: i.yield_rate_percent,
     })),
     menuIngredients: raw.menu_ingredients.map((mi) => ({
       menuId: mi.menu_id,
@@ -192,4 +206,23 @@ export const getIngredientPreviousPrices = cache(async function getIngredientPre
   if (error || !data) return new Map();
   const rows = data as { ingredient_id: string; previous_price: number }[];
   return new Map(rows.map((r) => [r.ingredient_id, r.previous_price]));
+});
+
+/**
+ * 食材ごとの仕入単価の変更履歴を全件まとめて取得する。
+ *
+ * 「今見直すべきメニュー」画面で過去の月を見たとき・「FL比率」画面の月次推移で、
+ * その月の時点で実際に使われていた仕入単価を再現する(ingredientPriceHistory.ts の
+ * resolveHistoricalPriceで解決する)ために使う。get_ingredient_previous_prices(直近2件のみ)
+ * では過去の任意の月を再現できないため、別のRPC(0013マイグレーション)で全件取得する。
+ *
+ * cache()でラップし、同一リクエスト内での重複呼び出しを避ける。
+ */
+export const getIngredientPriceHistory = cache(async function getIngredientPriceHistory(
+  supabase: SupabaseClient,
+): Promise<PriceHistoryEntry[]> {
+  const { data, error } = await supabase.rpc("get_ingredient_price_history");
+  if (error || !data) return [];
+  const rows = data as { ingredient_id: string; price: number; recorded_at: string }[];
+  return rows.map((r) => ({ ingredientId: r.ingredient_id, price: r.price, recordedAt: r.recorded_at }));
 });

@@ -21,7 +21,7 @@ export interface SaveMenuLineInput {
   /** 既存食材を使う場合はこちらだけ指定する */
   existingIngredientId?: string;
   /** その場で新しい食材を登録する場合はこちら */
-  newIngredient?: { name: string; unit: string; purchasePrice: number };
+  newIngredient?: { name: string; unit: string; purchasePrice: number; yieldRatePercent?: number };
 }
 
 export interface SaveMenuInput {
@@ -113,6 +113,10 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
       if (!Number.isFinite(line.newIngredient.purchasePrice) || line.newIngredient.purchasePrice < 0) {
         return { success: false, error: "仕入単価は0以上の数値で入力してください" };
       }
+      const yieldRatePercent = line.newIngredient.yieldRatePercent ?? 100;
+      if (!Number.isFinite(yieldRatePercent) || yieldRatePercent <= 0 || yieldRatePercent > 100) {
+        return { success: false, error: "歩留まり率は0より大きく100以下の数値で入力してください" };
+      }
       const ingNormalized = normalizeForDedupe(ingName);
 
       const { data: existingIngredient, error: existingIngErr } = await supabase
@@ -135,6 +139,7 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
             normalized_name: ingNormalized,
             unit: line.newIngredient.unit,
             current_purchase_price: line.newIngredient.purchasePrice,
+            yield_rate_percent: yieldRatePercent,
             price_updated_at: nowIso,
           })
           .select("id")

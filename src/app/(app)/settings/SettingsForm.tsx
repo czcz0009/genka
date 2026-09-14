@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import type { IngredientPriceTaxMode } from "@/lib/taxMode.ts";
 import { saveStoreSettings } from "./actions.ts";
 
 const INPUT_CLASS = "rounded border px-4 py-3 text-base focus:outline-none focus:ring-2";
@@ -13,18 +14,21 @@ export function SettingsForm({
   initialName,
   initialDefaultTargetCostRate,
   initialRent,
+  initialIngredientPriceTaxMode,
   month,
 }: {
   storeId: string;
   initialName: string;
   initialDefaultTargetCostRate: number;
   initialRent: number | null;
+  initialIngredientPriceTaxMode: IngredientPriceTaxMode;
   month: string;
 }) {
   const router = useRouter();
   const [name, setName] = useState(initialName);
   const [targetCostRate, setTargetCostRate] = useState(String(initialDefaultTargetCostRate));
   const [rent, setRent] = useState(initialRent != null ? String(initialRent) : "");
+  const [taxMode, setTaxMode] = useState<IngredientPriceTaxMode>(initialIngredientPriceTaxMode);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -38,6 +42,7 @@ export function SettingsForm({
       name,
       defaultTargetCostRate: Number(targetCostRate),
       rentAmount: rent.trim() ? Number(rent) : null,
+      ingredientPriceTaxMode: taxMode,
       month,
     });
     setSaving(false);
@@ -88,6 +93,41 @@ export function SettingsForm({
             この数値を超えると、メニュー一覧や「今見直すべきメニュー」で「値上げ検討」として目立つように表示されます。メニューごとに個別の目標を設定していない場合はこの値が使われます(未設定なら30%)。
           </span>
         </label>
+      </div>
+
+      <div className="rounded border p-5" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+        <p className="mb-4 text-sm font-semibold" style={labelStyle}>
+          税込・税抜の表示
+        </p>
+        <p className="mb-3 text-xs" style={{ color: "var(--muted-foreground)" }}>
+          売価は総額表示のルールにより税込金額として扱います。仕入単価は、仕入先の請求書などご自身がどちらで把握しているかに合わせて選んでください(この設定は入力欄のラベル表示を切り替えるだけで、原価率の計算方法自体は変わりません)。
+        </p>
+        <div className="flex gap-2 text-sm">
+          <button
+            type="button"
+            onClick={() => setTaxMode("exclusive")}
+            className="flex-1 rounded border px-3 py-2.5 transition-colors"
+            style={
+              taxMode === "exclusive"
+                ? { background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "var(--primary)" }
+                : { borderColor: "var(--border)", color: "var(--foreground)" }
+            }
+          >
+            仕入単価は税抜で入力しています
+          </button>
+          <button
+            type="button"
+            onClick={() => setTaxMode("inclusive")}
+            className="flex-1 rounded border px-3 py-2.5 transition-colors"
+            style={
+              taxMode === "inclusive"
+                ? { background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "var(--primary)" }
+                : { borderColor: "var(--border)", color: "var(--foreground)" }
+            }
+          >
+            仕入単価は税込で入力しています
+          </button>
+        </div>
       </div>
 
       <div className="rounded border p-5" style={{ background: "var(--card)", borderColor: "var(--border)" }}>

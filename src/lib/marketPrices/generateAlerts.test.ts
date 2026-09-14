@@ -110,6 +110,26 @@ test("今回の変動対象になっていない品目のマッチは通知し�
   assert.equal(alerts.length, 0);
 });
 
+test("歩留まり率: 食材に歩留まり率が設定されていれば、実質単価で原価率を試算する", () => {
+  // たまねぎの歩留まり率50%(現在0.2円/g -> 実質0.4円/g)
+  const ingredientsWithYield = [
+    { id: "ing-onion", name: "たまねぎ", currentPurchasePrice: 0.2, yieldRatePercent: 50 },
+    { id: "ing-rice", name: "米", currentPurchasePrice: 0.3 },
+  ];
+  const menus = [{ id: "menu-a", name: "カレーライス", sellingPrice: 800, targetCostRate: 13 }];
+  const { alerts } = generateMarketPriceAlerts({
+    priceChanges: [onionPriceChange],
+    matches: [onionMatch],
+    ingredients: ingredientsWithYield,
+    menus,
+    menuIngredients: menuIngredients.filter((mi) => mi.menuId === "menu-a"),
+    defaultTargetCostRate: 30,
+  });
+  const menuA = alerts[0].affectedMenus[0];
+  // 実質単価0.4円/g×200g(たまねぎ) + 0.3円/g×200g(米) = 80+60=140円 -> 原価率17.5%
+  assert.ok(Math.abs(menuA.oldCostRate! - 17.5) < 0.001);
+});
+
 test("その食材を使っているメニューが1つもない場合、影響メニューは空だがアラート自体は生成する", () => {
   const { alerts } = generateMarketPriceAlerts({
     priceChanges: [onionPriceChange],

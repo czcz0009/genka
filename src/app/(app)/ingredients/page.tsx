@@ -38,7 +38,7 @@ export default async function IngredientsPage() {
 
   const { data: ingredients } = await supabase
     .from("ingredients")
-    .select("id, name, unit, current_purchase_price")
+    .select("id, name, unit, current_purchase_price, yield_rate_percent")
     .eq("store_id", store.id)
     .order("name");
 
@@ -56,7 +56,9 @@ export default async function IngredientsPage() {
           name: i.name,
           unit: i.unit,
           currentPurchasePrice: i.current_purchase_price,
+          yieldRatePercent: i.yield_rate_percent,
         }))}
+        ingredientPriceTaxMode={store.ingredientPriceTaxMode}
       />
     </div>
   );

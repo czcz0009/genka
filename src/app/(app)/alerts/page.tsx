@@ -63,6 +63,7 @@ export default async function AlertsPage() {
     id: i.id,
     name: i.name,
     currentPurchasePrice: i.currentPurchasePrice,
+    yieldRatePercent: i.yieldRatePercent,
   }));
   const alertMenus = menus.map((m) => ({
     id: m.id,

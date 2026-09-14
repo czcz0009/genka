@@ -29,7 +29,7 @@ export default async function NewMenuPage() {
 
   const { data: allIngredients } = await supabase
     .from("ingredients")
-    .select("id, name, unit, current_purchase_price")
+    .select("id, name, unit, current_purchase_price, yield_rate_percent")
     .eq("store_id", store.id)
     .order("name");
 
@@ -51,9 +51,11 @@ export default async function NewMenuPage() {
           name: i.name,
           unit: i.unit,
           currentPurchasePrice: i.current_purchase_price,
+          yieldRatePercent: i.yield_rate_percent,
         }))}
         targetCostRate={store.defaultTargetCostRate}
         currentMonthQuantitySold={null}
+        ingredientPriceTaxMode={store.ingredientPriceTaxMode}
       />
     </div>
   );

@@ -22,6 +22,8 @@ export interface IngredientRow {
   name: string;
   unit: string;
   currentPurchasePrice: number;
+  /** 歩留まり率(%)。100(既定)なら歩留まりなし。 */
+  yieldRatePercent: number;
 }
 
 export interface CreateIngredientInput {
@@ -29,6 +31,8 @@ export interface CreateIngredientInput {
   name: string;
   unit: string;
   purchasePrice: number;
+  /** 歩留まり率(%)。未指定なら100(歩留まりなし)。 */
+  yieldRatePercent?: number;
 }
 
 export type CreateIngredientResult = { success: true; ingredient: IngredientRow } | { success: false; error: string };
@@ -43,6 +47,10 @@ export async function createIngredient(input: CreateIngredientInput): Promise<Cr
   if (!input.unit.trim()) return { success: false, error: "単位を入力してください" };
   if (!Number.isFinite(input.purchasePrice) || input.purchasePrice < 0) {
     return { success: false, error: "仕入単価は0以上の数値で入力してください" };
+  }
+  const yieldRatePercent = input.yieldRatePercent ?? 100;
+  if (!Number.isFinite(yieldRatePercent) || yieldRatePercent <= 0 || yieldRatePercent > 100) {
+    return { success: false, error: "歩留まり率は0より大きく100以下の数値で入力してください" };
   }
 
   const normalizedName = normalizeForDedupe(name);
@@ -64,9 +72,10 @@ export async function createIngredient(input: CreateIngredientInput): Promise<Cr
       normalized_name: normalizedName,
       unit: input.unit.trim(),
       current_purchase_price: input.purchasePrice,
+      yield_rate_percent: yieldRatePercent,
       price_updated_at: nowIso,
     })
-    .select("id, name, unit, current_purchase_price")
+    .select("id, name, unit, current_purchase_price, yield_rate_percent")
     .single();
   if (error || !created) return { success: false, error: `食材の登録に失敗しました: ${error?.message ?? "不明なエラー"}` };
 
@@ -81,6 +90,7 @@ export async function createIngredient(input: CreateIngredientInput): Promise<Cr
       name: created.name,
       unit: created.unit,
       currentPurchasePrice: created.current_purchase_price,
+      yieldRatePercent: created.yield_rate_percent,
     },
   };
 }
@@ -90,6 +100,8 @@ export interface UpdateIngredientInput {
   ingredientId: string;
   name: string;
   purchasePrice: number;
+  /** 歩留まり率(%)。未指定なら100(歩留まりなし)。 */
+  yieldRatePercent?: number;
 }
 
 export type UpdateIngredientResult = { success: true } | { success: false; error: string };
@@ -103,6 +115,10 @@ export async function updateIngredient(input: UpdateIngredientInput): Promise<Up
   if (!name) return { success: false, error: "食材名を入力してください" };
   if (!Number.isFinite(input.purchasePrice) || input.purchasePrice < 0) {
     return { success: false, error: "仕入単価は0以上の数値で入力してください" };
+  }
+  const yieldRatePercent = input.yieldRatePercent ?? 100;
+  if (!Number.isFinite(yieldRatePercent) || yieldRatePercent <= 0 || yieldRatePercent > 100) {
+    return { success: false, error: "歩留まり率は0より大きく100以下の数値で入力してください" };
   }
 
   const normalizedName = normalizeForDedupe(name);
@@ -132,6 +148,7 @@ export async function updateIngredient(input: UpdateIngredientInput): Promise<Up
       name: normalizeDisplayName(name),
       normalized_name: normalizedName,
       current_purchase_price: input.purchasePrice,
+      yield_rate_percent: yieldRatePercent,
       ...(priceChanged ? { price_updated_at: nowIso } : {}),
     })
     .eq("id", input.ingredientId);

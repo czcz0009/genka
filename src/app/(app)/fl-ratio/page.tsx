@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { getSessionStore, getStoreData } from "@/lib/store";
+import { getSessionStore, getStoreData, getIngredientPriceHistory } from "@/lib/store";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient, type RankingSales } from "@/lib/menuRanking";
+import { resolveHistoricalPrice } from "@/lib/ingredientPriceHistory";
 import {
   aggregateSalesAndFoodCost,
   calcFlRatios,
@@ -63,7 +64,12 @@ export default async function FlRatioPage({
   // menus・menu_ingredients・ingredients・sales(直近6ヶ月分)・fixedCostsを
   // 1回のRPC(get_store_data)でまとめて取得する(以前は最大5クエリの並列取得
   // だったが、往復そのものを1回に減らす)。
-  const storeData = await getStoreData(supabase, rangeStart, rangeEnd);
+  // 仕入単価の変更履歴(過去の月を当時の単価で再現するため)はこの画面でしか
+  // 使わないため、get_store_dataとは別のRPCで並行して取得する。
+  const [storeData, priceHistory] = await Promise.all([
+    getStoreData(supabase, rangeStart, rangeEnd),
+    getIngredientPriceHistory(supabase),
+  ]);
   const menus = storeData?.menus ?? [];
 
   // メニューが1件もなければ、上で取得した月次推移用データは使わずに
@@ -100,16 +106,20 @@ export default async function FlRatioPage({
     periodStart: f.periodStart,
     periodEnd: f.periodEnd,
   }));
-  const rankingIngredients = (storeData?.ingredients ?? []).map((i) => ({
-    id: i.id,
-    currentPurchasePrice: i.currentPurchasePrice,
-  }));
-
   const trend = months.map((m) => {
     const period = monthToPeriod(m);
     const monthSales: RankingSales[] = (storeData?.sales ?? [])
       .filter((s) => s.periodStart === period.start && s.periodEnd === period.end)
       .map((s) => ({ menuId: s.menuId, quantitySold: s.quantitySold }));
+
+    // その月の末日時点で実際に使われていた仕入単価を再現する(値上がり後にこの画面を
+    // 見ても、過去の月の食材原価が今の単価で遡及的に再計算されないようにするため)。
+    // 月ごとに単価が変わるため、trend内の月ごとに解決し直す必要がある。
+    const rankingIngredients = (storeData?.ingredients ?? []).map((i) => ({
+      id: i.id,
+      currentPurchasePrice: resolveHistoricalPrice(priceHistory, i.id, period.end, i.currentPurchasePrice),
+      yieldRatePercent: i.yieldRatePercent,
+    }));
 
     const summaries = buildMenuRanking({
       menus: rankingMenus,
@@ -142,7 +152,7 @@ export default async function FlRatioPage({
             %未満と言われますが、業態によって適正範囲は大きく異なります。あくまで一般的な目安として、自店の推移の把握に使ってください。
             <br />
             <span className="text-xs opacity-80">
-              過去月の食材原価は、現在登録されている仕入単価を使って再計算した参考値です(当時の実際の仕入単価とは異なる場合があります)。
+              過去月の食材原価は、その月の時点で記録されていた仕入単価をもとに計算しています。ただし、メニューの食材構成(レシピ)自体は現在の内容で計算するため、当時からレシピを変更している場合はその影響までは反映されません。
             </span>
           </>
         }

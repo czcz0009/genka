@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ingredientPriceTaxModeLabel, type IngredientPriceTaxMode } from "@/lib/taxMode.ts";
 import { createIngredient, updateIngredient, type IngredientRow } from "./actions.ts";
 
 function formatUnitPrice(n: number): string {
@@ -79,12 +80,54 @@ function usePriceInput(initialPrice?: number) {
   };
 }
 
+/** 歩留まり率(%)の入力欄。空欄なら100%(歩留まりなし)。 */
+function useYieldRateInput(initialPercent?: number) {
+  const [value, setValue] = useState(initialPercent != null && initialPercent < 100 ? String(initialPercent) : "");
+  const resolvedPercent = value.trim() ? Number(value) : 100;
+
+  function reset() {
+    setValue("");
+  }
+
+  return { value, setValue, resolvedPercent, reset };
+}
+
+function YieldRateField({ yieldRate }: { yieldRate: ReturnType<typeof useYieldRateInput> }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <label
+        className="flex w-32 flex-col gap-2 text-base"
+        style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
+      >
+        歩留まり率(%)
+        <input
+          type="number"
+          min={1}
+          max={100}
+          step="1"
+          inputMode="decimal"
+          value={yieldRate.value}
+          onChange={(e) => yieldRate.setValue(e.target.value)}
+          placeholder="例: 70(空欄なら100%)"
+          className={INPUT_CLASS + " font-mono"}
+          style={inputStyle}
+        />
+      </label>
+      <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+        仕入れた量のうち、実際に料理に使える割合です(例: 魚を捌いて骨や皮を除いた後の割合)。分からない・気にしない場合は空欄のままで大丈夫です(100%として扱います)。
+      </p>
+    </div>
+  );
+}
+
 function PriceInputFields({
   unit,
   price,
+  ingredientPriceTaxMode,
 }: {
   unit: string;
   price: ReturnType<typeof usePriceInput>;
+  ingredientPriceTaxMode: IngredientPriceTaxMode;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -115,7 +158,7 @@ function PriceInputFields({
               />
             </label>
             <label className="flex flex-1 flex-col gap-2 text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
-              仕入れ価格(円)
+              仕入れ価格(円・{ingredientPriceTaxModeLabel(ingredientPriceTaxMode)})
               <input
                 type="number"
                 min={0}
@@ -140,7 +183,7 @@ function PriceInputFields({
         </>
       ) : (
         <label className="flex flex-col gap-2 text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
-          仕入単価(円)
+          仕入単価(円・{ingredientPriceTaxModeLabel(ingredientPriceTaxMode)})
           <input
             type="number"
             min={0}
@@ -158,10 +201,19 @@ function PriceInputFields({
   );
 }
 
-function AddIngredientForm({ storeId, onAdded }: { storeId: string; onAdded: (i: IngredientRow) => void }) {
+function AddIngredientForm({
+  storeId,
+  ingredientPriceTaxMode,
+  onAdded,
+}: {
+  storeId: string;
+  ingredientPriceTaxMode: IngredientPriceTaxMode;
+  onAdded: (i: IngredientRow) => void;
+}) {
   const [name, setName] = useState("");
   const [unit, setUnit] = useState("g");
   const price = usePriceInput();
+  const yieldRate = useYieldRateInput();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [justAdded, setJustAdded] = useState<string | null>(null);
@@ -183,8 +235,18 @@ function AddIngredientForm({ storeId, onAdded }: { storeId: string; onAdded: (i:
       );
       return;
     }
+    if (!Number.isFinite(yieldRate.resolvedPercent) || yieldRate.resolvedPercent <= 0 || yieldRate.resolvedPercent > 100) {
+      setError("歩留まり率は0より大きく100以下の数値で入力してください");
+      return;
+    }
     setSaving(true);
-    const result = await createIngredient({ storeId, name: trimmedName, unit: unit.trim(), purchasePrice: price.resolvedPrice });
+    const result = await createIngredient({
+      storeId,
+      name: trimmedName,
+      unit: unit.trim(),
+      purchasePrice: price.resolvedPrice,
+      yieldRatePercent: yieldRate.resolvedPercent,
+    });
     setSaving(false);
     if (!result.success) {
       setError(result.error);
@@ -195,6 +257,7 @@ function AddIngredientForm({ storeId, onAdded }: { storeId: string; onAdded: (i:
     setName("");
     setUnit("g");
     price.reset();
+    yieldRate.reset();
   }
 
   return (
@@ -220,7 +283,8 @@ function AddIngredientForm({ storeId, onAdded }: { storeId: string; onAdded: (i:
         </label>
       </div>
 
-      <PriceInputFields unit={unit} price={price} />
+      <PriceInputFields unit={unit} price={price} ingredientPriceTaxMode={ingredientPriceTaxMode} />
+      <YieldRateField yieldRate={yieldRate} />
 
       {error && (
         <p className="text-sm" style={{ color: "var(--status-danger)" }}>
@@ -249,16 +313,19 @@ function AddIngredientForm({ storeId, onAdded }: { storeId: string; onAdded: (i:
 function IngredientEditRow({
   storeId,
   ingredient,
+  ingredientPriceTaxMode,
   onSaved,
   onCancel,
 }: {
   storeId: string;
   ingredient: IngredientRow;
+  ingredientPriceTaxMode: IngredientPriceTaxMode;
   onSaved: (i: IngredientRow) => void;
   onCancel: () => void;
 }) {
   const [name, setName] = useState(ingredient.name);
   const price = usePriceInput(ingredient.currentPurchasePrice);
+  const yieldRate = useYieldRateInput(ingredient.yieldRatePercent);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -275,19 +342,30 @@ function IngredientEditRow({
       );
       return;
     }
+    if (!Number.isFinite(yieldRate.resolvedPercent) || yieldRate.resolvedPercent <= 0 || yieldRate.resolvedPercent > 100) {
+      setError("歩留まり率は0より大きく100以下の数値で入力してください");
+      return;
+    }
     setSaving(true);
     const result = await updateIngredient({
       storeId,
       ingredientId: ingredient.id,
       name: trimmedName,
       purchasePrice: price.resolvedPrice,
+      yieldRatePercent: yieldRate.resolvedPercent,
     });
     setSaving(false);
     if (!result.success) {
       setError(result.error);
       return;
     }
-    onSaved({ id: ingredient.id, name: trimmedName, unit: ingredient.unit, currentPurchasePrice: price.resolvedPrice });
+    onSaved({
+      id: ingredient.id,
+      name: trimmedName,
+      unit: ingredient.unit,
+      currentPurchasePrice: price.resolvedPrice,
+      yieldRatePercent: yieldRate.resolvedPercent,
+    });
   }
 
   return (
@@ -308,7 +386,8 @@ function IngredientEditRow({
         単位はここでは変更できません(既存メニューの分量の意味が変わってしまうため)。単位を変えたい場合は、新しい食材として登録してください。
       </p>
 
-      <PriceInputFields unit={ingredient.unit} price={price} />
+      <PriceInputFields unit={ingredient.unit} price={price} ingredientPriceTaxMode={ingredientPriceTaxMode} />
+      <YieldRateField yieldRate={yieldRate} />
 
       {error && (
         <p className="text-sm" style={{ color: "var(--status-danger)" }}>
@@ -342,9 +421,11 @@ function IngredientEditRow({
 export function IngredientsView({
   storeId,
   initialIngredients,
+  ingredientPriceTaxMode,
 }: {
   storeId: string;
   initialIngredients: IngredientRow[];
+  ingredientPriceTaxMode: IngredientPriceTaxMode;
 }) {
   const router = useRouter();
   const [ingredients, setIngredients] = useState<IngredientRow[]>(initialIngredients);
@@ -371,7 +452,7 @@ export function IngredientsView({
 
   return (
     <div className="flex flex-col gap-6">
-      <AddIngredientForm storeId={storeId} onAdded={handleAdded} />
+      <AddIngredientForm storeId={storeId} ingredientPriceTaxMode={ingredientPriceTaxMode} onAdded={handleAdded} />
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
@@ -409,6 +490,7 @@ export function IngredientsView({
                   <IngredientEditRow
                     storeId={storeId}
                     ingredient={ing}
+                    ingredientPriceTaxMode={ingredientPriceTaxMode}
                     onSaved={handleSaved}
                     onCancel={() => setEditingId(null)}
                   />
@@ -425,6 +507,7 @@ export function IngredientsView({
                     </span>
                     <span className="font-mono text-sm" style={{ color: "var(--muted-foreground)" }}>
                       {ing.unit}あたり{formatUnitPrice(ing.currentPurchasePrice)}
+                      {ing.yieldRatePercent < 100 && `(歩留まり${ing.yieldRatePercent}%)`}
                     </span>
                   </div>
                   <button

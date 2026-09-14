@@ -13,12 +13,14 @@
  */
 import type { PriceChangeEvent } from "./detectPriceChanges.ts";
 import type { IngredientItemMatch } from "./matchIngredientToItem.ts";
-import { calcMenuTotalCost, calcCostRate, type UnitPriceMap } from "../costCalc.ts";
+import { calcMenuTotalCost, calcCostRate, calcEffectiveUnitPrice, type UnitPriceMap } from "../costCalc.ts";
 
 export interface AlertIngredient {
   id: string;
   name: string;
   currentPurchasePrice: number;
+  /** 歩留まり率(%)。未指定・100なら仕入単価をそのまま使う(従来通り)。 */
+  yieldRatePercent?: number | null;
 }
 
 export interface AlertMenu {
@@ -102,8 +104,10 @@ export function generateMarketPriceAlerts(input: GenerateAlertsInput): GenerateA
     list.push(mi);
     menuIngredientsByIngredientId.set(mi.ingredientId, list);
   }
-  // メニューごとの現在の仕入単価マップ(原価計算に必要)
-  const currentUnitPrices: UnitPriceMap = new Map(ingredients.map((i) => [i.id, i.currentPurchasePrice]));
+  // メニューごとの現在の仕入単価マップ(原価計算に必要)。歩留まり率を考慮した実質単価を使う。
+  const currentUnitPrices: UnitPriceMap = new Map(
+    ingredients.map((i) => [i.id, calcEffectiveUnitPrice(i.currentPurchasePrice, i.yieldRatePercent)]),
+  );
 
   const alerts: MarketPriceAlert[] = [];
   const needsReviewMatches: IngredientItemMatch[] = [];
@@ -124,9 +128,10 @@ export function generateMarketPriceAlerts(input: GenerateAlertsInput): GenerateA
     const affectedMenuIds = Array.from(new Set(affectedLines.map((l) => l.menuId)));
 
     const projectedUnitPrices: UnitPriceMap = new Map(currentUnitPrices);
+    const projectedPurchasePrice = ingredient.currentPurchasePrice * (1 + priceChange.changePercent / 100);
     projectedUnitPrices.set(
       ingredient.id,
-      ingredient.currentPurchasePrice * (1 + priceChange.changePercent / 100),
+      calcEffectiveUnitPrice(projectedPurchasePrice, ingredient.yieldRatePercent),
     );
 
     const affectedMenus: AffectedMenu[] = affectedMenuIds

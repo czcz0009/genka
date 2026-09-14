@@ -217,3 +217,48 @@ test("月間の利益への影響額: 販売数量が未登録(0件)のメニュ
   assert.equal(summary.quantitySold, 0);
   assert.equal(summary.monthlyProfitImpact, null);
 });
+
+test("歩留まり率: 未指定の食材は従来通り(仕入単価そのまま)で原価を計算する", () => {
+  const menus = [{ id: "m1", name: "ナポリタン", sellingPrice: 900, targetCostRate: 30 }];
+  const menuIngredients = [{ menuId: "m1", ingredientId: "pasta", quantity: 120 }];
+  // 歩留まり率を渡さない -> 0.8*120=96円のまま(既存の計算と完全一致することを確認)
+  const [summary] = buildMenuRanking({ menus, menuIngredients, ingredients, sales: [], defaultTargetCostRate: 30 });
+  assert.ok(Math.abs(summary.totalCost - 96) < 1e-9);
+});
+
+test("歩留まり率: 70%の食材は、仕入単価を0.7で割った実質単価で原価を計算する", () => {
+  const menus = [{ id: "m1", name: "焼き魚定食", sellingPrice: 900, targetCostRate: 30 }];
+  const menuIngredients = [{ menuId: "m1", ingredientId: "fish", quantity: 100 }];
+  // 1尾800円(1000gあたり)の魚、歩留まり70% -> 実質単価800/0.7=約1142.86円/1000g
+  const fishIngredients = [{ id: "fish", currentPurchasePrice: 0.8, yieldRatePercent: 70 }];
+  const [summary] = buildMenuRanking({
+    menus,
+    menuIngredients,
+    ingredients: fishIngredients,
+    sales: [],
+    defaultTargetCostRate: 30,
+  });
+  // 実質単価(0.8/0.7)×100g = 80/0.7 = 約114.29円
+  assert.ok(Math.abs(summary.totalCost - 0.8 / 0.7 * 100) < 1e-6);
+  assert.ok(Math.abs(summary.totalCost - 114.2857142857) < 1e-4);
+});
+
+test("歩留まり率: 月間影響額の計算でも、現在・1つ前どちらの単価にも同じ歩留まり率が適用される", () => {
+  const menus = [{ id: "m1", name: "焼き魚定食", sellingPrice: 900, targetCostRate: 30 }];
+  const menuIngredients = [{ menuId: "m1", ingredientId: "fish", quantity: 100 }];
+  const sales = [{ menuId: "m1", quantitySold: 10 }];
+  // 現在0.8円/g、1つ前0.5円/g、歩留まり50%
+  const fishIngredients = [
+    { id: "fish", currentPurchasePrice: 0.8, previousPurchasePrice: 0.5, yieldRatePercent: 50 },
+  ];
+  const [summary] = buildMenuRanking({
+    menus,
+    menuIngredients,
+    ingredients: fishIngredients,
+    sales,
+    defaultTargetCostRate: 30,
+  });
+  // 現在原価: (0.8/0.5)*100=160円、従来原価: (0.5/0.5)*100=100円。差額-60円×10食=-600円
+  assert.ok(Math.abs(summary.totalCost - 160) < 1e-9);
+  assert.ok(Math.abs(summary.monthlyProfitImpact! - -600) < 1e-6);
+});

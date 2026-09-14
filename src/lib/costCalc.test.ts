@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calcMenuTotalCost, calcCostRate, calcSuggestedPriceIncrease, calcRequiredSellingPrice } from "./costCalc.ts";
+import {
+  calcMenuTotalCost,
+  calcCostRate,
+  calcSuggestedPriceIncrease,
+  calcRequiredSellingPrice,
+  calcEffectiveUnitPrice,
+} from "./costCalc.ts";
 
 test("calcMenuTotalCost: 各食材の分量×単価を合計する", () => {
   const lines = [
@@ -83,4 +89,26 @@ test("calcRequiredSellingPrice: 目標原価率が0以下、または原価が�
 test("calcRequiredSellingPrice: roundToを変更できる", () => {
   assert.equal(calcRequiredSellingPrice(300, 30, 50), 1000);
   assert.equal(calcRequiredSellingPrice(310, 30, 50), 1050);
+});
+
+test("calcEffectiveUnitPrice: 歩留まり率未指定なら仕入単価をそのまま返す(従来通り)", () => {
+  assert.equal(calcEffectiveUnitPrice(800), 800);
+  assert.equal(calcEffectiveUnitPrice(800, null), 800);
+});
+
+test("calcEffectiveUnitPrice: 歩留まり率100%なら仕入単価をそのまま返す", () => {
+  assert.equal(calcEffectiveUnitPrice(800, 100), 800);
+});
+
+test("calcEffectiveUnitPrice: 歩留まり率70%なら仕入単価を0.7で割った額になる", () => {
+  // 1尾800円(1000gあたり)・歩留まり70% -> 実質1143.28...円(1000gあたり)
+  const result = calcEffectiveUnitPrice(800, 70);
+  assert.ok(Math.abs(result - 800 / 0.7) < 1e-9);
+  assert.ok(Math.abs(result - 1142.857142857143) < 1e-6);
+});
+
+test("calcEffectiveUnitPrice: 歩留まり率が0以下・100超などの不正値は仕入単価をそのまま返す(0除算防止)", () => {
+  assert.equal(calcEffectiveUnitPrice(800, 0), 800);
+  assert.equal(calcEffectiveUnitPrice(800, -10), 800);
+  assert.equal(calcEffectiveUnitPrice(800, 150), 800);
 });

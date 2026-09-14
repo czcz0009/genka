@@ -2,6 +2,7 @@
 
 import { monthToPeriod } from "@/lib/period/month";
 import { requireAuthedClient } from "@/lib/supabase/requireAuthedClient";
+import type { IngredientPriceTaxMode } from "@/lib/taxMode.ts";
 
 /**
  * 店舗設定(店名・目標原価率・家賃)をまとめて1回の保存で反映する。
@@ -20,6 +21,8 @@ export interface SaveStoreSettingsInput {
   rentAmount: number | null;
   /** 家賃を適用する対象月("YYYY-MM") */
   month: string;
+  /** 仕入単価を税込・税抜のどちらで入力しているか(ラベル表示のみに使う。計算式は変えない) */
+  ingredientPriceTaxMode: IngredientPriceTaxMode;
 }
 
 export type SaveStoreSettingsResult = { success: true } | { success: false; error: string };
@@ -41,7 +44,11 @@ export async function saveStoreSettings(input: SaveStoreSettingsInput): Promise<
 
   const { error: storeError } = await supabase
     .from("stores")
-    .update({ name, default_target_cost_rate: input.defaultTargetCostRate })
+    .update({
+      name,
+      default_target_cost_rate: input.defaultTargetCostRate,
+      ingredient_price_tax_mode: input.ingredientPriceTaxMode,
+    })
     .eq("id", input.storeId);
   if (storeError) return { success: false, error: `店舗情報の保存に失敗しました: ${storeError.message}` };
 

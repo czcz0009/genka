@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { getSessionStore, getStoreData, getIngredientPreviousPrices } from "@/lib/store";
+import { getSessionStore, getStoreData, getIngredientPreviousPrices, getIngredientPriceHistory } from "@/lib/store";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient, type RankingSales } from "@/lib/menuRanking";
+import { resolveHistoricalPrice } from "@/lib/ingredientPriceHistory";
 import { monthToPeriod, currentMonthString } from "@/lib/period/month";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
@@ -49,11 +50,13 @@ export default async function RankingPage({
   // (get_store_data)でまとめて取得する(以前は最大5回のクエリに分かれていた)。
   // 「対象月の絞り込み」「利用可能な月の一覧」はどちらもこの1回の取得結果から
   // JS側で計算するため、月ごとの追加クエリは発生しない。
-  // 食材の「1つ前の仕入単価」(月間の利益への影響額の計算用)はこの画面でしか
-  // 使わないため、get_store_dataとは別のRPCで並行して取得する。
-  const [storeData, previousPrices] = await Promise.all([
+  // 食材の「1つ前の仕入単価」(月間の利益への影響額の計算用)・仕入単価の変更履歴
+  // (過去の月を見たときに当時の単価を再現するため)はこの画面でしか使わないため、
+  // get_store_dataとは別のRPCで並行して取得する。
+  const [storeData, previousPrices, priceHistory] = await Promise.all([
     getStoreData(supabase),
     getIngredientPreviousPrices(supabase),
+    getIngredientPriceHistory(supabase),
   ]);
   const menus = storeData?.menus ?? [];
 
@@ -89,10 +92,15 @@ export default async function RankingPage({
   const rankingSales: RankingSales[] = allSales
     .filter((s) => s.periodStart === period.start && s.periodEnd === period.end)
     .map((s) => ({ menuId: s.menuId, quantitySold: s.quantitySold }));
+  // その月の末日時点で実際に使われていた仕入単価を再現する(値上がり後にこの画面で
+  // 過去の月を見ても、今の単価で遡及的に再計算されないようにするため)。
+  // previousPurchasePrice(月間の利益への影響額の計算用)は「直近の価格変更」という
+  // 別の意味の値のため、ここでは変更しない。
   const rankingIngredients = (storeData?.ingredients ?? []).map((i) => ({
     id: i.id,
-    currentPurchasePrice: i.currentPurchasePrice,
+    currentPurchasePrice: resolveHistoricalPrice(priceHistory, i.id, period.end, i.currentPurchasePrice),
     previousPurchasePrice: previousPrices.get(i.id) ?? null,
+    yieldRatePercent: i.yieldRatePercent,
   }));
 
   const summaries = buildMenuRanking({

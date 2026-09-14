@@ -89,6 +89,7 @@ export default async function MenusPage() {
   const rankingIngredients = (storeData?.ingredients ?? []).map((i) => ({
     id: i.id,
     currentPurchasePrice: i.currentPurchasePrice,
+    yieldRatePercent: i.yieldRatePercent,
   }));
 
   const summaries = buildMenuRanking({
@@ -126,7 +127,7 @@ export default async function MenusPage() {
           style={{ borderColor: "var(--border)", color: "var(--muted-foreground)", background: "var(--muted)" }}
         >
           <div>メニュー名</div>
-          <div className="text-right">売価</div>
+          <div className="text-right" title="売価は税込金額として扱います">売価</div>
           <div className="text-right">原価</div>
           <div className="text-right">原価率</div>
           <div className="text-right">状態</div>

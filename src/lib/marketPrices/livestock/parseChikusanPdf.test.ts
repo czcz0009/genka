@@ -43,7 +43,7 @@ test("実データ: 8年7月(直近の確定月)の価格が実際の値と一�
   assert.equal(row!.prices.wagyu_a4, 2452);
   assert.equal(row!.prices.cross_b3, 1894);
   assert.equal(row!.prices.dairy_b2, 1320);
-  assert.equal(row!.prices.mature_cattle_m, 303);
+  assert.equal(row!.prices.egg_m_tokyo, 303); // 訂正前は「成牛(M)」と誤認識していた列(実際は鶏卵(M)東京の価格)
   assert.equal(row!.prices.chicken_thigh, 837);
   assert.equal(row!.prices.chicken_breast, 479);
 });

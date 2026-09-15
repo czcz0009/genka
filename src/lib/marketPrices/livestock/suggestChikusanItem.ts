@@ -34,14 +34,19 @@ export interface ChikusanItemSuggestion {
 
 type ChikusanSpecies = "pork" | "beef" | "chicken";
 
-/** 品目コード(規格)がどの畜種に属するか。CHIKUSAN_COLUMNSのラベルから機械的に決まる固定対応。 */
-const SPECIES_BY_ITEM_CODE: Record<ChikusanItemCode, ChikusanSpecies> = {
+/**
+ * 品目コード(規格)がどの畜種に属するか。CHIKUSAN_COLUMNSのラベルから機械的に決まる固定対応。
+ *
+ * egg_m_tokyo(鶏卵)には意図的にエントリを持たせない(Partial型)。卵は肉ではないため
+ * 「豚/牛/鶏」いずれの畜種にも属させず、suggestChikusanItemsの候補には出さない
+ * (卵の食材名はclassifySpeciesのNON_MEAT_KEYWORDSで先に対象外と判定される設計と一貫させる)。
+ */
+const SPECIES_BY_ITEM_CODE: Partial<Record<ChikusanItemCode, ChikusanSpecies>> = {
   pork_tokyo: "pork",
   wagyu_a5: "beef",
   wagyu_a4: "beef",
   cross_b3: "beef",
   dairy_b2: "beef",
-  mature_cattle_m: "beef",
   chicken_thigh: "chicken",
   chicken_breast: "chicken",
 };

@@ -20,13 +20,18 @@ test("曖昧な「豚肉」でも候補は返す(が、これはあくまで初�
 
 test("食材名から畜種(豚/牛/鶏)を判定できても、候補は同じ畜種の規格だけに絞られる(他畜種は混ざらない)", () => {
   const suggestions = suggestChikusanItems("牛肉ロース");
-  assert.equal(suggestions.length, 5); // 牛関連の規格数(wagyu_a5/a4, cross_b3, dairy_b2, mature_cattle_m)のみ
+  assert.equal(suggestions.length, 4); // 牛関連の規格数(wagyu_a5/a4, cross_b3, dairy_b2)のみ
   for (const s of suggestions) {
-    assert.ok(["wagyu_a5", "wagyu_a4", "cross_b3", "dairy_b2", "mature_cattle_m"].includes(s.itemCode));
+    assert.ok(["wagyu_a5", "wagyu_a4", "cross_b3", "dairy_b2"].includes(s.itemCode));
   }
   for (let i = 1; i < suggestions.length; i++) {
     assert.ok(suggestions[i - 1].score >= suggestions[i].score);
   }
+});
+
+test("不具合修正の確認: 鶏卵(Ｍ)の価格(egg_m_tokyo)は牛の候補に混ざらない(以前は「成牛(M)」と誤認識され牛の規格として提示されていた)", () => {
+  const suggestions = suggestChikusanItems("経産牛肉");
+  assert.ok(!suggestions.some((s) => s.itemCode === "egg_m_tokyo"));
 });
 
 test("豚の食材には豚の規格だけが候補になり、牛・鶏の規格は混ざらない", () => {

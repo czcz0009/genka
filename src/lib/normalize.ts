@@ -24,3 +24,20 @@ export function normalizeForDedupe(raw: string): string {
 export function normalizeDisplayName(raw: string): string {
   return raw.normalize("NFKC").trim().replace(/[\s　]+/g, " ");
 }
+
+/**
+ * 食材名・メニュー名の文字数上限。
+ *
+ * 配布前QAで発見: 以前は上限が無く、極端に長い名前(例: 500文字)を登録すると
+ * 一覧画面のレイアウトが崩れる懸念があった。実用上の食材名・メニュー名は
+ * 数文字〜数十文字程度のため、100文字あれば十分に余裕がある上限として設定する。
+ */
+export const MAX_NAME_LENGTH = 100;
+
+/** 名前の文字数チェック。問題なければnull、上限超過ならエラーメッセージを返す。 */
+export function validateNameLength(trimmedName: string, label: string): string | null {
+  if (trimmedName.length > MAX_NAME_LENGTH) {
+    return `${label}は${MAX_NAME_LENGTH}文字以内で入力してください`;
+  }
+  return null;
+}

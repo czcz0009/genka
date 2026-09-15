@@ -139,9 +139,11 @@ function FixedCostEntry({
         <p className="text-sm font-semibold" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
           {formatMonthLabel(month)}の固定費
         </p>
+        {/* px-3 py-2.5: 配布前QAで発見。以前はパディング無しで文字の行高分しかタップ領域が
+            無かったため、推奨タップサイズに近づける(-mr-3で見た目の位置は変えない)。 */}
         <button
           onClick={() => setOpen(false)}
-          className="text-xs underline underline-offset-2"
+          className="-mr-3 px-3 py-2.5 text-xs underline underline-offset-2"
           style={{ color: "var(--muted-foreground)" }}
         >
           閉じる

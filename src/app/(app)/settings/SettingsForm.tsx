@@ -4,8 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { IngredientPriceTaxMode } from "@/lib/taxMode.ts";
 import { saveStoreSettings } from "./actions.ts";
+import { ActionErrorMessage } from "@/components/ActionErrorMessage.tsx";
 
-const INPUT_CLASS = "rounded border px-4 py-3 text-base focus:outline-none focus:ring-2";
+// w-full: 配布前QAで発見。入力欄に幅を明示しないと、狭いflexの列の中でブラウザ既定の
+// 内容幅が優先され、スマホ幅で入力欄がはみ出して見えなくなる不具合があったため付与する。
+const INPUT_CLASS = "w-full rounded border px-4 py-3 text-base focus:outline-none focus:ring-2";
 const inputStyle = { background: "var(--background)", borderColor: "var(--border)", color: "var(--foreground)" };
 const labelStyle = { color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" };
 
@@ -161,11 +164,7 @@ export function SettingsForm({
         </p>
       </div>
 
-      {error && (
-        <p className="text-sm" style={{ color: "var(--status-danger)" }}>
-          {error}
-        </p>
-      )}
+      {error && <ActionErrorMessage error={error} />}
       {saved && !error && (
         <p className="text-sm" style={{ color: "var(--status-ok)" }}>
           保存しました

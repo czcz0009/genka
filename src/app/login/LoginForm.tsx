@@ -145,7 +145,7 @@ export function LoginForm() {
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="rounded border px-4 py-3 text-base focus:outline-none focus:ring-2"
+          className="w-full rounded border px-4 py-3 text-base focus:outline-none focus:ring-2"
           style={{ background: "var(--card)", borderColor: "var(--border)", color: "var(--foreground)" }}
         />
       </label>
@@ -159,7 +159,7 @@ export function LoginForm() {
             minLength={6}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="rounded border px-4 py-3 text-base focus:outline-none focus:ring-2"
+            className="w-full rounded border px-4 py-3 text-base focus:outline-none focus:ring-2"
             style={{ background: "var(--card)", borderColor: "var(--border)", color: "var(--foreground)" }}
           />
         </label>
@@ -174,7 +174,7 @@ export function LoginForm() {
             minLength={6}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            className="rounded border px-4 py-3 text-base focus:outline-none focus:ring-2"
+            className="w-full rounded border px-4 py-3 text-base focus:outline-none focus:ring-2"
             style={{ background: "var(--card)", borderColor: "var(--border)", color: "var(--foreground)" }}
           />
         </label>

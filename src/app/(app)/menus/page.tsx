@@ -7,28 +7,12 @@ import { getSessionStore, getStoreData } from "@/lib/store";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient } from "@/lib/menuRanking";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
-import { StatusBadge, type BadgeStatus } from "@/components/StatusBadge.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
+import { MenusList } from "./MenusList.tsx";
 
 export const metadata: Metadata = {
   title: "メニュー一覧",
 };
-
-function formatYen(n: number | null): string {
-  if (n == null) return "-";
-  return `¥${Math.round(n).toLocaleString()}`;
-}
-
-function rowStatus(overTarget: boolean, costRate: number | null): BadgeStatus {
-  if (costRate == null) return "muted";
-  return overTarget ? "danger" : "ok";
-}
-
-function rowStatusLabel(status: BadgeStatus): string {
-  if (status === "danger") return "要対応";
-  if (status === "muted") return "-";
-  return "正常";
-}
 
 export default async function MenusPage() {
   if (!isSupabaseConfigured()) {
@@ -121,68 +105,7 @@ export default async function MenusPage() {
         </Link>
       </div>
 
-      <div className="overflow-hidden rounded border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-        <div
-          className="hidden grid-cols-[1fr_96px_96px_128px_80px] border-b px-5 py-3 text-xs font-semibold uppercase tracking-wide sm:grid"
-          style={{ borderColor: "var(--border)", color: "var(--muted-foreground)", background: "var(--muted)" }}
-        >
-          <div>メニュー名</div>
-          <div className="text-right" title="売価は税込金額として扱います">売価</div>
-          <div className="text-right">原価</div>
-          <div className="text-right">原価率</div>
-          <div className="text-right">状態</div>
-        </div>
-
-        {rows.map((s) => {
-          const status = rowStatus(s.overTarget, s.costRate);
-          return (
-            <Link
-              key={s.menuId}
-              // 一覧の行数分だけ/menus/[id]がプリフェッチされ裏でSupabaseクエリが
-              // 走ってしまうのを避けるため、ここもprefetchを無効化する
-              href={`/menus/${s.menuId}`}
-              prefetch={false}
-              className="flex flex-col gap-2 border-b px-5 py-4 text-left transition-colors last:border-0 hover:bg-[color:var(--muted)]/50 sm:grid sm:grid-cols-[1fr_96px_96px_128px_80px] sm:items-center sm:gap-0"
-              style={{ borderColor: "var(--border)" }}
-            >
-              <div className="font-medium" style={{ fontFamily: "var(--font-noto-sans-jp)", color: "var(--foreground)" }}>
-                {s.menuName}
-              </div>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm sm:contents">
-                <div className="font-mono sm:text-right" style={{ color: "var(--foreground)" }}>
-                  {formatYen(s.sellingPrice)}
-                </div>
-                <div className="font-mono sm:text-right" style={{ color: "var(--foreground)" }}>
-                  {formatYen(s.totalCost)}
-                </div>
-                {/*
-                  不具合修正: 以前は「19.2%(目標25%)」のように原価率と目標値を
-                  1行に横並びで詰め込んでおり、桁数によっては固定幅(100px)の
-                  グリッド列に収まりきらず、隣の列とテキストが重なって表示される
-                  不具合があった(例:「焼き魚定食」の8.7%だけ崩れる、といった
-                  桁数依存の再現しにくいレイアウト崩れ)。原価率と目標値を別行に
-                  縦積みすることで、桁数に関わらず横方向にはみ出さないようにする。
-                */}
-                <div
-                  className="font-mono font-semibold sm:text-right"
-                  style={{
-                    color:
-                      status === "danger" ? "var(--status-danger)" : status === "ok" ? "var(--status-ok)" : "var(--muted-foreground)",
-                  }}
-                >
-                  <div>{s.costRate != null ? `${s.costRate.toFixed(1)}%` : "-"}</div>
-                  <div className="font-sans text-xs font-normal" style={{ color: "var(--muted-foreground)" }}>
-                    (目標{s.targetCostRate}%)
-                  </div>
-                </div>
-                <div className="sm:flex sm:justify-end">
-                  <StatusBadge status={status} label={rowStatusLabel(status)} />
-                </div>
-              </div>
-            </Link>
-          );
-        })}
-      </div>
+      <MenusList storeId={store.id} rows={rows} />
     </div>
   );
 }

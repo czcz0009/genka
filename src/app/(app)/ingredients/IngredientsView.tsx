@@ -3,7 +3,9 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ingredientPriceTaxModeLabel, type IngredientPriceTaxMode } from "@/lib/taxMode.ts";
-import { createIngredient, updateIngredient, type IngredientRow } from "./actions.ts";
+import { MAX_NAME_LENGTH } from "@/lib/normalize";
+import { createIngredient, updateIngredient, deleteIngredient, type IngredientRow } from "./actions.ts";
+import { ActionErrorMessage } from "@/components/ActionErrorMessage.tsx";
 
 function formatUnitPrice(n: number): string {
   const rounded = Math.round(n * 100) / 100;
@@ -26,7 +28,10 @@ const inputStyle: React.CSSProperties = {
   color: "var(--foreground)",
   fontFamily: "var(--font-noto-sans-jp)",
 };
-const INPUT_CLASS = "rounded border px-4 py-3 text-base focus:outline-none focus:ring-2";
+// w-full: 配布前QAで発見。入力欄に幅を明示しないと、狭いflexの列(単位・仕入れ価格等)の
+// 中でブラウザ既定の内容幅が優先され、スマホ幅(360px)で入力欄が親要素の外にはみ出して
+// 見えなくなる/操作できなくなる不具合があったため、常に親の幅いっぱいに広げる。
+const INPUT_CLASS = "w-full rounded border px-4 py-3 text-base focus:outline-none focus:ring-2";
 
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
@@ -273,6 +278,7 @@ function AddIngredientForm({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="例: 豚肉"
+            maxLength={MAX_NAME_LENGTH}
             className={INPUT_CLASS}
             style={inputStyle}
           />
@@ -286,11 +292,7 @@ function AddIngredientForm({
       <PriceInputFields unit={unit} price={price} ingredientPriceTaxMode={ingredientPriceTaxMode} />
       <YieldRateField yieldRate={yieldRate} />
 
-      {error && (
-        <p className="text-sm" style={{ color: "var(--status-danger)" }}>
-          {error}
-        </p>
-      )}
+      {error && <ActionErrorMessage error={error} />}
       {justAdded && !error && (
         <p className="text-sm font-medium" style={{ color: "var(--status-ok)" }}>
           ✓ 「{justAdded}」を追加しました
@@ -373,7 +375,13 @@ function IngredientEditRow({
       <div className="flex gap-3">
         <label className="flex flex-1 flex-col gap-2 text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
           食材名
-          <input value={name} onChange={(e) => setName(e.target.value)} className={INPUT_CLASS} style={inputStyle} />
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={MAX_NAME_LENGTH}
+            className={INPUT_CLASS}
+            style={inputStyle}
+          />
         </label>
         <div className="flex w-24 flex-col gap-2 text-base" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
           単位
@@ -389,11 +397,7 @@ function IngredientEditRow({
       <PriceInputFields unit={ingredient.unit} price={price} ingredientPriceTaxMode={ingredientPriceTaxMode} />
       <YieldRateField yieldRate={yieldRate} />
 
-      {error && (
-        <p className="text-sm" style={{ color: "var(--status-danger)" }}>
-          {error}
-        </p>
-      )}
+      {error && <ActionErrorMessage error={error} />}
 
       <div className="flex gap-3">
         <button
@@ -431,6 +435,11 @@ export function IngredientsView({
   const [ingredients, setIngredients] = useState<IngredientRow[]>(initialIngredients);
   const [query, setQuery] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  // 食材ごとの削除失敗メッセージ(「使用中のメニューがあるため削除できません」等)。
+  // 一覧全体で1つの共有エラーにすると、どの食材の削除が失敗したのか分かりにくいため、
+  // 食材IDごとに保持してその行の直下に表示する。
+  const [deleteErrors, setDeleteErrors] = useState<Record<string, string>>({});
 
   const filtered = useMemo(() => {
     const normalize = (s: string) => s.normalize("NFKC").toLowerCase();
@@ -447,6 +456,31 @@ export function IngredientsView({
   function handleSaved(i: IngredientRow) {
     setIngredients((prev) => prev.map((x) => (x.id === i.id ? i : x)));
     setEditingId(null);
+    router.refresh();
+  }
+
+  /**
+   * 食材の削除(取り消せない操作)。
+   * 確認ダイアログ→サーバーアクション呼び出し、の順で行う。
+   * サーバー側で「使用中のメニューがあれば削除を拒否する」チェックが入っているため、
+   * 失敗時のエラーメッセージ(例:「〇〇で使われているため削除できません」)を
+   * そのまま該当行の下に表示する。
+   */
+  async function handleDelete(ing: IngredientRow) {
+    if (!window.confirm(`「${ing.name}」を削除します。この操作は取り消せません。よろしいですか?`)) return;
+    setDeletingId(ing.id);
+    setDeleteErrors((prev) => {
+      const next = { ...prev };
+      delete next[ing.id];
+      return next;
+    });
+    const result = await deleteIngredient({ storeId, ingredientId: ing.id });
+    setDeletingId(null);
+    if (!result.success) {
+      setDeleteErrors((prev) => ({ ...prev, [ing.id]: result.error }));
+      return;
+    }
+    setIngredients((prev) => prev.filter((x) => x.id !== ing.id));
     router.refresh();
   }
 
@@ -498,26 +532,40 @@ export function IngredientsView({
               ) : (
                 <li
                   key={ing.id}
-                  className="flex items-center justify-between gap-3 rounded border px-4 py-3"
+                  className="flex flex-col gap-2 rounded border px-4 py-3"
                   style={{ borderColor: "var(--border)", background: "var(--card)" }}
                 >
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-base font-medium" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
-                      {ing.name}
-                    </span>
-                    <span className="font-mono text-sm" style={{ color: "var(--muted-foreground)" }}>
-                      {ing.unit}あたり{formatUnitPrice(ing.currentPurchasePrice)}
-                      {ing.yieldRatePercent < 100 && `(歩留まり${ing.yieldRatePercent}%)`}
-                    </span>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      <span className="break-words text-base font-medium" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+                        {ing.name}
+                      </span>
+                      <span className="font-mono text-sm" style={{ color: "var(--muted-foreground)" }}>
+                        {ing.unit}あたり{formatUnitPrice(ing.currentPurchasePrice)}
+                        {ing.yieldRatePercent < 100 && `(歩留まり${ing.yieldRatePercent}%)`}
+                      </span>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(ing.id)}
+                        className="rounded border px-3 py-2 text-sm transition-colors hover:bg-[color:var(--muted)]"
+                        style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+                      >
+                        編集する
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(ing)}
+                        disabled={deletingId === ing.id}
+                        className="rounded border px-3 py-2 text-sm transition-colors hover:bg-[color:var(--muted)] disabled:opacity-40"
+                        style={{ borderColor: "var(--border)", color: "var(--status-danger)" }}
+                      >
+                        {deletingId === ing.id ? "削除中…" : "削除する"}
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setEditingId(ing.id)}
-                    className="shrink-0 rounded border px-3 py-2 text-sm transition-colors hover:bg-[color:var(--muted)]"
-                    style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
-                  >
-                    編集する
-                  </button>
+                  {deleteErrors[ing.id] && <ActionErrorMessage error={deleteErrors[ing.id]} />}
                 </li>
               ),
             )}

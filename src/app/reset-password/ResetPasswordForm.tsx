@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
-const INPUT_CLASS = "rounded border px-4 py-3 text-base focus:outline-none focus:ring-2";
+// w-full: 配布前QAで発見。入力欄に幅を明示しないと、スマホ幅で入力欄がはみ出す不具合が
+// あったため付与する(他画面の同名定数と同じ修正)。
+const INPUT_CLASS = "w-full rounded border px-4 py-3 text-base focus:outline-none focus:ring-2";
 const inputStyle = { background: "var(--card)", borderColor: "var(--border)", color: "var(--foreground)" };
 
 /**

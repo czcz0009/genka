@@ -1,7 +1,8 @@
 "use server";
 
-import { normalizeDisplayName, normalizeForDedupe } from "@/lib/normalize";
+import { normalizeDisplayName, normalizeForDedupe, validateNameLength } from "@/lib/normalize";
 import { requireAuthedClient } from "@/lib/supabase/requireAuthedClient";
+import { friendlyDbError } from "@/lib/supabase/friendlyDbError";
 
 /**
  * メニュー1つ分(メニュー名・売価・食材の行すべて)を1回の保存操作でまとめて
@@ -31,6 +32,14 @@ export interface SaveMenuInput {
   name: string;
   sellingPrice: number | null;
   lines: SaveMenuLineInput[];
+  /**
+   * この編集画面を開いた(＝最後にサーバーから読み込んだ)時点で使っていた既存食材のID一覧。
+   * 新規メニュー作成時は常に空配列でよい。
+   *
+   * 複数タブ・複数端末で同じメニューをほぼ同時に編集した場合の事故防止に使う
+   * (下のrowsToDelete算出部のコメント参照)。
+   */
+  knownIngredientIds?: string[];
 }
 
 export type SaveMenuResult = { success: true; menuId: string } | { success: false; error: string };
@@ -42,6 +51,11 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
 
   const name = input.name.trim();
   if (!name) return { success: false, error: "メニュー名を入力してください" };
+  const menuNameLengthError = validateNameLength(name, "メニュー名");
+  if (menuNameLengthError) return { success: false, error: menuNameLengthError };
+  if (input.sellingPrice != null && (!Number.isFinite(input.sellingPrice) || input.sellingPrice < 0)) {
+    return { success: false, error: "売価は0以上の数値で入力してください" };
+  }
   const normalizedName = normalizeForDedupe(name);
 
   let menuId = input.menuId;
@@ -83,7 +97,10 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
         .select("id")
         .single();
       if (error || !data) {
-        return { success: false, error: `メニューの作成に失敗しました: ${error?.message ?? "不明なエラー"}` };
+        return {
+          success: false,
+          error: `メニューの作成に失敗しました: ${friendlyDbError(error, "同じ名前のメニューがすでに登録されています")}`,
+        };
       }
       menuId = data.id;
     }
@@ -109,6 +126,8 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
       if (!line.newIngredient) return { success: false, error: "食材を選ぶか、新しい食材を入力してください" };
       const ingName = line.newIngredient.name.trim();
       if (!ingName) return { success: false, error: "食材名を入力してください" };
+      const ingNameLengthError = validateNameLength(ingName, "食材名");
+      if (ingNameLengthError) return { success: false, error: ingNameLengthError };
       if (!line.newIngredient.unit.trim()) return { success: false, error: "食材の単位を入力してください" };
       if (!Number.isFinite(line.newIngredient.purchasePrice) || line.newIngredient.purchasePrice < 0) {
         return { success: false, error: "仕入単価は0以上の数値で入力してください" };
@@ -145,7 +164,10 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
           .select("id")
           .single();
         if (createErr || !created) {
-          return { success: false, error: `食材の登録に失敗しました: ${createErr?.message ?? "不明なエラー"}` };
+          return {
+            success: false,
+            error: `食材の登録に失敗しました: ${friendlyDbError(createErr, "同じ名前の食材がすでに登録されています")}`,
+          };
         }
         ingredientId = created.id;
         await supabase
@@ -169,12 +191,50 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
     }
   }
 
-  // 編集前は登録されていたが、今回の保存で画面上から削除された食材行を消す
-  const rowsToDelete = (existingRows ?? []).filter((r) => !keptIngredientIds.has(r.ingredient_id)).map((r) => r.id);
+  // 編集前は登録されていたが、今回の保存で画面上から削除された食材行を消す。
+  //
+  // 注意(複数タブ・複数端末での同時編集事故の防止): ここでの「編集前」は
+  // 「保存ボタンを押した今、DBから読み直した内容」(=existingRows)ではなく、
+  // 「この編集画面を開いた時点でこのタブが実際に見ていた内容」(=knownIngredientIds)を
+  // 基準にする。そうしないと、例えば別のタブが先に食材Yを追加保存していた場合、
+  // このタブは「Yを見たことも選んだこともない」のに「今回の保存でYを外した」と誤解され、
+  // 何のエラーも警告もなくYの行が削除されてしまう(実際に発生した不具合)。
+  // knownIngredientIdsが渡されていない(=互換性のため、または新規作成)場合のみ、
+  // 従来通りexistingRows基準で削除する。
+  const knownIds = input.knownIngredientIds;
+  const rowsToDelete = (existingRows ?? [])
+    .filter((r) => !keptIngredientIds.has(r.ingredient_id))
+    .filter((r) => knownIds == null || knownIds.includes(r.ingredient_id))
+    .map((r) => r.id);
   if (rowsToDelete.length > 0) {
     const { error: deleteError } = await supabase.from("menu_ingredients").delete().in("id", rowsToDelete);
     if (deleteError) return { success: false, error: `不要な食材の削除に失敗しました: ${deleteError.message}` };
   }
 
   return { success: true, menuId };
+}
+
+export interface DeleteMenuInput {
+  storeId: string;
+  menuId: string;
+}
+
+export type DeleteMenuResult = { success: true } | { success: false; error: string };
+
+/**
+ * メニューを1件削除する。
+ *
+ * menu_ingredients・menu_sales はどちらも menus への外部キーに
+ * on delete cascade が設定されている(0001_init.sql)ため、このメニューの
+ * レシピ行・販売実績もあわせて自動的に削除される。取り消せない操作のため、
+ * 呼び出し側(MenusList.tsx)で確認ダイアログを挟んでから呼ぶこと。
+ */
+export async function deleteMenu(input: DeleteMenuInput): Promise<DeleteMenuResult> {
+  const ctx = await requireAuthedClient();
+  if ("error" in ctx) return { success: false, error: ctx.error };
+  const { supabase } = ctx;
+
+  const { error } = await supabase.from("menus").delete().eq("id", input.menuId).eq("store_id", input.storeId);
+  if (error) return { success: false, error: `メニューの削除に失敗しました: ${error.message}` };
+  return { success: true };
 }

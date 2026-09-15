@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { calcCostRate, calcRequiredSellingPrice, calcEffectiveUnitPrice } from "@/lib/costCalc";
-import { normalizeForDedupe } from "@/lib/normalize.ts";
+import { normalizeForDedupe, MAX_NAME_LENGTH } from "@/lib/normalize.ts";
 import { ingredientPriceTaxModeLabel, type IngredientPriceTaxMode } from "@/lib/taxMode.ts";
 import { saveMenuWithIngredients, type SaveMenuLineInput } from "./actions.ts";
+import { ActionErrorMessage } from "@/components/ActionErrorMessage.tsx";
 
 export interface IngredientOption {
   id: string;
@@ -87,7 +88,10 @@ const inputStyle: React.CSSProperties = {
   fontFamily: "var(--font-noto-sans-jp)",
 };
 
-const INPUT_CLASS = "rounded border px-4 py-3 text-base focus:outline-none focus:ring-2";
+// w-full: 配布前QAで発見。入力欄に幅を明示しないと、狭いflexの列(単位・仕入れ価格等)の
+// 中でブラウザ既定の内容幅が優先され、スマホ幅(360px)で入力欄が親要素の外にはみ出して
+// 見えなくなる/操作できなくなる不具合があったため、常に親の幅いっぱいに広げる。
+const INPUT_CLASS = "w-full rounded border px-4 py-3 text-base focus:outline-none focus:ring-2";
 
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
@@ -191,6 +195,10 @@ export function MenuEditor({
       setError("メニュー名を入力してください");
       return;
     }
+    if (sellingPriceNumber != null && (!Number.isFinite(sellingPriceNumber) || sellingPriceNumber < 0)) {
+      setError("売価は0以上の数値で入力してください");
+      return;
+    }
     setSaving(mode);
     const lineInputs: SaveMenuLineInput[] = lines.map((l) => ({
       quantity: Number(l.quantity),
@@ -212,6 +220,12 @@ export function MenuEditor({
       name,
       sellingPrice: sellingPriceNumber,
       lines: lineInputs,
+      // この画面を開いた(＝最後にサーバーから読み込んだ)時点で使っていた既存食材のID一覧。
+      // 別のタブ等で先に保存されて追加された食材行を、こちらの保存時に「知らずに削除して
+      // しまう」事故を防ぐために使う(詳細は saveMenuWithIngredients 側のコメント参照)。
+      knownIngredientIds: initialLines
+        .filter((l): l is LocalLine & { source: { type: "existing"; ingredientId: string } } => l.source.type === "existing")
+        .map((l) => l.source.ingredientId),
     });
     setSaving(null);
     if (!result.success) {
@@ -235,6 +249,7 @@ export function MenuEditor({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="例: 生姜焼き定食"
+          maxLength={MAX_NAME_LENGTH}
           className={INPUT_CLASS}
           style={inputStyle}
         />
@@ -319,8 +334,8 @@ export function MenuEditor({
                   className="flex items-center justify-between gap-3 rounded border px-4 py-3"
                   style={{ borderColor: "var(--border)", background: "var(--card)" }}
                 >
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-base font-medium" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <span className="break-words text-base font-medium" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
                       {l.ingredientName}
                     </span>
                     <span className="font-mono text-sm" style={{ color: "var(--muted-foreground)" }}>
@@ -355,11 +370,7 @@ export function MenuEditor({
         )}
       </div>
 
-      {error && (
-        <p className="text-sm" style={{ color: "var(--status-danger)" }}>
-          {error}
-        </p>
-      )}
+      {error && <ActionErrorMessage error={error} />}
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <button
@@ -726,6 +737,7 @@ function IngredientLineForm({
               onFocus={handleNameFocus}
               onBlur={handleNameBlur}
               placeholder="例: 豚肉(クリックすると候補が出ます)"
+              maxLength={MAX_NAME_LENGTH}
               className={INPUT_CLASS}
               style={inputStyle}
             />

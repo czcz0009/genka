@@ -187,7 +187,9 @@ export function Sidebar({ storeName }: { storeName: string }) {
         <button
           onClick={() => setMobileOpen(true)}
           aria-label="メニューを開く"
-          className="-ml-1 flex size-9 items-center justify-center rounded"
+          // size-11(44x44px): 配布前QAで発見。以前はsize-9(36x36px)でモバイル唯一の
+          // ナビゲーション入口としてはタップ領域が小さすぎたため、推奨タップサイズに広げる。
+          className="-ml-2 flex size-11 items-center justify-center rounded"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="size-5">
             <line x1="3" y1="6" x2="21" y2="6" />

@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { dbErrorMessage } from "@/lib/supabase/friendlyDbError";
 import type { ChikusanItemCode } from "@/lib/marketPrices/livestock/chikusanColumns";
 
 export type SaveLinkResult = { success: true } | { success: false; error: string };
@@ -24,7 +25,7 @@ export async function saveIngredientMarketLink(input: {
     { ingredient_id: input.ingredientId, source: "chikusan", item_code: input.itemCode },
     { onConflict: "ingredient_id,source" },
   );
-  if (error) return { success: false, error: `保存に失敗しました: ${error.message}` };
+  if (error) return { success: false, error: dbErrorMessage("保存", error) };
   return { success: true };
 }
 
@@ -41,6 +42,6 @@ export async function clearIngredientMarketLink(input: { ingredientId: string })
     .delete()
     .eq("ingredient_id", input.ingredientId)
     .eq("source", "chikusan");
-  if (error) return { success: false, error: `解除に失敗しました: ${error.message}` };
+  if (error) return { success: false, error: dbErrorMessage("解除", error) };
   return { success: true };
 }

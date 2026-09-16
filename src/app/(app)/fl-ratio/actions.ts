@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { dbErrorMessage } from "@/lib/supabase/friendlyDbError";
 import { monthToPeriod } from "@/lib/period/month";
 import type { FixedCostType } from "@/lib/flRatio";
 
@@ -39,6 +40,6 @@ export async function saveFixedCost(input: SaveFixedCostInput): Promise<SaveFixe
     },
     { onConflict: "store_id,cost_type,period_start" },
   );
-  if (error) return { success: false, error: `固定費の保存に失敗しました: ${error.message}` };
+  if (error) return { success: false, error: dbErrorMessage("固定費の保存", error) };
   return { success: true };
 }

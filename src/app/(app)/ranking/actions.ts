@@ -4,6 +4,7 @@ import { monthToPeriod } from "@/lib/period/month";
 import { normalizeForDedupe } from "@/lib/normalize";
 import { applySalesMapping, buildSalesImportPlan, type SalesFinalMapping } from "@/lib/salesImport/applySalesMapping";
 import { requireAuthedClient } from "@/lib/supabase/requireAuthedClient";
+import { dbErrorMessage } from "@/lib/supabase/friendlyDbError";
 
 export interface SaveManualSalesInput {
   storeId: string;
@@ -34,7 +35,7 @@ export async function saveManualSales(input: SaveManualSalesInput): Promise<Save
   if (rows.length === 0) return { success: true, savedCount: 0, skippedMenuNames: [] };
 
   const { error } = await supabase.from("menu_sales").upsert(rows, { onConflict: "menu_id,period_start,period_end" });
-  if (error) return { success: false, error: `販売数量の保存に失敗しました: ${error.message}` };
+  if (error) return { success: false, error: dbErrorMessage("販売数量の保存", error) };
 
   return { success: true, savedCount: rows.length, skippedMenuNames: [] };
 }
@@ -65,7 +66,7 @@ export async function saveSalesImportPlan(input: SaveSalesImportInput): Promise<
     .from("menus")
     .select("id, normalized_name")
     .eq("store_id", input.storeId);
-  if (menusError) return { success: false, error: `メニューの取得に失敗しました: ${menusError.message}` };
+  if (menusError) return { success: false, error: dbErrorMessage("メニューの取得", menusError) };
 
   const menuIdByNormalizedName = new Map((menus ?? []).map((m) => [m.normalized_name, m.id]));
   const { start, end } = monthToPeriod(input.month);
@@ -92,7 +93,7 @@ export async function saveSalesImportPlan(input: SaveSalesImportInput): Promise<
     const { error } = await supabase
       .from("menu_sales")
       .upsert(salesRows, { onConflict: "menu_id,period_start,period_end" });
-    if (error) return { success: false, error: `販売数量の保存に失敗しました: ${error.message}` };
+    if (error) return { success: false, error: dbErrorMessage("販売数量の保存", error) };
   }
 
   return { success: true, savedCount: salesRows.length, skippedMenuNames };

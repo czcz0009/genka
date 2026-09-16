@@ -2,7 +2,7 @@
 
 import { normalizeDisplayName, normalizeForDedupe, validateNameLength } from "@/lib/normalize";
 import { requireAuthedClient } from "@/lib/supabase/requireAuthedClient";
-import { friendlyDbError } from "@/lib/supabase/friendlyDbError";
+import { friendlyDbError, dbErrorMessage } from "@/lib/supabase/friendlyDbError";
 
 /**
  * メニュー1つ分(メニュー名・売価・食材の行すべて)を1回の保存操作でまとめて
@@ -71,7 +71,7 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
       .update({ name: normalizeDisplayName(name), normalized_name: normalizedName, selling_price: input.sellingPrice })
       .eq("id", menuId)
       .eq("store_id", input.storeId);
-    if (error) return { success: false, error: `メニューの更新に失敗しました: ${error.message}` };
+    if (error) return { success: false, error: dbErrorMessage("メニューの更新", error) };
   } else {
     // 同じ名前のメニューが既にあれば、新規作成せずそれを使う(①のCSV取り込みと同じ重複防止設計)
     const { data: existing, error: existingError } = await supabase
@@ -80,7 +80,7 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
       .eq("store_id", input.storeId)
       .eq("normalized_name", normalizedName)
       .maybeSingle();
-    if (existingError) return { success: false, error: `確認に失敗しました: ${existingError.message}` };
+    if (existingError) return { success: false, error: dbErrorMessage("確認", existingError) };
 
     if (existing) {
       menuId = existing.id;
@@ -144,7 +144,7 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
         .eq("store_id", input.storeId)
         .eq("normalized_name", ingNormalized)
         .maybeSingle();
-      if (existingIngErr) return { success: false, error: `確認に失敗しました: ${existingIngErr.message}` };
+      if (existingIngErr) return { success: false, error: dbErrorMessage("確認", existingIngErr) };
 
       if (existingIngredient) {
         ingredientId = existingIngredient.id;
@@ -187,7 +187,7 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
         { onConflict: "menu_id,ingredient_id" },
       );
     if (upsertError) {
-      return { success: false, error: `レシピへの追加に失敗しました: ${upsertError.message}` };
+      return { success: false, error: dbErrorMessage("レシピへの追加", upsertError) };
     }
   }
 
@@ -208,7 +208,7 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
     .map((r) => r.id);
   if (rowsToDelete.length > 0) {
     const { error: deleteError } = await supabase.from("menu_ingredients").delete().in("id", rowsToDelete);
-    if (deleteError) return { success: false, error: `不要な食材の削除に失敗しました: ${deleteError.message}` };
+    if (deleteError) return { success: false, error: dbErrorMessage("不要な食材の削除", deleteError) };
   }
 
   return { success: true, menuId };
@@ -235,6 +235,6 @@ export async function deleteMenu(input: DeleteMenuInput): Promise<DeleteMenuResu
   const { supabase } = ctx;
 
   const { error } = await supabase.from("menus").delete().eq("id", input.menuId).eq("store_id", input.storeId);
-  if (error) return { success: false, error: `メニューの削除に失敗しました: ${error.message}` };
+  if (error) return { success: false, error: dbErrorMessage("メニューの削除", error) };
   return { success: true };
 }

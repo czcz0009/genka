@@ -2,6 +2,7 @@
 
 import { monthToPeriod } from "@/lib/period/month";
 import { requireAuthedClient } from "@/lib/supabase/requireAuthedClient";
+import { dbErrorMessage } from "@/lib/supabase/friendlyDbError";
 import type { IngredientPriceTaxMode } from "@/lib/taxMode.ts";
 
 /**
@@ -50,7 +51,7 @@ export async function saveStoreSettings(input: SaveStoreSettingsInput): Promise<
       ingredient_price_tax_mode: input.ingredientPriceTaxMode,
     })
     .eq("id", input.storeId);
-  if (storeError) return { success: false, error: `店舗情報の保存に失敗しました: ${storeError.message}` };
+  if (storeError) return { success: false, error: dbErrorMessage("店舗情報の保存", storeError) };
 
   const { start } = monthToPeriod(input.month);
 
@@ -62,7 +63,7 @@ export async function saveStoreSettings(input: SaveStoreSettingsInput): Promise<
       { store_id: input.storeId, cost_type: "rent", amount: input.rentAmount, period_start: start, period_end: null },
       { onConflict: "store_id,cost_type,period_start" },
     );
-    if (error) return { success: false, error: `家賃の保存に失敗しました: ${error.message}` };
+    if (error) return { success: false, error: dbErrorMessage("家賃の保存", error) };
   }
 
   return { success: true };

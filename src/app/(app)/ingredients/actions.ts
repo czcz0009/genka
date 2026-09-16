@@ -2,7 +2,7 @@
 
 import { normalizeDisplayName, normalizeForDedupe, validateNameLength } from "@/lib/normalize";
 import { requireAuthedClient } from "@/lib/supabase/requireAuthedClient";
-import { friendlyDbError } from "@/lib/supabase/friendlyDbError";
+import { friendlyDbError, dbErrorMessage } from "@/lib/supabase/friendlyDbError";
 
 /**
  * 食材の単独登録・編集(メニュー登録画面を経由しない、食材だけの追加・編集)。
@@ -63,7 +63,7 @@ export async function createIngredient(input: CreateIngredientInput): Promise<Cr
     .eq("store_id", input.storeId)
     .eq("normalized_name", normalizedName)
     .maybeSingle();
-  if (existingErr) return { success: false, error: `確認に失敗しました: ${existingErr.message}` };
+  if (existingErr) return { success: false, error: dbErrorMessage("確認", existingErr) };
   if (existing) return { success: false, error: "同じ名前の食材がすでに登録されています" };
 
   const nowIso = new Date().toISOString();
@@ -139,7 +139,7 @@ export async function updateIngredient(input: UpdateIngredientInput): Promise<Up
     .eq("normalized_name", normalizedName)
     .neq("id", input.ingredientId)
     .maybeSingle();
-  if (conflictErr) return { success: false, error: `確認に失敗しました: ${conflictErr.message}` };
+  if (conflictErr) return { success: false, error: dbErrorMessage("確認", conflictErr) };
   if (conflict) return { success: false, error: "同じ名前の食材が他に登録されています" };
 
   const { data: current, error: currentErr } = await supabase
@@ -147,7 +147,7 @@ export async function updateIngredient(input: UpdateIngredientInput): Promise<Up
     .select("current_purchase_price")
     .eq("id", input.ingredientId)
     .single();
-  if (currentErr) return { success: false, error: `確認に失敗しました: ${currentErr.message}` };
+  if (currentErr) return { success: false, error: dbErrorMessage("確認", currentErr) };
 
   const priceChanged = current.current_purchase_price !== input.purchasePrice;
   const nowIso = new Date().toISOString();
@@ -206,7 +206,7 @@ export async function deleteIngredient(input: DeleteIngredientInput): Promise<De
     .from("menu_ingredients")
     .select("menus(name)")
     .eq("ingredient_id", input.ingredientId);
-  if (usedInErr) return { success: false, error: `確認に失敗しました: ${usedInErr.message}` };
+  if (usedInErr) return { success: false, error: dbErrorMessage("確認", usedInErr) };
 
   if (usedIn && usedIn.length > 0) {
     const menuNames = Array.from(
@@ -231,6 +231,6 @@ export async function deleteIngredient(input: DeleteIngredientInput): Promise<De
     .delete()
     .eq("id", input.ingredientId)
     .eq("store_id", input.storeId);
-  if (error) return { success: false, error: `食材の削除に失敗しました: ${error.message}` };
+  if (error) return { success: false, error: dbErrorMessage("食材の削除", error) };
   return { success: true };
 }

@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { dbErrorMessage } from "@/lib/supabase/friendlyDbError";
 import type { ImportPlan } from "@/lib/mapping/applyMapping";
 import type { FinalMapping } from "@/lib/mapping/applyMapping";
 import { FIELD_DEFS } from "@/lib/mapping/fields";
@@ -46,7 +47,7 @@ export async function saveImportPlan(input: SaveImportPlanInput): Promise<SaveIm
     .select("id, normalized_name, current_purchase_price")
     .eq("store_id", storeId);
   if (existingIngredientsError) {
-    return { success: false, error: `食材の取得に失敗しました: ${existingIngredientsError.message}` };
+    return { success: false, error: dbErrorMessage("食材の取得", existingIngredientsError) };
   }
   const existingIngredientByName = new Map(
     (existingIngredients ?? []).map((i) => [i.normalized_name, i]),
@@ -101,7 +102,7 @@ export async function saveImportPlan(input: SaveImportPlanInput): Promise<SaveIm
     .select("id, normalized_name, selling_price")
     .eq("store_id", storeId);
   if (existingMenusError) {
-    return { success: false, error: `メニューの取得に失敗しました: ${existingMenusError.message}` };
+    return { success: false, error: dbErrorMessage("メニューの取得", existingMenusError) };
   }
   const existingMenuByName = new Map((existingMenus ?? []).map((m) => [m.normalized_name, m]));
 
@@ -141,7 +142,7 @@ export async function saveImportPlan(input: SaveImportPlanInput): Promise<SaveIm
       .from("menu_ingredients")
       .upsert(menuIngredientRows, { onConflict: "menu_id,ingredient_id" });
     if (menuIngredientError) {
-      return { success: false, error: `レシピ明細の保存に失敗しました: ${menuIngredientError.message}` };
+      return { success: false, error: dbErrorMessage("レシピ明細の保存", menuIngredientError) };
     }
   }
 

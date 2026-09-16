@@ -16,5 +16,19 @@ export function friendlyDbError(
   duplicateMessage: string,
 ): string {
   if (error?.code === "23505") return duplicateMessage;
-  return error?.message ?? "不明なエラー";
+  if (error) console.error("[db error]", error);
+  return "処理に失敗しました。時間をおいて再度お試しください。";
+}
+
+/**
+ * DBエラーをそのままユーザーに見せず、サーバーログにだけ詳細を残す。
+ *
+ * 背景(セキュリティ監査で発見): 「確認に失敗しました: ${error.message}」のように
+ * Postgresの生のエラーメッセージ(テーブル名・制約名等の内部情報を含みうる)を
+ * そのまま画面に表示していた箇所が複数あった。ユーザー向けには操作名だけを含む
+ * 定型文を返し、詳細はサーバーコンソール(Vercelのログ)にのみ出力する。
+ */
+export function dbErrorMessage(action: string, error: unknown): string {
+  console.error(`[db error] ${action}`, error);
+  return `${action}に失敗しました。時間をおいて再度お試しください。`;
 }

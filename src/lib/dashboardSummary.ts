@@ -137,9 +137,9 @@ export const getCurrentFlRate = cache(async function getCurrentFlRate(
   });
 
   const fixedCostRows: FixedCostRow[] = fixedCosts.map((f) => ({
-    // store_fixed_costs.cost_typeはDBのcheck制約で'rent'|'labor'のみ許可されている
-    // (0005_ranking_and_fl_ratio.sql)。RPCのJSON経由では型情報が失われるため、
-    // ここで明示的に絞り込む。
+    // store_fixed_costs.cost_typeはDBのcheck制約で'rent'|'labor'|'loss'のみ許可されている
+    // (0005_ranking_and_fl_ratio.sql、'loss'は0014_loss_discount_fixed_cost.sqlで追加)。
+    // RPCのJSON経由では型情報が失われるため、ここで明示的に絞り込む。
     costType: f.costType as FixedCostType,
     amount: f.amount,
     periodStart: f.periodStart,
@@ -148,7 +148,8 @@ export const getCurrentFlRate = cache(async function getCurrentFlRate(
   const { totalSales, totalFoodCost } = aggregateSalesAndFoodCost(summaries);
   const laborCost = selectApplicableFixedCost(fixedCostRows, "labor", period);
   const rentCost = selectApplicableFixedCost(fixedCostRows, "rent", period);
-  const { flRate } = calcFlRatios({ totalSales, totalFoodCost, laborCost, rentCost });
+  // ホーム画面のFL比率サマリーでは実質原価率は使わないため、ロス・値引き額は渡さない。
+  const { flRate } = calcFlRatios({ totalSales, totalFoodCost, laborCost, rentCost, lossAmount: null });
   return flRate;
 });
 

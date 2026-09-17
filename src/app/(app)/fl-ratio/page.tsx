@@ -98,9 +98,9 @@ export default async function FlRatioPage({
     quantity: mi.quantity,
   }));
   const fixedCostRows: FixedCostRow[] = (storeData?.fixedCosts ?? []).map((f) => ({
-    // store_fixed_costs.cost_typeはDBのcheck制約で'rent'|'labor'のみ許可されている
-    // (0005_ranking_and_fl_ratio.sql)。RPCのJSON経由では型情報が失われるため、
-    // ここで明示的に絞り込む。
+    // store_fixed_costs.cost_typeはDBのcheck制約で'rent'|'labor'|'loss'のみ許可されている
+    // (0005_ranking_and_fl_ratio.sql、'loss'は0014_loss_discount_fixed_cost.sqlで追加)。
+    // RPCのJSON経由では型情報が失われるため、ここで明示的に絞り込む。
     costType: f.costType as FixedCostType,
     amount: f.amount,
     periodStart: f.periodStart,
@@ -131,15 +131,20 @@ export default async function FlRatioPage({
     const { totalSales, totalFoodCost } = aggregateSalesAndFoodCost(summaries);
     const laborCost = selectApplicableFixedCost(fixedCostRows, "labor", period);
     const rentCost = selectApplicableFixedCost(fixedCostRows, "rent", period);
-    const ratios = calcFlRatios({ totalSales, totalFoodCost, laborCost, rentCost });
+    const lossAmount = selectApplicableFixedCost(fixedCostRows, "loss", period);
+    const ratios = calcFlRatios({ totalSales, totalFoodCost, laborCost, rentCost, lossAmount });
 
-    return { month: m, label: formatMonthLabel(m), totalSales, laborCost, rentCost, ...ratios };
+    return { month: m, label: formatMonthLabel(m), totalSales, laborCost, rentCost, lossAmount, ...ratios };
   });
 
   const current = trend[trend.length - 1];
   const currentPeriod = monthToPeriod(month);
   const currentLabor = selectApplicableFixedCost(fixedCostRows, "labor", currentPeriod);
   const currentRent = selectApplicableFixedCost(fixedCostRows, "rent", currentPeriod);
+  const currentLoss = selectApplicableFixedCost(fixedCostRows, "loss", currentPeriod);
+  // 売上データ(CSV取り込み・手動登録のどちらも含む)が1件も無い店舗では、
+  // 実質原価率は「大づかみに見せる」という目的自体が成立しないため、入力欄ごと隠す。
+  const hasSalesData = (storeData?.sales?.length ?? 0) > 0;
 
   return (
     <div className="max-w-4xl space-y-6 p-6 md:p-8">
@@ -164,6 +169,8 @@ export default async function FlRatioPage({
         trend={trend}
         currentLabor={currentLabor}
         currentRent={currentRent}
+        currentLoss={currentLoss}
+        hasSalesData={hasSalesData}
       />
     </div>
   );

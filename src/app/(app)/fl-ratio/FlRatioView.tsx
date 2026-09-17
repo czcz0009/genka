@@ -23,6 +23,8 @@ export function FlRatioView({
   trend,
   currentLabor,
   currentRent,
+  currentLoss,
+  hasSalesData,
 }: {
   storeId: string;
   month: string;
@@ -30,6 +32,9 @@ export function FlRatioView({
   trend: TrendPoint[];
   currentLabor: number | null;
   currentRent: number | null;
+  currentLoss: number | null;
+  /** 売上データ(CSV取り込み・手動登録)が1件もない店舗ではロス・値引き機能自体を隠す */
+  hasSalesData: boolean;
 }) {
   const router = useRouter();
 
@@ -56,7 +61,26 @@ export function FlRatioView({
         FL比率 = (食材原価 + 人件費)÷ 売上。FLR比率 = そこにさらに家賃を加えたものの割合です。
       </p>
 
-      <FixedCostEntry storeId={storeId} month={month} currentLabor={currentLabor} currentRent={currentRent} />
+      {hasSalesData && (
+        <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-2 gap-3">
+            <RatioCard label="理論原価率(レシピ通り)" value={formatPercent(current.foodCostRate)} />
+            <RatioCard label="実質原価率(ロス・値引き込み)" value={formatPercent(current.actualCostRate)} />
+          </div>
+          <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+            実質原価率 = 理論原価率 +(ロス・値引き額 ÷ 売上)× 100 の大づかみな概算です。正常/注意/危険の色分けはせず、参考値として表示しています。
+          </p>
+        </div>
+      )}
+
+      <FixedCostEntry
+        storeId={storeId}
+        month={month}
+        currentLabor={currentLabor}
+        currentRent={currentRent}
+        currentLoss={currentLoss}
+        showLoss={hasSalesData}
+      />
 
       <section>
         <h2 className="mb-2 text-sm font-semibold" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
@@ -89,11 +113,16 @@ function FixedCostEntry({
   month,
   currentLabor,
   currentRent,
+  currentLoss,
+  showLoss,
 }: {
   storeId: string;
   month: string;
   currentLabor: number | null;
   currentRent: number | null;
+  currentLoss: number | null;
+  /** 売上データが無い店舗ではロス・値引き額の入力欄自体を出さない */
+  showLoss: boolean;
 }) {
   const router = useRouter();
   // 未設定(初めてこの画面を見る等)なら最初から開いておき、設定済みなら
@@ -101,11 +130,12 @@ function FixedCostEntry({
   const [open, setOpen] = useState(currentLabor == null && currentRent == null);
   const [labor, setLabor] = useState(currentLabor != null ? String(currentLabor) : "");
   const [rent, setRent] = useState(currentRent != null ? String(currentRent) : "");
-  const [saving, setSaving] = useState<"labor" | "rent" | null>(null);
+  const [loss, setLoss] = useState(currentLoss != null ? String(currentLoss) : "");
+  const [saving, setSaving] = useState<"labor" | "rent" | "loss" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSave(costType: "labor" | "rent") {
-    const amount = Number(costType === "labor" ? labor : rent);
+  async function handleSave(costType: "labor" | "rent" | "loss") {
+    const amount = Number(costType === "labor" ? labor : costType === "rent" ? rent : loss);
     if (!Number.isFinite(amount) || amount < 0) {
       setError("0以上の数値で入力してください");
       return;
@@ -197,8 +227,36 @@ function FixedCostEntry({
           </div>
         </label>
       </div>
+      {showLoss && (
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+          <label className="flex flex-1 flex-col gap-2 text-sm sm:flex-row sm:items-center" style={{ color: "var(--foreground)" }}>
+            <span className="shrink-0">ロス・値引き額(月次・任意)</span>
+            <div className="flex flex-1 items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                value={loss}
+                onChange={(e) => setLoss(e.target.value)}
+                placeholder="例: 50000"
+                className="w-full min-w-0 rounded border px-3 py-2 font-mono text-sm"
+                style={{ background: "var(--background)", borderColor: "var(--border)", color: "var(--foreground)" }}
+              />
+              <span className="shrink-0">円</span>
+              <button
+                onClick={() => handleSave("loss")}
+                disabled={saving === "loss"}
+                className="shrink-0 rounded border px-3 py-2 text-sm disabled:opacity-40"
+                style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+              >
+                {saving === "loss" ? "保存中…" : "保存"}
+              </button>
+            </div>
+          </label>
+        </div>
+      )}
       <p className="mt-2 text-xs" style={{ color: "var(--muted-foreground)" }}>
-        家賃は一度登録すれば、金額が変わるまで翌月以降にも引き継がれます。人件費は月ごとに入力してください。今月分だけでよければ、
+        家賃は一度登録すれば、金額が変わるまで翌月以降にも引き継がれます。人件費{showLoss && "・ロス/値引き額"}
+        は月ごとに入力してください。家賃を今月分だけでよければ、
         <Link href="/settings" prefetch={false} className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
           店舗設定
         </Link>

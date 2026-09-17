@@ -9,7 +9,9 @@ export interface TrendPoint {
   totalSales: number;
   laborCost: number | null;
   rentCost: number | null;
+  lossAmount: number | null;
   foodCostRate: number | null;
+  actualCostRate: number | null;
   laborCostRate: number | null;
   flRate: number | null;
   flrRate: number | null;

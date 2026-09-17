@@ -63,7 +63,13 @@ test("aggregateSalesAndFoodCost: 売価×数量の合計と原価×数量の合�
 });
 
 test("calcFlRatios: F比率・L比率・FL比率を個別に算出する", () => {
-  const result = calcFlRatios({ totalSales: 1000000, totalFoodCost: 300000, laborCost: 300000, rentCost: null });
+  const result = calcFlRatios({
+    totalSales: 1000000,
+    totalFoodCost: 300000,
+    laborCost: 300000,
+    rentCost: null,
+    lossAmount: null,
+  });
   assert.equal(result.foodCostRate, 30);
   assert.equal(result.laborCostRate, 30);
   assert.equal(result.flRate, 60);
@@ -77,31 +83,89 @@ test("calcFlRatios: 家賃が登録されていればFLR比率も算出する", 
     totalFoodCost: 300000,
     laborCost: 300000,
     rentCost: 100000,
+    lossAmount: null,
   });
   assert.equal(result.flrRate, 70);
   assert.equal(result.flrSeverity, "normal"); // ちょうど70%(目安以下)
 });
 
 test("calcFlRatios: 目安超過は「注意」、大きく超えると「危険」になる", () => {
-  const caution = calcFlRatios({ totalSales: 1000000, totalFoodCost: 350000, laborCost: 320000, rentCost: null });
+  const caution = calcFlRatios({
+    totalSales: 1000000,
+    totalFoodCost: 350000,
+    laborCost: 320000,
+    rentCost: null,
+    lossAmount: null,
+  });
   assert.equal(caution.flRate, 67); // 60%より上、70%以下
   assert.equal(caution.flSeverity, "caution");
 
-  const danger = calcFlRatios({ totalSales: 1000000, totalFoodCost: 400000, laborCost: 400000, rentCost: null });
+  const danger = calcFlRatios({
+    totalSales: 1000000,
+    totalFoodCost: 400000,
+    laborCost: 400000,
+    rentCost: null,
+    lossAmount: null,
+  });
   assert.equal(danger.flRate, 80); // 60+10=70を超える
   assert.equal(danger.flSeverity, "danger");
 });
 
 test("calcFlRatios: 人件費が未登録ならFL比率もnull(F比率だけは出す)", () => {
-  const result = calcFlRatios({ totalSales: 1000000, totalFoodCost: 300000, laborCost: null, rentCost: null });
+  const result = calcFlRatios({
+    totalSales: 1000000,
+    totalFoodCost: 300000,
+    laborCost: null,
+    rentCost: null,
+    lossAmount: null,
+  });
   assert.equal(result.foodCostRate, 30);
   assert.equal(result.flRate, null);
   assert.equal(result.flSeverity, null);
 });
 
 test("calcFlRatios: 売上0以下は全項目null(0除算を避ける)", () => {
-  const result = calcFlRatios({ totalSales: 0, totalFoodCost: 100, laborCost: 100, rentCost: 100 });
+  const result = calcFlRatios({ totalSales: 0, totalFoodCost: 100, laborCost: 100, rentCost: 100, lossAmount: 50 });
   assert.equal(result.foodCostRate, null);
+  assert.equal(result.actualCostRate, null);
   assert.equal(result.flRate, null);
   assert.equal(result.flrRate, null);
+});
+
+// ここから実質原価率(理論原価率+ロス・値引き額)のテスト。
+// 事前にMahiroさんに手計算で検算してもらった3ケース。
+test("calcFlRatios: ロス・値引き額を加味した実質原価率を算出する(①売上100万・理論30%・ロス5万→35%)", () => {
+  const result = calcFlRatios({
+    totalSales: 1000000,
+    totalFoodCost: 300000,
+    laborCost: null,
+    rentCost: null,
+    lossAmount: 50000,
+  });
+  assert.equal(result.foodCostRate, 30);
+  assert.equal(result.actualCostRate, 35); // 30 + 5万÷100万×100
+});
+
+test("calcFlRatios: ロス・値引き額が未入力(null)なら実質原価率は理論原価率と同じ(②30%→30%)", () => {
+  const result = calcFlRatios({
+    totalSales: 1000000,
+    totalFoodCost: 300000,
+    laborCost: null,
+    rentCost: null,
+    lossAmount: null,
+  });
+  assert.equal(result.foodCostRate, 30);
+  assert.equal(result.actualCostRate, 30);
+});
+
+test("calcFlRatios: 売上50万・理論40%・ロス10万→実質60%(③)", () => {
+  const result = calcFlRatios({
+    totalSales: 500000,
+    totalFoodCost: 200000,
+    laborCost: null,
+    rentCost: null,
+    lossAmount: 100000,
+  });
+  assert.equal(result.foodCostRate, 40);
+  assert.equal(result.actualCostRate, 60); // 40 + 10万÷50万×100
 });

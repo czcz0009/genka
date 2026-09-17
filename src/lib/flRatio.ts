@@ -7,7 +7,7 @@
  */
 import type { MenuCostSummary } from "./types.ts";
 
-export type FixedCostType = "rent" | "labor";
+export type FixedCostType = "rent" | "labor" | "loss";
 
 export interface FixedCostRow {
   costType: FixedCostType;
@@ -85,10 +85,19 @@ export interface FlRatioInput {
   laborCost: number | null;
   /** その期間に適用される家賃。未登録ならnull(FLRは計算しない)。 */
   rentCost: number | null;
+  /**
+   * その期間のロス・値引き額。未登録ならnull(=0円として扱い、実質原価率は
+   * 理論原価率と同じ値になる)。開業直後などレシピ通りの理論原価率と肌感覚の
+   * 差を大づかみに見せるための補助値で、複雑な按分計算はしない。
+   */
+  lossAmount: number | null;
 }
 
 export interface FlRatioResult {
+  /** 理論原価率(レシピ通りの原価率)。foodCostRateと同じ値。 */
   foodCostRate: number | null;
+  /** 実質原価率 ≒ 理論原価率 +(ロス・値引き額 ÷ 売上)× 100。単純な加算のみ。 */
+  actualCostRate: number | null;
   laborCostRate: number | null;
   flRate: number | null;
   flrRate: number | null;
@@ -97,10 +106,11 @@ export interface FlRatioResult {
 }
 
 export function calcFlRatios(input: FlRatioInput): FlRatioResult {
-  const { totalSales, totalFoodCost, laborCost, rentCost } = input;
+  const { totalSales, totalFoodCost, laborCost, rentCost, lossAmount } = input;
   if (totalSales <= 0) {
     return {
       foodCostRate: null,
+      actualCostRate: null,
       laborCostRate: null,
       flRate: null,
       flrRate: null,
@@ -110,6 +120,7 @@ export function calcFlRatios(input: FlRatioInput): FlRatioResult {
   }
 
   const foodCostRate = (totalFoodCost / totalSales) * 100;
+  const actualCostRate = foodCostRate + ((lossAmount ?? 0) / totalSales) * 100;
   const laborCostRate = laborCost != null ? (laborCost / totalSales) * 100 : null;
   const flRate = laborCost != null ? ((totalFoodCost + laborCost) / totalSales) * 100 : null;
   const flrRate =
@@ -117,6 +128,7 @@ export function calcFlRatios(input: FlRatioInput): FlRatioResult {
 
   return {
     foodCostRate,
+    actualCostRate,
     laborCostRate,
     flRate,
     flrRate,

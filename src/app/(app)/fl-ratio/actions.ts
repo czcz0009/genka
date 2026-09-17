@@ -16,7 +16,8 @@ export type SaveFixedCostResult = { success: true } | { success: false; error: s
 
 /**
  * 固定費(家賃・人件費)を保存する。
- * - labor(人件費): その月だけに適用される値として period_start/period_end を月初/月末で保存する。
+ * - labor(人件費)・loss(ロス・値引き額): その月だけに適用される値として
+ *   period_start/period_end を月初/月末で保存する。
  * - rent(家賃): 「その月から適用され、変更されるまで続く」値として period_end は null(継続中)にする。
  *   同じ月に対して再度保存すれば、その月の値を上書き更新するだけ(store_fixed_costsの
  *   unique(store_id, cost_type, period_start)により、月ごとに1行に定まる)。
@@ -36,7 +37,7 @@ export async function saveFixedCost(input: SaveFixedCostInput): Promise<SaveFixe
       cost_type: input.costType,
       amount: input.amount,
       period_start: start,
-      period_end: input.costType === "labor" ? end : null,
+      period_end: input.costType === "rent" ? null : end,
     },
     { onConflict: "store_id,cost_type,period_start" },
   );

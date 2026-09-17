@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { IngredientPriceTaxMode } from "@/lib/taxMode.ts";
 import { saveStoreSettings } from "./actions.ts";
 import { ActionErrorMessage } from "@/components/ActionErrorMessage.tsx";
@@ -18,21 +19,19 @@ export function SettingsForm({
   storeId,
   initialName,
   initialDefaultTargetCostRate,
-  initialRent,
+  currentRent,
   initialIngredientPriceTaxMode,
-  month,
 }: {
   storeId: string;
   initialName: string;
   initialDefaultTargetCostRate: number;
-  initialRent: number | null;
+  /** 現在の家賃(読み取り専用表示のみ。変更はFL比率画面で行う)。未登録ならnull。 */
+  currentRent: number | null;
   initialIngredientPriceTaxMode: IngredientPriceTaxMode;
-  month: string;
 }) {
   const router = useRouter();
   const [name, setName] = useState(initialName);
   const [targetCostRate, setTargetCostRate] = useState(String(initialDefaultTargetCostRate));
-  const [rent, setRent] = useState(initialRent != null ? String(initialRent) : "");
   const [taxMode, setTaxMode] = useState<IngredientPriceTaxMode>(initialIngredientPriceTaxMode);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,9 +55,7 @@ export function SettingsForm({
       storeId,
       name,
       defaultTargetCostRate: Number(targetCostRate),
-      rentAmount: rent.trim() ? Number(rent) : null,
       ingredientPriceTaxMode: taxMode,
-      month,
     });
     setSaving(false);
     if (!result.success) {
@@ -149,30 +146,21 @@ export function SettingsForm({
         <p className="mb-4 text-sm font-semibold" style={labelStyle}>
           家賃(月額)
         </p>
-        <label className="flex flex-col gap-2 text-base" style={labelStyle}>
-          家賃
-          <input
-            type="number"
-            min={0}
-            step="1"
-            inputMode="decimal"
-            value={rent}
-            onChange={(e) => setRent(e.target.value)}
-            placeholder="例: 180000(未入力なら変更しません)"
-            className={INPUT_CLASS + " font-mono"}
-            style={inputStyle}
-          />
-          <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-            一度設定すれば、金額を変えるまで翌月以降も引き継がれます。
-          </span>
-        </label>
         {/*
-          人件費は月によって金額が変わるため、「設定」に置くと当月分しか
-          触れないのに一度きりの設定のように見えて紛らわしい、という指摘を受け、
-          月ごとに入力するFL比率画面のみに一本化した(ここには置かない)。
+          以前はここに家賃の入力欄もあったが、人件費・ロス値引き額と入力場所が
+          分かれてしまい「どこで何を入力するか」が分かりにくい、という指摘を受け、
+          家賃も含めて月次の金額はすべてFL比率画面に一本化した。ここは現在値の
+          確認だけができる読み取り専用表示にする。
         */}
-        <p className="mt-4 text-xs" style={{ color: "var(--muted-foreground)" }}>
-          人件費は月ごとに金額が変わるため、ここではなく「FL比率」画面から月を選んで入力してください。
+        <p className="text-base" style={labelStyle}>
+          現在の家賃: <span className="font-mono font-semibold">{currentRent != null ? `¥${currentRent.toLocaleString()}` : "未設定"}</span>
+        </p>
+        <p className="mt-2 text-xs" style={{ color: "var(--muted-foreground)" }}>
+          家賃・人件費・ロス値引き額はすべて
+          <Link href="/fl-ratio" prefetch={false} className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
+            FL比率
+          </Link>
+          画面から入力・変更してください。
         </p>
       </div>
 

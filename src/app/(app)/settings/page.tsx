@@ -65,9 +65,8 @@ export default async function SettingsPage() {
         storeId={store.id}
         initialName={store.name}
         initialDefaultTargetCostRate={store.defaultTargetCostRate}
-        initialRent={currentRent}
+        currentRent={currentRent}
         initialIngredientPriceTaxMode={store.ingredientPriceTaxMode}
-        month={month}
       />
     </div>
   );

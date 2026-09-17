@@ -6,6 +6,7 @@ import { ingredientPriceTaxModeLabel, type IngredientPriceTaxMode } from "@/lib/
 import { MAX_NAME_LENGTH } from "@/lib/normalize";
 import { createIngredient, updateIngredient, deleteIngredient, type IngredientRow } from "./actions.ts";
 import { ActionErrorMessage } from "@/components/ActionErrorMessage.tsx";
+import { Modal } from "@/components/Modal.tsx";
 
 function formatUnitPrice(n: number): string {
   const rounded = Math.round(n * 100) / 100;
@@ -266,11 +267,7 @@ function AddIngredientForm({
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded border p-5" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-      <p className="text-base font-semibold" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
-        食材を追加
-      </p>
-
+    <div className="flex flex-col gap-4">
       <div className="flex gap-3">
         <label className="flex flex-1 flex-col gap-2 text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
           食材名
@@ -434,6 +431,7 @@ export function IngredientsView({
   const router = useRouter();
   const [ingredients, setIngredients] = useState<IngredientRow[]>(initialIngredients);
   const [query, setQuery] = useState("");
+  const [showAddModal, setShowAddModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   // 食材ごとの削除失敗メッセージ(「使用中のメニューがあるため削除できません」等)。
@@ -486,13 +484,19 @@ export function IngredientsView({
 
   return (
     <div className="flex flex-col gap-6">
-      <AddIngredientForm storeId={storeId} ingredientPriceTaxMode={ingredientPriceTaxMode} onAdded={handleAdded} />
-
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-medium" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
             登録済みの食材({ingredients.length}件)
           </p>
+          <button
+            type="button"
+            onClick={() => setShowAddModal(true)}
+            className="shrink-0 rounded px-4 py-2.5 text-sm font-bold transition-colors"
+            style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
+          >
+            ＋ 食材を追加
+          </button>
         </div>
 
         {ingredients.length > 0 && (
@@ -510,7 +514,7 @@ export function IngredientsView({
             className="rounded border border-dashed px-4 py-6 text-center text-sm"
             style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
           >
-            まだ食材が登録されていません。上のフォームから追加してください。
+            まだ食材が登録されていません。上の「＋ 食材を追加」ボタンから追加してください。
           </p>
         ) : filtered.length === 0 ? (
           <p className="rounded border border-dashed px-4 py-6 text-center text-sm" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
@@ -572,6 +576,12 @@ export function IngredientsView({
           </ul>
         )}
       </div>
+
+      {showAddModal && (
+        <Modal title="食材を追加" onClose={() => setShowAddModal(false)}>
+          <AddIngredientForm storeId={storeId} ingredientPriceTaxMode={ingredientPriceTaxMode} onAdded={handleAdded} />
+        </Modal>
+      )}
     </div>
   );
 }

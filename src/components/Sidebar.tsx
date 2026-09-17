@@ -37,16 +37,6 @@ function IconList({ className }: { className?: string }) {
   );
 }
 
-function IconUpload({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="17 8 12 3 7 8" />
-      <line x1="12" y1="3" x2="12" y2="15" />
-    </svg>
-  );
-}
-
 function IconBox({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -93,11 +83,14 @@ function IconSettings({ className }: { className?: string }) {
   );
 }
 
+// CSV取り込み(/import)はここには置かず、メニュー一覧画面内の導線からのみ
+// たどれるようにしている(メニュー登録という同じ目的の画面がサイドバーに
+// 複数並んで迷いやすい、という指摘への対応)。ルート自体は残っているので、
+// 直接アクセスやオンボーディングツアーからのリンクは引き続き機能する。
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "ダッシュボード", icon: IconGrid },
-  { href: "/menus", label: "原価計算", icon: IconList, tourId: "nav-menus" },
+  { href: "/menus", label: "メニュー一覧", icon: IconList, tourId: "nav-menus" },
   { href: "/ingredients", label: "食材", icon: IconBox },
-  { href: "/import", label: "CSV取り込み", icon: IconUpload },
   { href: "/ranking", label: "今見直すべきメニュー", icon: IconTrendingUp, tourId: "nav-ranking" },
   { href: "/fl-ratio", label: "FL比率", icon: IconActivity },
   { href: "/alerts", label: "仕入れ値アラート", icon: IconAlertTriangle, tourId: "nav-alerts" },

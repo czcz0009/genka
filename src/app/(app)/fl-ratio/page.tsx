@@ -18,6 +18,7 @@ import { monthToPeriod, currentMonthString, recentMonths, formatMonthLabel } fro
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
+import { HelpButton } from "@/components/HelpButton.tsx";
 import { FlRatioView } from "./FlRatioView.tsx";
 
 export const metadata: Metadata = {
@@ -77,7 +78,7 @@ export default async function FlRatioPage({
   if (menus.length === 0) {
     return (
       <div className="max-w-4xl space-y-6 p-6 md:p-8">
-        <PageHeader eyebrow="FL比率" title="FL比率・FLR比率" />
+        <PageHeader eyebrow="FL比率" title="FL比率・FLR比率" actions={<FlRatioHelpButton />} />
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           メニューを登録すると、F比率(食材原価)を含むFL比率がここに表示されます。
         </p>
@@ -151,6 +152,7 @@ export default async function FlRatioPage({
       <PageHeader
         eyebrow="FL比率"
         title="FL比率・FLR比率"
+        actions={<FlRatioHelpButton />}
         description={
           <>
             業界目安はFL比率{FL_BENCHMARK_PERCENT}%未満・FLR比率{FLR_BENCHMARK_PERCENT}
@@ -173,5 +175,23 @@ export default async function FlRatioPage({
         hasSalesData={hasSalesData}
       />
     </div>
+  );
+}
+
+/**
+ * 「そもそもFL比率・FLR比率とは何のための指標か」を説明するヘルプ。
+ * ページ上部に常時表示されている説明文(業界目安の数値・計算の注意点)とは
+ * 粒度を分け、こちらは原価率との違い・何のために見るのかに絞る。
+ */
+function FlRatioHelpButton() {
+  return (
+    <HelpButton title="FL比率・FLR比率とは">
+      <p>
+        原価率が「メニュー1品ごと」の値付けの目安なのに対し、FL比率・FLR比率は「お店全体」の経営が健全かどうかを見る指標です。
+      </p>
+      <p className="mt-3">
+        食材原価に人件費を加えたものがFL比率、そこにさらに家賃を加えたものがFLR比率です。業界の目安(FL比率60%未満・FLR比率70%未満)はあくまで一般的な水準で、業態によって適正範囲は大きく異なるため、自店の月ごとの推移を追うための参考値として使ってください。
+      </p>
+    </HelpButton>
   );
 }

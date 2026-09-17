@@ -7,6 +7,7 @@ import { computeStoreAlerts } from "@/lib/marketPrices/computeStoreAlerts";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
+import { HelpButton } from "@/components/HelpButton.tsx";
 import { AlertsView } from "./AlertsView.tsx";
 import { LivestockLinkSettings } from "./LivestockLinkSettings.tsx";
 import { IngredientOverview } from "./IngredientOverview.tsx";
@@ -50,7 +51,7 @@ export default async function AlertsPage() {
   if (menus.length === 0) {
     return (
       <div className="max-w-4xl space-y-6 p-6 md:p-8">
-        <PageHeader eyebrow="仕入れ値アラート" title="仕入れ値変動アラート" />
+        <PageHeader eyebrow="仕入れ値アラート" title="仕入れ値変動アラート" actions={<AlertsHelpButton />} />
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           メニューと食材を登録すると、市場価格の変動アラートがここに表示されます。電話・FAXでの仕入れなど、どんな仕入れ方法のお店でも、特別なシステム連携なしで使えます。
         </p>
@@ -92,6 +93,7 @@ export default async function AlertsPage() {
       <PageHeader
         eyebrow="仕入れ値アラート"
         title="仕入れ値変動アラート"
+        actions={<AlertsHelpButton />}
         description={
           <>
             農水省「青果物卸売市場調査(旬別結果)」「畜産物卸売価格の推移」の市場価格をもとに、市場価格の変動率がそのまま仕入単価に反映されたと仮定した場合の試算原価率を表示します。実際に仕入単価を変更した結果ではありません。電話・FAXでの仕入れなど、どんな仕入れ方法のお店でも使えます。特別なシステム連携は不要です。
@@ -125,5 +127,23 @@ export default async function AlertsPage() {
 
       <LivestockLinkSettings unlinkedIngredients={unlinkedIngredients} linkedIngredients={linkedIngredients} />
     </div>
+  );
+}
+
+/**
+ * 「そもそもこのアラートは何のためにあるか」を説明するヘルプ。
+ * ページ上部に常時表示されている説明文(データの出典・東京市場である旨など)とは
+ * 粒度を分け、こちらは目的(値上げの見落とし防止)に絞る。
+ */
+function AlertsHelpButton() {
+  return (
+    <HelpButton title="仕入れ値アラートとは">
+      <p>
+        野菜(青果物)や肉(畜産物)の卸売市場の価格が大きく動いた時に知らせる機能です。仕入れ値が上がっているのに気づかず、以前のままの原価率のつもりで営業してしまう、といった見落としを防ぐためのものです。
+      </p>
+      <p className="mt-3">
+        表示される原価率は、市場価格の変動率がそのまま仕入単価に反映されたと仮定した試算であり、実際に仕入単価を変更した結果ではありません。あくまで「相場が動いた」ことに気づくための目安として使ってください。
+      </p>
+    </HelpButton>
   );
 }

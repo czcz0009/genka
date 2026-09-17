@@ -7,6 +7,7 @@ import { normalizeForDedupe, MAX_NAME_LENGTH } from "@/lib/normalize.ts";
 import { ingredientPriceTaxModeLabel, type IngredientPriceTaxMode } from "@/lib/taxMode.ts";
 import { saveMenuWithIngredients, type SaveMenuLineInput } from "./actions.ts";
 import { ActionErrorMessage } from "@/components/ActionErrorMessage.tsx";
+import { HelpButton } from "@/components/HelpButton.tsx";
 
 export interface IngredientOption {
   id: string;
@@ -464,9 +465,19 @@ function PriceSimulation({
 
   return (
     <div className="flex flex-col gap-4 rounded border p-5" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-      <p className="text-base font-semibold" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
-        値上げシミュレーション
-      </p>
+      <div className="flex items-center gap-2">
+        <p className="text-base font-semibold" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+          値上げシミュレーション
+        </p>
+        <HelpButton title="値上げシミュレーションとは">
+          <p>
+            実際に保存される売価は変えずに、「仮にこの値段にしたら原価率や利益がどうなるか」をその場で試せる機能です。
+          </p>
+          <p className="mt-3">
+            目標原価率ちょうどにするための必要売価も自動で計算されるので、値上げ幅を検討する時の目安として使ってください。ここでどれだけ試算しても、「保存する」を押さない限り実際の売価は変わりません。
+          </p>
+        </HelpButton>
+      </div>
       <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
         実際の売価は変えずに、「仮にこの値段だったら」を試算できます。
       </p>

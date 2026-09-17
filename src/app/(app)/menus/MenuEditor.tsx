@@ -117,7 +117,8 @@ export function MenuEditor({
   initialSellingPrice,
   initialLines,
   allIngredients,
-  targetCostRate,
+  individualTargetCostRate,
+  defaultTargetCostRate,
   currentMonthQuantitySold,
   ingredientPriceTaxMode,
 }: {
@@ -127,7 +128,10 @@ export function MenuEditor({
   initialSellingPrice: number | null;
   initialLines: LocalLine[];
   allIngredients: IngredientOption[];
-  targetCostRate: number;
+  /** このメニューだけの目標原価率(%)。未設定ならnull(店舗全体の目標を使う)。 */
+  individualTargetCostRate: number | null;
+  /** 店舗全体の目標原価率(%)。個別目標が未設定の時のフォールバック先。 */
+  defaultTargetCostRate: number;
   /** 今月の販売数量。値上げシミュレーションの月間利益試算に使う(未登録ならnull)。 */
   currentMonthQuantitySold: number | null;
   /** 仕入単価の入力欄ラベルを「税込」「税抜」どちらで出すか(店舗設定より)。計算式には影響しない。 */
@@ -137,6 +141,9 @@ export function MenuEditor({
   const [name, setName] = useState(initialName);
   const [sellingPrice, setSellingPrice] = useState(initialSellingPrice != null ? String(initialSellingPrice) : "");
   const [lines, setLines] = useState<LocalLine[]>(initialLines);
+  const [targetCostRateInput, setTargetCostRateInput] = useState(
+    individualTargetCostRate != null ? String(individualTargetCostRate) : "",
+  );
   const [saving, setSaving] = useState<"save" | "saveAndNew" | null>(null);
   const [error, setError] = useState<string | null>(null);
   // このメニュー編集中に「新規食材」として追加した食材の下書き一覧。
@@ -158,6 +165,12 @@ export function MenuEditor({
     [lines],
   );
   const sellingPriceNumber = sellingPrice.trim() ? Number(sellingPrice) : null;
+  const targetCostRateNumber = targetCostRateInput.trim() ? Number(targetCostRateInput) : null;
+  const targetCostRateInputError =
+    targetCostRateNumber != null && (!Number.isFinite(targetCostRateNumber) || targetCostRateNumber <= 0 || targetCostRateNumber > 100)
+      ? "目標原価率は0より大きく100以下の数値で入力してください"
+      : null;
+  const targetCostRate = targetCostRateNumber ?? defaultTargetCostRate;
   const costRate = calcCostRate(totalCost, sellingPriceNumber);
   const overTarget = costRate != null && costRate > targetCostRate;
 
@@ -199,6 +212,10 @@ export function MenuEditor({
       setError("売価は0以上の数値で入力してください");
       return;
     }
+    if (targetCostRateInputError) {
+      setError(targetCostRateInputError);
+      return;
+    }
     setSaving(mode);
     const lineInputs: SaveMenuLineInput[] = lines.map((l) => ({
       quantity: Number(l.quantity),
@@ -219,6 +236,7 @@ export function MenuEditor({
       menuId,
       name,
       sellingPrice: sellingPriceNumber,
+      targetCostRatePercent: targetCostRateNumber,
       lines: lineInputs,
       // この画面を開いた(＝最後にサーバーから読み込んだ)時点で使っていた既存食材のID一覧。
       // 別のタブ等で先に保存されて追加された食材行を、こちらの保存時に「知らずに削除して
@@ -268,6 +286,25 @@ export function MenuEditor({
           className={INPUT_CLASS + " font-mono"}
           style={inputStyle}
         />
+      </label>
+
+      <label className="flex flex-col gap-2 text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+        このメニューの目標原価率(%・任意)
+        <input
+          type="number"
+          min={0}
+          max={100}
+          step="0.1"
+          inputMode="decimal"
+          value={targetCostRateInput}
+          onChange={(e) => setTargetCostRateInput(e.target.value)}
+          placeholder={`例: 50(未設定の場合は店舗全体の目標(${defaultTargetCostRate}%)が使われます)`}
+          className={INPUT_CLASS + " font-mono"}
+          style={inputStyle}
+        />
+        <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+          未設定の場合は店舗全体の目標({defaultTargetCostRate}%)が使われます。海鮮など構造的に原価率が高いメニューだけ、個別に目標を上げたい場合に使ってください。
+        </span>
       </label>
 
       {/* 現在の原価率 */}

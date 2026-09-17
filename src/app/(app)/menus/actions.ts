@@ -31,6 +31,8 @@ export interface SaveMenuInput {
   menuId?: string;
   name: string;
   sellingPrice: number | null;
+  /** このメニュー個別の目標原価率(%)。未設定(null)なら店舗全体の目標原価率を使う。 */
+  targetCostRatePercent?: number | null;
   lines: SaveMenuLineInput[];
   /**
    * この編集画面を開いた(＝最後にサーバーから読み込んだ)時点で使っていた既存食材のID一覧。
@@ -56,6 +58,13 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
   if (input.sellingPrice != null && (!Number.isFinite(input.sellingPrice) || input.sellingPrice < 0)) {
     return { success: false, error: "売価は0以上の数値で入力してください" };
   }
+  const targetCostRatePercent = input.targetCostRatePercent ?? null;
+  if (
+    targetCostRatePercent != null &&
+    (!Number.isFinite(targetCostRatePercent) || targetCostRatePercent <= 0 || targetCostRatePercent > 100)
+  ) {
+    return { success: false, error: "目標原価率は0より大きく100以下の数値で入力してください" };
+  }
   const normalizedName = normalizeForDedupe(name);
 
   let menuId = input.menuId;
@@ -68,7 +77,12 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
   if (menuId) {
     const { error } = await supabase
       .from("menus")
-      .update({ name: normalizeDisplayName(name), normalized_name: normalizedName, selling_price: input.sellingPrice })
+      .update({
+        name: normalizeDisplayName(name),
+        normalized_name: normalizedName,
+        selling_price: input.sellingPrice,
+        target_cost_rate: targetCostRatePercent,
+      })
       .eq("id", menuId)
       .eq("store_id", input.storeId);
     if (error) return { success: false, error: dbErrorMessage("メニューの更新", error) };
@@ -84,7 +98,10 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
 
     if (existing) {
       menuId = existing.id;
-      await supabase.from("menus").update({ selling_price: input.sellingPrice }).eq("id", menuId);
+      await supabase
+        .from("menus")
+        .update({ selling_price: input.sellingPrice, target_cost_rate: targetCostRatePercent })
+        .eq("id", menuId);
     } else {
       const { data, error } = await supabase
         .from("menus")
@@ -93,6 +110,7 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
           name: normalizeDisplayName(name),
           normalized_name: normalizedName,
           selling_price: input.sellingPrice,
+          target_cost_rate: targetCostRatePercent,
         })
         .select("id")
         .single();

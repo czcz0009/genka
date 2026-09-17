@@ -94,7 +94,8 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
           currentPurchasePrice: i.current_purchase_price,
           yieldRatePercent: i.yield_rate_percent,
         }))}
-        targetCostRate={menu.target_cost_rate ?? store.defaultTargetCostRate}
+        individualTargetCostRate={menu.target_cost_rate}
+        defaultTargetCostRate={store.defaultTargetCostRate}
         currentMonthQuantitySold={currentMonthSales?.quantity_sold ?? null}
         ingredientPriceTaxMode={store.ingredientPriceTaxMode}
       />

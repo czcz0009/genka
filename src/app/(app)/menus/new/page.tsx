@@ -53,7 +53,8 @@ export default async function NewMenuPage() {
           currentPurchasePrice: i.current_purchase_price,
           yieldRatePercent: i.yield_rate_percent,
         }))}
-        targetCostRate={store.defaultTargetCostRate}
+        individualTargetCostRate={null}
+        defaultTargetCostRate={store.defaultTargetCostRate}
         currentMonthQuantitySold={null}
         ingredientPriceTaxMode={store.ingredientPriceTaxMode}
       />

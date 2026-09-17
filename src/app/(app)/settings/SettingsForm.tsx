@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import type { IngredientPriceTaxMode } from "@/lib/taxMode.ts";
 import { saveStoreSettings } from "./actions.ts";
 import { ActionErrorMessage } from "@/components/ActionErrorMessage.tsx";
+import { runOnboardingTour } from "@/lib/onboardingTour.client.ts";
+import { completeOnboarding } from "@/app/(app)/onboarding/actions.ts";
 
 // w-full: 配布前QAで発見。入力欄に幅を明示しないと、狭いflexの列の中でブラウザ既定の
 // 内容幅が優先され、スマホ幅で入力欄がはみ出して見えなくなる不具合があったため付与する。
@@ -35,6 +37,16 @@ export function SettingsForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [tourRunning, setTourRunning] = useState(false);
+
+  async function handleReplayTour() {
+    setTourRunning(true);
+    await runOnboardingTour(() => {
+      setTourRunning(false);
+      // 完了状態を更新するだけで、内容自体は毎回同じものを表示する。
+      void completeOnboarding(storeId);
+    });
+  }
 
   async function handleSave() {
     setError(null);
@@ -162,6 +174,24 @@ export function SettingsForm({
         <p className="mt-4 text-xs" style={{ color: "var(--muted-foreground)" }}>
           人件費は月ごとに金額が変わるため、ここではなく「FL比率」画面から月を選んで入力してください。
         </p>
+      </div>
+
+      <div className="rounded border p-5" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+        <p className="mb-4 text-sm font-semibold" style={labelStyle}>
+          使い方の案内
+        </p>
+        <p className="mb-3 text-xs" style={{ color: "var(--muted-foreground)" }}>
+          初回ログイン時に表示される、画面の使い方の案内をもう一度見られます。
+        </p>
+        <button
+          type="button"
+          onClick={handleReplayTour}
+          disabled={tourRunning}
+          className="rounded border px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-40 hover:bg-[color:var(--muted)]"
+          style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+        >
+          {tourRunning ? "案内を表示中…" : "案内をもう一度見る"}
+        </button>
       </div>
 
       {error && <ActionErrorMessage error={error} />}

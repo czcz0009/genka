@@ -22,6 +22,7 @@ export function StartHerePrompt({
         <Link
           href="/import"
           prefetch={false}
+          data-tour="start-import"
           className="rounded border px-6 py-4 text-base font-semibold transition-colors hover:border-[color:var(--accent)]"
           style={{ borderColor: "var(--border)", color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
         >
@@ -30,6 +31,7 @@ export function StartHerePrompt({
         <Link
           href="/menus/new"
           prefetch={false}
+          data-tour="start-manual"
           className="rounded px-6 py-4 text-base font-bold"
           style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
         >

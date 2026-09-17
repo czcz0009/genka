@@ -9,6 +9,8 @@ interface NavItem {
   href: string;
   label: string;
   icon: (props: { className?: string }) => React.ReactElement;
+  /** オンボーディングツアーがこの項目をハイライトする時の目印(無ければツアー対象外)。 */
+  tourId?: string;
 }
 
 function IconGrid({ className }: { className?: string }) {
@@ -93,13 +95,13 @@ function IconSettings({ className }: { className?: string }) {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "ダッシュボード", icon: IconGrid },
-  { href: "/menus", label: "原価計算", icon: IconList },
+  { href: "/menus", label: "原価計算", icon: IconList, tourId: "nav-menus" },
   { href: "/ingredients", label: "食材", icon: IconBox },
   { href: "/import", label: "CSV取り込み", icon: IconUpload },
-  { href: "/ranking", label: "今見直すべきメニュー", icon: IconTrendingUp },
+  { href: "/ranking", label: "今見直すべきメニュー", icon: IconTrendingUp, tourId: "nav-ranking" },
   { href: "/fl-ratio", label: "FL比率", icon: IconActivity },
-  { href: "/alerts", label: "仕入れ値アラート", icon: IconAlertTriangle },
-  { href: "/settings", label: "設定", icon: IconSettings },
+  { href: "/alerts", label: "仕入れ値アラート", icon: IconAlertTriangle, tourId: "nav-alerts" },
+  { href: "/settings", label: "設定", icon: IconSettings, tourId: "nav-settings" },
 ];
 
 /**
@@ -150,6 +152,7 @@ function NavList({ pathname, onNavigate }: { pathname: string; onNavigate?: () =
             key={item.href}
             href={item.href}
             prefetch={false}
+            data-tour={item.tourId}
             onMouseEnter={() => handleMouseEnter(item.href)}
             onMouseLeave={handleMouseLeave}
             onClick={onNavigate}

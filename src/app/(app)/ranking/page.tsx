@@ -3,7 +3,13 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getSessionStore, getStoreData, getIngredientPreviousPrices, getIngredientPriceHistory } from "@/lib/store";
-import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient, type RankingSales } from "@/lib/menuRanking";
+import {
+  buildMenuRanking,
+  findPriceHeadroomMenus,
+  type RankingMenu,
+  type RankingMenuIngredient,
+  type RankingSales,
+} from "@/lib/menuRanking";
 import { resolveHistoricalPrice } from "@/lib/ingredientPriceHistory";
 import { withResolvedPrepItemPrices } from "@/lib/prepItemCost";
 import { monthToPeriod, currentMonthString } from "@/lib/period/month";
@@ -122,6 +128,7 @@ export default async function RankingPage({
     sales: rankingSales,
     defaultTargetCostRate: store.defaultTargetCostRate,
   });
+  const headroomMenus = findPriceHeadroomMenus(summaries);
 
   return (
     <div className="max-w-4xl space-y-6 p-6 md:p-8">
@@ -136,6 +143,7 @@ export default async function RankingPage({
         availableMonths={availableMonths}
         summaries={summaries}
         menus={rankingMenus}
+        headroomMenus={headroomMenus}
       />
     </div>
   );

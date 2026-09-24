@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { MenuCostSummary } from "@/lib/types";
 import type { RankingMenu } from "@/lib/menuRanking";
 import { formatMonthLabel } from "@/lib/period/month";
@@ -46,12 +47,15 @@ export function RankingView({
   availableMonths,
   summaries,
   menus,
+  headroomMenus,
 }: {
   storeId: string;
   month: string;
   availableMonths: string[];
   summaries: MenuCostSummary[];
   menus: RankingMenu[];
+  /** 原価率が目標より大幅に低い、値上げ余地のあるメニュー(「今見直すべきメニュー」と対になる一覧)。 */
+  headroomMenus: MenuCostSummary[];
 }) {
   const router = useRouter();
   const [showEntry, setShowEntry] = useState(false);
@@ -253,6 +257,69 @@ export function RankingView({
           </table>
         </div>
       </div>
+
+      {headroomMenus.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <div>
+            <h2 className="text-base font-bold" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+              まだ活かせていない伸びしろ
+            </h2>
+            <p className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+              原価率が目標より大幅に低いメニューです。既に目標より高い利益率を確保できているため、値上げしてもまだ受け入れられる可能性があります。具体的な金額は、各メニューの編集画面にある値上げシミュレーションで試してみてください。
+            </p>
+          </div>
+          <div className="overflow-hidden rounded border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left" style={{ background: "var(--muted)" }}>
+                  <tr>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted-foreground)" }}>
+                      メニュー
+                    </th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted-foreground)" }}>
+                      原価率
+                    </th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted-foreground)" }}>
+                      目標との差
+                    </th>
+                    <th className="whitespace-nowrap px-3 py-2.5" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {headroomMenus.map((s) => (
+                    <tr key={s.menuId} className="border-t" style={{ borderColor: "var(--border)" }}>
+                      <td className="whitespace-nowrap px-3 py-2.5 font-medium" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+                        {s.menuName}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right">
+                        <span className="font-mono font-semibold" style={{ color: "var(--status-ok)" }}>
+                          {s.costRate!.toFixed(1)}%
+                        </span>
+                        <span className="ml-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+                          (目標{s.targetCostRate}%)
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono font-semibold" style={{ color: "var(--status-ok)" }}>
+                        -{(s.targetCostRate - s.costRate!).toFixed(1)}pt
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right">
+                        <Link
+                          href={`/menus/${s.menuId}`}
+                          prefetch={false}
+                          className="text-sm underline underline-offset-2"
+                          style={{ color: "var(--accent)" }}
+                        >
+                          試してみる →
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

@@ -1,6 +1,23 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildMenuRanking } from "./menuRanking.ts";
+import { buildMenuRanking, findPriceHeadroomMenus } from "./menuRanking.ts";
+import type { MenuCostSummary } from "./types.ts";
+
+function summary(partial: Partial<MenuCostSummary> & { menuId: string }): MenuCostSummary {
+  return {
+    menuName: "",
+    sellingPrice: null,
+    totalCost: 0,
+    costRate: null,
+    targetCostRate: 30,
+    overTarget: false,
+    quantitySold: 0,
+    profitContribution: null,
+    suggestedPriceIncrease: null,
+    monthlyProfitImpact: null,
+    ...partial,
+  };
+}
 
 const ingredients = [
   { id: "pasta", currentPurchasePrice: 0.8 }, // 円/g
@@ -261,4 +278,30 @@ test("歩留まり率: 月間影響額の計算でも、現在・1つ前どち�
   // 現在原価: (0.8/0.5)*100=160円、従来原価: (0.5/0.5)*100=100円。差額-60円×10食=-600円
   assert.ok(Math.abs(summary.totalCost - 160) < 1e-9);
   assert.ok(Math.abs(summary.monthlyProfitImpact! - -600) < 1e-6);
+});
+
+test("findPriceHeadroomMenus: 原価率が目標より10ポイント以上低いメニューだけを、差が大きい順に返す", () => {
+  const summaries = [
+    summary({ menuId: "m1", costRate: 15, targetCostRate: 30 }), // 差15 → 対象
+    summary({ menuId: "m2", costRate: 25, targetCostRate: 30 }), // 差5 → 対象外
+    summary({ menuId: "m3", costRate: 5, targetCostRate: 30 }), // 差25 → 対象(最大)
+    summary({ menuId: "m4", costRate: null, targetCostRate: 30 }), // 原価率不明 → 対象外
+  ];
+  const result = findPriceHeadroomMenus(summaries);
+  assert.deepEqual(
+    result.map((s) => s.menuId),
+    ["m3", "m1"],
+  );
+});
+
+test("findPriceHeadroomMenus: ちょうどしきい値(10ポイント差)は対象に含む", () => {
+  const summaries = [summary({ menuId: "m1", costRate: 20, targetCostRate: 30 })];
+  const result = findPriceHeadroomMenus(summaries);
+  assert.deepEqual(result.map((s) => s.menuId), ["m1"]);
+});
+
+test("findPriceHeadroomMenus: しきい値は引数で上書きできる", () => {
+  const summaries = [summary({ menuId: "m1", costRate: 25, targetCostRate: 30 })]; // 差5
+  assert.equal(findPriceHeadroomMenus(summaries, 10).length, 0);
+  assert.equal(findPriceHeadroomMenus(summaries, 5).length, 1);
 });

@@ -100,6 +100,34 @@ function compareByReviewPriority(a: MenuCostSummary, b: MenuCostSummary): number
  * 「今見直すべきメニュー」一覧を組み立てる。並び順は compareByReviewPriority を参照。
  * 売価未設定などで貢献度が計算できないメニューは(目標内グループの)末尾に回す。
  */
+/**
+ * 「値上げ余地」ありと見なす、目標原価率との差(ポイント)のしきい値。
+ * flRatio.tsのCAUTION_MARGIN_POINTSと同じ考え方(統計的根拠のある値ではなく、
+ * ちょうど目標ぴったりでも余地扱いにならないよう設けた説明可能なデフォルト値)。
+ */
+export const PRICE_HEADROOM_MARGIN_POINTS = 10;
+
+/**
+ * 「今見直すべきメニュー」と対になる、値上げ余地のあるメニューの抽出。
+ * 原価率が目標より大幅に低い(=現在の価格で既に目標より高い利益率を確保できている)
+ * メニューを、差(ポイント)が大きい順に返す。
+ *
+ * 「いくらまで値上げすべきか」という具体的な金額はここでは計算しない
+ * (calcRequiredSellingPrice等の値上げ目安の計算式は原価率を目標まで下げる方向の
+ * ものであり、逆方向(既に目標より低い原価率をさらにどこまで上げられるか)に
+ * そのまま転用すると誤った金額を示しかねないため)。あくまで「候補として目を
+ * 向けるべきメニュー」を挙げるところまでに留め、実際の金額試算は各メニューの
+ * 編集画面にある既存の値上げシミュレーションを使ってもらう設計にしている。
+ */
+export function findPriceHeadroomMenus(
+  summaries: MenuCostSummary[],
+  marginPoints: number = PRICE_HEADROOM_MARGIN_POINTS,
+): MenuCostSummary[] {
+  return summaries
+    .filter((s) => s.costRate != null && s.targetCostRate - s.costRate >= marginPoints)
+    .sort((a, b) => b.targetCostRate - (b.costRate ?? 0) - (a.targetCostRate - (a.costRate ?? 0)));
+}
+
 export function buildMenuRanking(input: BuildMenuRankingInput): MenuCostSummary[] {
   const { menus, menuIngredients, ingredients, sales, defaultTargetCostRate, priceRoundTo = 10 } = input;
 

@@ -9,9 +9,11 @@ import {
   getCurrentFlRate,
   getAlertSummary,
   getOverTargetMonthlyImpact,
+  getTimeSavedMinutesThisMonth,
   type FastDashboardSummary,
 } from "@/lib/dashboardSummary";
 import { FL_BENCHMARK_PERCENT } from "@/lib/flRatio";
+import { formatTimeSaved, TIME_SAVED_DISPLAY_THRESHOLD_MINUTES } from "@/lib/timeSavedEstimate";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 
@@ -243,7 +245,34 @@ export default async function Home() {
         </Link>
         こともできます。
       </p>
+
+      <Suspense fallback={null}>
+        <TimeSavedNote supabase={supabase} store={store} />
+      </Suspense>
     </div>
+  );
+}
+
+/**
+ * Excelで同じ作業をしていた場合と比べた、今月の時間節約の目安。
+ * あくまで控えめな補足情報なので、他のKPIより目立たない画面下部の小さな
+ * テキストに留め、目安になるほど使われていない月は何も表示しない
+ * (TIME_SAVED_DISPLAY_THRESHOLD_MINUTES未満は非表示)。
+ */
+async function TimeSavedNote({
+  supabase,
+  store,
+}: {
+  supabase: SupabaseClient;
+  store: { id: string };
+}) {
+  const minutes = await getTimeSavedMinutesThisMonth(supabase, store);
+  if (minutes < TIME_SAVED_DISPLAY_THRESHOLD_MINUTES) return null;
+
+  return (
+    <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+      今月、メニュー登録・原価計算にかかる時間を{formatTimeSaved(minutes)}削減できています(Excelで同じ作業をした場合との簡易的な比較です)。
+    </p>
   );
 }
 

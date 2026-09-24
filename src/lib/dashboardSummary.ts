@@ -13,6 +13,7 @@ import { monthToPeriod, currentMonthString } from "./period/month.ts";
 import { computeStoreAlerts } from "./marketPrices/computeStoreAlerts.ts";
 import { getStoreData, getIngredientPreviousPrices } from "./store.ts";
 import { withResolvedPrepItemPrices } from "./prepItemCost.ts";
+import { estimateTimeSavedMinutes } from "./timeSavedEstimate.ts";
 
 /**
  * ホーム画面(ダッシュボード)の経営状況サマリー。
@@ -248,4 +249,34 @@ export const getOverTargetMonthlyImpact = cache(async function getOverTargetMont
     .filter((v): v is number => v != null);
   if (impacts.length === 0) return null;
   return impacts.reduce((a, b) => a + b, 0);
+});
+
+/**
+ * Excelで同じ作業をしていた場合と比べた、今月の時間節約の目安(分)。
+ * 「今月CSV取り込みで取り込んだ行数」「今月新規登録したメニュー数」から
+ * 保守的に見積もる(厳密な計測ではない。詳細はtimeSavedEstimate.ts参照)。
+ * ダッシュボードの控えめな補足表示専用のため、市場価格データ等は使わず軽量。
+ */
+export const getTimeSavedMinutesThisMonth = cache(async function getTimeSavedMinutesThisMonth(
+  supabase: SupabaseClient,
+  store: { id: string },
+): Promise<number> {
+  const period = monthToPeriod(currentMonthString());
+
+  const [storeData, { data: importJobs }] = await Promise.all([
+    getStoreData(supabase),
+    supabase
+      .from("import_jobs")
+      .select("row_count")
+      .eq("store_id", store.id)
+      .gte("created_at", period.start)
+      .lte("created_at", `${period.end}T23:59:59`),
+  ]);
+
+  const menusRegisteredThisMonth = (storeData?.menus ?? []).filter(
+    (m) => m.createdAt >= period.start && m.createdAt <= `${period.end}T23:59:59`,
+  ).length;
+  const csvRowsThisMonth = (importJobs ?? []).reduce((sum, j) => sum + j.row_count, 0);
+
+  return estimateTimeSavedMinutes({ csvRowsThisMonth, menusRegisteredThisMonth });
 });

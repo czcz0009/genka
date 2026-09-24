@@ -3,6 +3,7 @@
 import { normalizeDisplayName, normalizeForDedupe, validateNameLength } from "@/lib/normalize";
 import { requireAuthedClient } from "@/lib/supabase/requireAuthedClient";
 import { friendlyDbError, dbErrorMessage } from "@/lib/supabase/friendlyDbError";
+import { wouldCreateCycle } from "@/lib/prepItemCost";
 
 /**
  * 食材の単独登録・編集(メニュー登録画面を経由しない、食材だけの追加・編集)。
@@ -25,6 +26,12 @@ export interface IngredientRow {
   currentPurchasePrice: number;
   /** 歩留まり率(%)。100(既定)なら歩留まりなし。 */
   yieldRatePercent: number;
+  /** 仕込み品(サブレシピ)かどうか。 */
+  isPrepItem: boolean;
+  /** 仕込み品の場合のみ使う。1回の仕込みでできる量(unitと同じ単位)。 */
+  yieldQuantity: number | null;
+  /** 仕込み品の場合のみ使う。レシピ明細(表示・編集用)。 */
+  components?: { componentId: string; componentName: string; componentUnit: string; quantity: number }[];
 }
 
 export interface CreateIngredientInput {
@@ -99,6 +106,8 @@ export async function createIngredient(input: CreateIngredientInput): Promise<Cr
       unit: created.unit,
       currentPurchasePrice: created.current_purchase_price,
       yieldRatePercent: created.yield_rate_percent,
+      isPrepItem: false,
+      yieldQuantity: null,
     },
   };
 }
@@ -226,6 +235,32 @@ export async function deleteIngredient(input: DeleteIngredientInput): Promise<De
     };
   }
 
+  // 仕込み品の材料として使われている場合も同様に削除を防ぐ(こちらは通常の食材・
+  // 仕込み品のどちらを削除しようとした場合でも起こりうるチェック)。
+  const { data: usedInPrepItems, error: usedInPrepItemsErr } = await supabase
+    .from("prep_item_components")
+    .select("ingredients!prep_item_components_prep_item_id_fkey(name)")
+    .eq("component_id", input.ingredientId);
+  if (usedInPrepItemsErr) return { success: false, error: dbErrorMessage("確認", usedInPrepItemsErr) };
+
+  if (usedInPrepItems && usedInPrepItems.length > 0) {
+    const prepItemNames = Array.from(
+      new Set(
+        usedInPrepItems
+          .map((r) => (r.ingredients as unknown as { name: string } | null)?.name)
+          .filter((n): n is string => Boolean(n)),
+      ),
+    );
+    const label =
+      prepItemNames.length > 0
+        ? prepItemNames.slice(0, 3).join("・") + (prepItemNames.length > 3 ? ` 他${prepItemNames.length - 3}件` : "")
+        : `${usedInPrepItems.length}件の仕込み品`;
+    return {
+      success: false,
+      error: `この食材は仕込み品「${label}」の材料として使われているため削除できません。先に仕込み品からこの食材を外してから削除してください。`,
+    };
+  }
+
   const { error } = await supabase
     .from("ingredients")
     .delete()
@@ -233,4 +268,150 @@ export async function deleteIngredient(input: DeleteIngredientInput): Promise<De
     .eq("store_id", input.storeId);
   if (error) return { success: false, error: dbErrorMessage("食材の削除", error) };
   return { success: true };
+}
+
+export interface SavePrepItemComponentInput {
+  componentId: string;
+  quantity: number;
+  /** その材料(componentId)自身の単位(例: "g")。メニュー編集画面のレシピ行と同じ規約。 */
+  unit: string;
+}
+
+export interface SavePrepItemInput {
+  storeId: string;
+  /** 未指定 = 新規作成。指定 = 既存の仕込み品を更新する */
+  prepItemId?: string;
+  name: string;
+  /** メニューがこの仕込み品を使う時の単位(例: "ml") */
+  unit: string;
+  /** 1回の仕込みでできる量(unitと同じ単位、例: 10000) */
+  yieldQuantity: number;
+  components: SavePrepItemComponentInput[];
+}
+
+export type SavePrepItemResult = { success: true; prepItemId: string } | { success: false; error: string };
+
+/**
+ * 仕込み品(サブレシピ)を1件、名前・仕込み量・レシピ明細まとめて保存する。
+ * saveMenuWithIngredients(menus/actions.ts)と同じ「保存ボタンを押した瞬間に
+ * まとめて1回だけ送る」設計。レシピ明細は毎回すべて置き換える(削除→挿入)。
+ *
+ * 循環参照の防止: 更新時のみ、店舗内の他の仕込み品どうしの参照関係を全件読み、
+ * この仕込み品の新しいレシピを反映した場合に自分自身に戻ってきてしまわないかを
+ * 検査する(新規作成時は、まだ存在しないためどの仕込み品からも参照されようが
+ * なく、循環が起こり得ない)。
+ */
+export async function savePrepItem(input: SavePrepItemInput): Promise<SavePrepItemResult> {
+  const ctx = await requireAuthedClient();
+  if ("error" in ctx) return { success: false, error: ctx.error };
+  const { supabase } = ctx;
+
+  const name = input.name.trim();
+  if (!name) return { success: false, error: "仕込み品名を入力してください" };
+  const nameLengthError = validateNameLength(name, "仕込み品名");
+  if (nameLengthError) return { success: false, error: nameLengthError };
+  if (!input.unit.trim()) return { success: false, error: "単位を入力してください" };
+  if (!Number.isFinite(input.yieldQuantity) || input.yieldQuantity <= 0) {
+    return { success: false, error: "1回の仕込みでできる量は0より大きい数値で入力してください" };
+  }
+  if (input.components.length === 0) {
+    return { success: false, error: "材料を1つ以上追加してください" };
+  }
+  for (const c of input.components) {
+    if (!Number.isFinite(c.quantity) || c.quantity <= 0) {
+      return { success: false, error: "材料の分量は0より大きい数値で入力してください" };
+    }
+    if (!c.unit.trim()) {
+      return { success: false, error: "材料の単位を入力してください" };
+    }
+  }
+
+  if (input.prepItemId) {
+    const { data: allEdges, error: edgesErr } = await supabase
+      .from("prep_item_components")
+      .select("prep_item_id, component_id")
+      .neq("prep_item_id", input.prepItemId);
+    if (edgesErr) return { success: false, error: dbErrorMessage("確認", edgesErr) };
+
+    const existingEdges = (allEdges ?? []).map((e) => ({ prepItemId: e.prep_item_id, componentId: e.component_id }));
+    const newComponentIds = input.components.map((c) => c.componentId);
+    if (wouldCreateCycle(input.prepItemId, newComponentIds, existingEdges)) {
+      return {
+        success: false,
+        error: "この材料構成にすると仕込み品同士が循環参照してしまうため保存できません(例: AがBを含み、BがAを含む形)",
+      };
+    }
+  }
+
+  const normalizedName = normalizeForDedupe(name);
+  let prepItemId = input.prepItemId;
+
+  if (prepItemId) {
+    const { data: conflict, error: conflictErr } = await supabase
+      .from("ingredients")
+      .select("id")
+      .eq("store_id", input.storeId)
+      .eq("normalized_name", normalizedName)
+      .neq("id", prepItemId)
+      .maybeSingle();
+    if (conflictErr) return { success: false, error: dbErrorMessage("確認", conflictErr) };
+    if (conflict) return { success: false, error: "同じ名前の食材・仕込み品が他に登録されています" };
+
+    const { error: updateErr } = await supabase
+      .from("ingredients")
+      .update({
+        name: normalizeDisplayName(name),
+        normalized_name: normalizedName,
+        unit: input.unit.trim(),
+        yield_quantity: input.yieldQuantity,
+      })
+      .eq("id", prepItemId)
+      .eq("store_id", input.storeId);
+    if (updateErr) return { success: false, error: dbErrorMessage("仕込み品の更新", updateErr) };
+
+    const { error: deleteErr } = await supabase.from("prep_item_components").delete().eq("prep_item_id", prepItemId);
+    if (deleteErr) return { success: false, error: dbErrorMessage("材料構成の更新", deleteErr) };
+  } else {
+    const { data: existing, error: existingErr } = await supabase
+      .from("ingredients")
+      .select("id")
+      .eq("store_id", input.storeId)
+      .eq("normalized_name", normalizedName)
+      .maybeSingle();
+    if (existingErr) return { success: false, error: dbErrorMessage("確認", existingErr) };
+    if (existing) return { success: false, error: "同じ名前の食材・仕込み品がすでに登録されています" };
+
+    const { data: created, error: createErr } = await supabase
+      .from("ingredients")
+      .insert({
+        store_id: input.storeId,
+        name: normalizeDisplayName(name),
+        normalized_name: normalizedName,
+        unit: input.unit.trim(),
+        current_purchase_price: 0, // 仕込み品は使わない(レシピからその場で計算するため)
+        is_prep_item: true,
+        yield_quantity: input.yieldQuantity,
+      })
+      .select("id")
+      .single();
+    if (createErr || !created) {
+      return {
+        success: false,
+        error: `仕込み品の登録に失敗しました: ${friendlyDbError(createErr, "同じ名前の食材・仕込み品がすでに登録されています")}`,
+      };
+    }
+    prepItemId = created.id;
+  }
+
+  const { error: insertErr } = await supabase.from("prep_item_components").insert(
+    input.components.map((c) => ({
+      prep_item_id: prepItemId,
+      component_id: c.componentId,
+      quantity: c.quantity,
+      unit: c.unit,
+    })),
+  );
+  if (insertErr) return { success: false, error: dbErrorMessage("材料構成の保存", insertErr) };
+
+  return { success: true, prepItemId: prepItemId! };
 }

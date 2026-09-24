@@ -7,6 +7,7 @@ import { MAX_NAME_LENGTH } from "@/lib/normalize";
 import { createIngredient, updateIngredient, deleteIngredient, type IngredientRow } from "./actions.ts";
 import { ActionErrorMessage } from "@/components/ActionErrorMessage.tsx";
 import { Modal } from "@/components/Modal.tsx";
+import { PrepItemForm, type PrepItemComponentOption } from "./PrepItemForm.tsx";
 
 function formatUnitPrice(n: number): string {
   const rounded = Math.round(n * 100) / 100;
@@ -364,6 +365,8 @@ function IngredientEditRow({
       unit: ingredient.unit,
       currentPurchasePrice: price.resolvedPrice,
       yieldRatePercent: yieldRate.resolvedPercent,
+      isPrepItem: false,
+      yieldQuantity: null,
     });
   }
 
@@ -432,6 +435,7 @@ export function IngredientsView({
   const [ingredients, setIngredients] = useState<IngredientRow[]>(initialIngredients);
   const [query, setQuery] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [addMode, setAddMode] = useState<"ingredient" | "prepItem">("ingredient");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   // 食材ごとの削除失敗メッセージ(「使用中のメニューがあるため削除できません」等)。
@@ -445,6 +449,12 @@ export function IngredientsView({
     const list = q ? ingredients.filter((i) => normalize(i.name).includes(q)) : ingredients;
     return [...list].sort((a, b) => a.name.localeCompare(b.name, "ja"));
   }, [ingredients, query]);
+
+  // 仕込み品の材料として選べる候補(通常の食材・別の仕込み品どちらも含む)。
+  const componentOptions: PrepItemComponentOption[] = useMemo(
+    () => ingredients.map((i) => ({ id: i.id, name: i.name, unit: i.unit })),
+    [ingredients],
+  );
 
   function handleAdded(i: IngredientRow) {
     setIngredients((prev) => [...prev, i]);
@@ -525,13 +535,36 @@ export function IngredientsView({
             {filtered.map((ing) =>
               editingId === ing.id ? (
                 <li key={ing.id}>
-                  <IngredientEditRow
-                    storeId={storeId}
-                    ingredient={ing}
-                    ingredientPriceTaxMode={ingredientPriceTaxMode}
-                    onSaved={handleSaved}
-                    onCancel={() => setEditingId(null)}
-                  />
+                  {ing.isPrepItem ? (
+                    <div className="rounded border p-4" style={{ background: "var(--muted)", borderColor: "var(--border)" }}>
+                      <PrepItemForm
+                        storeId={storeId}
+                        prepItemId={ing.id}
+                        initialName={ing.name}
+                        initialUnit={ing.unit}
+                        initialYieldQuantity={ing.yieldQuantity}
+                        initialComponents={ing.components ?? []}
+                        componentOptions={componentOptions.filter((o) => o.id !== ing.id)}
+                        onSaved={handleSaved}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(null)}
+                        className="mt-3 rounded border px-4 py-2.5 text-sm"
+                        style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+                      >
+                        キャンセル
+                      </button>
+                    </div>
+                  ) : (
+                    <IngredientEditRow
+                      storeId={storeId}
+                      ingredient={ing}
+                      ingredientPriceTaxMode={ingredientPriceTaxMode}
+                      onSaved={handleSaved}
+                      onCancel={() => setEditingId(null)}
+                    />
+                  )}
                 </li>
               ) : (
                 <li
@@ -543,10 +576,15 @@ export function IngredientsView({
                     <div className="flex min-w-0 flex-col gap-0.5">
                       <span className="break-words text-base font-medium" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
                         {ing.name}
+                        {ing.isPrepItem && (
+                          <span className="ml-2 text-xs font-normal" style={{ color: "var(--accent)" }}>
+                            (仕込み品)
+                          </span>
+                        )}
                       </span>
                       <span className="font-mono text-sm" style={{ color: "var(--muted-foreground)" }}>
                         {ing.unit}あたり{formatUnitPrice(ing.currentPurchasePrice)}
-                        {ing.yieldRatePercent < 100 && `(歩留まり${ing.yieldRatePercent}%)`}
+                        {!ing.isPrepItem && ing.yieldRatePercent < 100 && `(歩留まり${ing.yieldRatePercent}%)`}
                       </span>
                     </div>
                     <div className="flex shrink-0 gap-2">
@@ -578,8 +616,31 @@ export function IngredientsView({
       </div>
 
       {showAddModal && (
-        <Modal title="食材を追加" onClose={() => setShowAddModal(false)}>
-          <AddIngredientForm storeId={storeId} ingredientPriceTaxMode={ingredientPriceTaxMode} onAdded={handleAdded} />
+        <Modal
+          title={addMode === "ingredient" ? "食材を追加" : "仕込み品を追加"}
+          onClose={() => setShowAddModal(false)}
+        >
+          <div className="mb-4 flex gap-2 text-sm">
+            <TabButton active={addMode === "ingredient"} onClick={() => setAddMode("ingredient")}>
+              食材
+            </TabButton>
+            <TabButton active={addMode === "prepItem"} onClick={() => setAddMode("prepItem")}>
+              仕込み品
+            </TabButton>
+          </div>
+          {addMode === "ingredient" ? (
+            <AddIngredientForm storeId={storeId} ingredientPriceTaxMode={ingredientPriceTaxMode} onAdded={handleAdded} />
+          ) : (
+            <PrepItemForm
+              storeId={storeId}
+              initialName=""
+              initialUnit="ml"
+              initialYieldQuantity={null}
+              initialComponents={[]}
+              componentOptions={componentOptions}
+              onSaved={handleAdded}
+            />
+          )}
         </Modal>
       )}
     </div>

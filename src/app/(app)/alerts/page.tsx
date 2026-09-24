@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getSessionStore, getStoreData } from "@/lib/store";
 import { computeStoreAlerts } from "@/lib/marketPrices/computeStoreAlerts";
+import { withResolvedPrepItemPrices } from "@/lib/prepItemCost";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
@@ -60,7 +61,13 @@ export default async function AlertsPage() {
     );
   }
 
-  const alertIngredients = (storeData?.ingredients ?? []).map((i) => ({
+  // 仕込み品(サブレシピ)は仕入単価を持たないため、レシピから計算した実質単価に
+  // 差し替える(市場価格アラート自体は末端の食材にのみ紐づくが、試算原価率の
+  // ベースとなる原価にはメニューが使う仕込み品の分も正しく含める必要がある)。
+  const alertIngredients = withResolvedPrepItemPrices(
+    storeData?.ingredients ?? [],
+    storeData?.prepItemComponents ?? [],
+  ).map((i) => ({
     id: i.id,
     name: i.name,
     currentPurchasePrice: i.currentPurchasePrice,

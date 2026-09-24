@@ -80,11 +80,22 @@ export interface StoreDataIngredient {
   currentPurchasePrice: number;
   /** 歩留まり率(%)。100(初期値)なら歩留まりなし=従来通りの計算。 */
   yieldRatePercent: number;
+  /** 仕込み品(サブレシピ)かどうか。trueの場合、currentPurchasePriceは使わない。 */
+  isPrepItem: boolean;
+  /** 仕込み品の場合のみ使う。1回の仕込みでできる量(unitと同じ単位)。 */
+  yieldQuantity: number | null;
 }
 
 export interface StoreDataMenuIngredient {
   menuId: string;
   ingredientId: string;
+  quantity: number;
+}
+
+/** 仕込み品のレシピ明細(menuIngredientsと同じ形。親が仕込み品自身である点が異なる)。 */
+export interface StoreDataPrepItemComponent {
+  prepItemId: string;
+  componentId: string;
   quantity: number;
 }
 
@@ -107,6 +118,7 @@ export interface StoreData {
   menus: StoreDataMenu[];
   ingredients: StoreDataIngredient[];
   menuIngredients: StoreDataMenuIngredient[];
+  prepItemComponents: StoreDataPrepItemComponent[];
   sales: StoreDataSale[];
   fixedCosts: StoreDataFixedCost[];
 }
@@ -114,8 +126,16 @@ export interface StoreData {
 interface RawStoreDataRow {
   store: { id: string; name: string; default_target_cost_rate: number; ingredient_price_tax_mode: string };
   menus: { id: string; name: string; selling_price: number | null; target_cost_rate: number | null; created_at: string }[];
-  ingredients: { id: string; name: string; current_purchase_price: number; yield_rate_percent: number }[];
+  ingredients: {
+    id: string;
+    name: string;
+    current_purchase_price: number;
+    yield_rate_percent: number;
+    is_prep_item: boolean;
+    yield_quantity: number | null;
+  }[];
   menu_ingredients: { menu_id: string; ingredient_id: string; quantity: number }[];
+  prep_item_components: { prep_item_id: string; component_id: string; quantity: number }[];
   sales: { menu_id: string; quantity_sold: number; period_start: string; period_end: string }[];
   fixed_costs: { cost_type: string; amount: number; period_start: string; period_end: string }[];
 }
@@ -168,11 +188,18 @@ export const getStoreData = cache(async function getStoreData(
       name: i.name,
       currentPurchasePrice: i.current_purchase_price,
       yieldRatePercent: i.yield_rate_percent,
+      isPrepItem: i.is_prep_item,
+      yieldQuantity: i.yield_quantity,
     })),
     menuIngredients: raw.menu_ingredients.map((mi) => ({
       menuId: mi.menu_id,
       ingredientId: mi.ingredient_id,
       quantity: mi.quantity,
+    })),
+    prepItemComponents: raw.prep_item_components.map((pc) => ({
+      prepItemId: pc.prep_item_id,
+      componentId: pc.component_id,
+      quantity: pc.quantity,
     })),
     sales: raw.sales.map((s) => ({
       menuId: s.menu_id,

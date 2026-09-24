@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getSessionStore, getStoreData, getIngredientPreviousPrices, getIngredientPriceHistory } from "@/lib/store";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient, type RankingSales } from "@/lib/menuRanking";
 import { resolveHistoricalPrice } from "@/lib/ingredientPriceHistory";
+import { withResolvedPrepItemPrices } from "@/lib/prepItemCost";
 import { monthToPeriod, currentMonthString } from "@/lib/period/month";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
@@ -96,9 +97,20 @@ export default async function RankingPage({
   // 過去の月を見ても、今の単価で遡及的に再計算されないようにするため)。
   // previousPurchasePrice(月間の利益への影響額の計算用)は「直近の価格変更」という
   // 別の意味の値のため、ここでは変更しない。
-  const rankingIngredients = (storeData?.ingredients ?? []).map((i) => ({
+  //
+  // 仕込み品は仕入単価の履歴を持たない(値を保存せずその場で計算する方式のため)。
+  // そのため、まず通常の食材だけ履歴価格に差し替えたうえで、仕込み品の実質単価を
+  // その履歴価格から計算する(withResolvedPrepItemPrices)。previousPurchasePriceも
+  // 仕込み品には無い(=変動なしとして扱われ、月間影響額の計算には寄与しない。
+  // 仕込み品の価格変動検知は今回のスコープ外)。
+  const historicizedIngredients = (storeData?.ingredients ?? []).map((i) => ({
+    ...i,
+    currentPurchasePrice: i.isPrepItem ? 0 : resolveHistoricalPrice(priceHistory, i.id, period.end, i.currentPurchasePrice),
+  }));
+  const resolvedIngredients = withResolvedPrepItemPrices(historicizedIngredients, storeData?.prepItemComponents ?? []);
+  const rankingIngredients = resolvedIngredients.map((i) => ({
     id: i.id,
-    currentPurchasePrice: resolveHistoricalPrice(priceHistory, i.id, period.end, i.currentPurchasePrice),
+    currentPurchasePrice: i.currentPurchasePrice,
     previousPurchasePrice: previousPrices.get(i.id) ?? null,
     yieldRatePercent: i.yieldRatePercent,
   }));

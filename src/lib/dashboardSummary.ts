@@ -12,6 +12,7 @@ import {
 import { monthToPeriod, currentMonthString } from "./period/month.ts";
 import { computeStoreAlerts } from "./marketPrices/computeStoreAlerts.ts";
 import { getStoreData, getIngredientPreviousPrices } from "./store.ts";
+import { withResolvedPrepItemPrices } from "./prepItemCost.ts";
 
 /**
  * ホーム画面(ダッシュボード)の経営状況サマリー。
@@ -60,12 +61,18 @@ async function fetchRankingInputs(supabase: SupabaseClient) {
     ingredientId: mi.ingredientId,
     quantity: mi.quantity,
   }));
-  const rankingIngredients = (storeData?.ingredients ?? []).map((i) => ({
+  // 仕込み品(サブレシピ)は仕入単価を持たないため、レシピから計算した実質単価に
+  // 差し替えてから使う(withResolvedPrepItemPrices)。通常の食材はそのまま。
+  const resolvedIngredients = withResolvedPrepItemPrices(
+    storeData?.ingredients ?? [],
+    storeData?.prepItemComponents ?? [],
+  );
+  const rankingIngredients = resolvedIngredients.map((i) => ({
     id: i.id,
     currentPurchasePrice: i.currentPurchasePrice,
     yieldRatePercent: i.yieldRatePercent,
   }));
-  const alertIngredients = (storeData?.ingredients ?? []).map((i) => ({
+  const alertIngredients = resolvedIngredients.map((i) => ({
     id: i.id,
     name: i.name,
     currentPurchasePrice: i.currentPurchasePrice,

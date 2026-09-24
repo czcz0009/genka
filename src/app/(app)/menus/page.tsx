@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getSessionStore, getStoreData } from "@/lib/store";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient } from "@/lib/menuRanking";
+import { withResolvedPrepItemPrices } from "@/lib/prepItemCost";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
@@ -71,7 +72,11 @@ export default async function MenusPage() {
     ingredientId: mi.ingredientId,
     quantity: mi.quantity,
   }));
-  const rankingIngredients = (storeData?.ingredients ?? []).map((i) => ({
+  const resolvedIngredients = withResolvedPrepItemPrices(
+    storeData?.ingredients ?? [],
+    storeData?.prepItemComponents ?? [],
+  );
+  const rankingIngredients = resolvedIngredients.map((i) => ({
     id: i.id,
     currentPurchasePrice: i.currentPurchasePrice,
     yieldRatePercent: i.yieldRatePercent,

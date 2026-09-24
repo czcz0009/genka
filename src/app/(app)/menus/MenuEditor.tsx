@@ -17,6 +17,12 @@ export interface IngredientOption {
   /** 歩留まり率(%)。100(既定)なら歩留まりなし=従来通りの計算。 */
   yieldRatePercent: number;
   /**
+   * 仕込み品(サブレシピ)かどうか。表示のタグ付けにのみ使い、原価計算は
+   * currentPurchasePrice(サーバー側で既に実質単価に解決済み)をそのまま使うため、
+   * この画面のロジックには一切影響しない。
+   */
+  isPrepItem?: boolean;
+  /**
    * true = このメニュー編集セッション中に「新規食材」として追加した、
    * まだサーバーに保存されていない食材(idはこの画面内だけで使う仮のもの)。
    * 保存前に同じ食材名をもう一度使いたい時、候補として出すためだけに使う。
@@ -816,7 +822,9 @@ function IngredientLineForm({
             style={{ borderColor: "var(--status-ok)", background: "var(--card)" }}
           >
             <span style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
-              ✓ 登録済みの「{effectiveExisting.name}」を使います({effectiveExisting.unit}あたり
+              ✓ 登録済みの「{effectiveExisting.name}」
+              {effectiveExisting.isPrepItem && <span style={{ color: "var(--accent)" }}>(仕込み品)</span>}
+              を使います({effectiveExisting.unit}あたり
               {formatUnitPrice(effectiveExisting.currentPurchasePrice)}
               {effectiveExisting.yieldRatePercent < 100 && `・歩留まり${effectiveExisting.yieldRatePercent}%`})
               {existingNames.has(effectiveExisting.name) && (
@@ -847,6 +855,11 @@ function IngredientLineForm({
                 >
                   <span style={{ fontFamily: "var(--font-noto-sans-jp)" }}>
                     {i.name}
+                    {i.isPrepItem && (
+                      <span className="ml-2 text-xs" style={{ color: "var(--accent)" }}>
+                        (仕込み品)
+                      </span>
+                    )}
                     {existingNames.has(i.name) && (
                       <span className="ml-2 text-xs" style={{ color: "var(--muted-foreground)" }}>
                         (追加済み)

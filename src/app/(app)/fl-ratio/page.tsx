@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getSessionStore, getStoreData, getIngredientPriceHistory } from "@/lib/store";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient, type RankingSales } from "@/lib/menuRanking";
 import { resolveHistoricalPrice } from "@/lib/ingredientPriceHistory";
+import { withResolvedPrepItemPrices } from "@/lib/prepItemCost";
 import {
   aggregateSalesAndFoodCost,
   calcFlRatios,
@@ -116,9 +117,18 @@ export default async function FlRatioPage({
     // その月の末日時点で実際に使われていた仕入単価を再現する(値上がり後にこの画面を
     // 見ても、過去の月の食材原価が今の単価で遡及的に再計算されないようにするため)。
     // 月ごとに単価が変わるため、trend内の月ごとに解決し直す必要がある。
-    const rankingIngredients = (storeData?.ingredients ?? []).map((i) => ({
+    // 仕込み品は履歴を持たないため、通常の食材の履歴価格から実質単価を計算し直す
+    // (withResolvedPrepItemPrices。詳細はranking/page.tsxの同様のコメントを参照)。
+    const historicizedIngredients = (storeData?.ingredients ?? []).map((i) => ({
+      ...i,
+      currentPurchasePrice: i.isPrepItem ? 0 : resolveHistoricalPrice(priceHistory, i.id, period.end, i.currentPurchasePrice),
+    }));
+    const rankingIngredients = withResolvedPrepItemPrices(
+      historicizedIngredients,
+      storeData?.prepItemComponents ?? [],
+    ).map((i) => ({
       id: i.id,
-      currentPurchasePrice: resolveHistoricalPrice(priceHistory, i.id, period.end, i.currentPurchasePrice),
+      currentPurchasePrice: i.currentPurchasePrice,
       yieldRatePercent: i.yieldRatePercent,
     }));
 

@@ -68,6 +68,11 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
   const normalizedName = normalizeForDedupe(name);
 
   let menuId = input.menuId;
+  const nowIso = new Date().toISOString();
+  // 売価が実際に変わった時だけ menu_price_history に記録する(食材の仕入単価履歴と
+  // 同じ規約)。「過去の値付け判断の成果追跡」(menus/[id]画面)が、この履歴から
+  // 直近の値上げの前後で利益を比較するために使う。
+  let priceChanged = false;
 
   // 既存の食材行(編集モードで、今回の保存で外れた行を後で削除するために先に読んでおく)
   const { data: existingRows } = menuId
@@ -75,6 +80,14 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
     : { data: [] as { id: string; ingredient_id: string }[] };
 
   if (menuId) {
+    const { data: currentMenu, error: currentMenuErr } = await supabase
+      .from("menus")
+      .select("selling_price")
+      .eq("id", menuId)
+      .maybeSingle();
+    if (currentMenuErr) return { success: false, error: dbErrorMessage("確認", currentMenuErr) };
+    priceChanged = input.sellingPrice != null && currentMenu?.selling_price !== input.sellingPrice;
+
     const { error } = await supabase
       .from("menus")
       .update({
@@ -90,7 +103,7 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
     // 同じ名前のメニューが既にあれば、新規作成せずそれを使う(①のCSV取り込みと同じ重複防止設計)
     const { data: existing, error: existingError } = await supabase
       .from("menus")
-      .select("id")
+      .select("id, selling_price")
       .eq("store_id", input.storeId)
       .eq("normalized_name", normalizedName)
       .maybeSingle();
@@ -98,6 +111,7 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
 
     if (existing) {
       menuId = existing.id;
+      priceChanged = input.sellingPrice != null && existing.selling_price !== input.sellingPrice;
       await supabase
         .from("menus")
         .update({ selling_price: input.sellingPrice, target_cost_rate: targetCostRatePercent })
@@ -121,11 +135,17 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
         };
       }
       menuId = data.id;
+      // 新規作成時、売価が設定されていれば最初の記録として1行残す(食材登録時と同じ規約)。
+      priceChanged = input.sellingPrice != null;
     }
   }
 
   if (!menuId) {
     return { success: false, error: "メニューの特定に失敗しました" };
+  }
+
+  if (priceChanged && input.sellingPrice != null) {
+    await supabase.from("menu_price_history").insert({ menu_id: menuId, price: input.sellingPrice, recorded_at: nowIso });
   }
 
   const keptIngredientIds = new Set<string>();

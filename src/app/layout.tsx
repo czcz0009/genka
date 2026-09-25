@@ -23,8 +23,8 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "原価計算・値付けツール",
-  description: "個人飲食店向けの原価計算・メニュー値付けMVP",
+  title: { default: "ゲンカル | 飲食店向け原価計算・値付けツール", template: "%s | ゲンカル" },
+  description: "個人飲食店向けの原価計算・メニュー値付けツール「ゲンカル」",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

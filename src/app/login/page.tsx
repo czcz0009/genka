@@ -15,7 +15,7 @@ export default function LoginPage() {
         style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
       >
         <div>
-          <div className="mb-8 text-xs font-bold tracking-widest opacity-60">GENKA KANRI</div>
+          <div className="mb-8 text-xs font-bold tracking-widest opacity-60">ゲンカル</div>
           <div className="text-3xl leading-tight font-bold" style={{ fontFamily: "var(--font-noto-sans-jp)" }}>
             飲食店の
             <br />

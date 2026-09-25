@@ -16,7 +16,7 @@ import { NumberInputScrollGuard } from "@/components/NumberInputScrollGuard.tsx"
  * ここではエラーにせず既定の店名を表示するだけに留める。
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  let storeName = "原価計算ツール";
+  let storeName = "ゲンカル";
   let onboarding: { storeId: string; shouldAutoShow: boolean } | null = null;
 
   if (isSupabaseConfigured()) {

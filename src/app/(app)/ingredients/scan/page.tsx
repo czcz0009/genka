@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getSessionStore } from "@/lib/store";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
+import { remainingOcrUses } from "@/lib/invoiceOcr/usageLimit.ts";
 import { ScanView, type ExistingIngredientOption } from "./ScanView.tsx";
 
 export const metadata: Metadata = {
@@ -36,6 +37,9 @@ export default async function ScanInvoicePage() {
     .eq("is_prep_item", false)
     .order("name");
 
+  const { data: usage } = await supabase.from("ocr_usage").select("used_count").maybeSingle();
+  const initialRemaining = remainingOcrUses(usage?.used_count ?? 0);
+
   const existingIngredients: ExistingIngredientOption[] = (ingredients ?? []).map((i) => ({
     id: i.id,
     name: i.name,
@@ -51,7 +55,7 @@ export default async function ScanInvoicePage() {
         title="納品書から読み取る"
         description="納品書・請求書を写真で撮ってアップロードすると、AIが食材名・数量・単価を読み取ります。読み取り結果は必ずこの画面で確認・修正してから登録されます(自動では確定しません)。印刷された文字が中心の書類を対象としています(手書きの伝票は対象外です)。"
       />
-      <ScanView storeId={store.id} existingIngredients={existingIngredients} />
+      <ScanView storeId={store.id} existingIngredients={existingIngredients} initialRemaining={initialRemaining} />
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge.tsx";
 import { scanInvoicePhoto } from "./actions.ts";
 import { createIngredient, updateIngredient } from "../actions.ts";
 import type { ExtractedInvoiceItem } from "@/lib/invoiceOcr/types.ts";
+import { convertUnitPrice, isSameUnit } from "@/lib/invoiceOcr/convertUnitPrice.ts";
 
 export interface ExistingIngredientOption {
   id: string;
@@ -38,6 +39,11 @@ interface LocalRow {
   name: string;
   unit: string;
   unitPrice: string;
+  /** 納品書に書かれていた単位・単価(登録先を変えたときの再換算に使う) */
+  invoiceUnit: string;
+  invoicePrice: number | null;
+  /** 単位の換算・不一致に関する注意書き */
+  unitNote: string | null;
   quantity: number | null;
   lowConfidence: boolean;
   note: string | null;
@@ -47,17 +53,50 @@ interface LocalRow {
   error: string | null;
 }
 
+function formatPrice(price: number | null): string {
+  return price != null ? String(Math.round(price * 100) / 100) : "";
+}
+
+/** 既存食材に登録するとき、納品書の単価を登録済みの単位に合わせる */
+function resolvePriceForExisting(
+  invoiceUnit: string,
+  invoicePrice: number | null,
+  existingUnit: string,
+): { unitPrice: string; unitNote: string | null } {
+  if (invoicePrice == null || !invoiceUnit || isSameUnit(invoiceUnit, existingUnit)) {
+    return { unitPrice: formatPrice(invoicePrice), unitNote: null };
+  }
+  const converted = convertUnitPrice(invoicePrice, invoiceUnit, existingUnit);
+  if (converted != null) {
+    return {
+      unitPrice: formatPrice(converted),
+      unitNote: `納品書の単位(${invoiceUnit})から登録済みの単位(${existingUnit})に換算しました。納品書の単価: ${formatPrice(invoicePrice)}円/${invoiceUnit}`,
+    };
+  }
+  return {
+    unitPrice: formatPrice(invoicePrice),
+    unitNote: `納品書の単位は「${invoiceUnit}」、登録済みの単位は「${existingUnit}」で、自動では換算できません。単価が登録済みの単位あたりになっているか確認してください。`,
+  };
+}
+
 function buildInitialRow(item: ExtractedInvoiceItem, existingByNormalizedName: Map<string, ExistingIngredientOption>): LocalRow {
   const matched = existingByNormalizedName.get(normalizeForDedupe(item.name));
-  const computedUnitPrice =
+  const invoiceUnit = item.unit ?? "";
+  const invoicePrice =
     item.unitPrice ?? (item.totalAmount != null && item.quantity != null && item.quantity > 0 ? item.totalAmount / item.quantity : null);
+  const resolved = matched
+    ? resolvePriceForExisting(invoiceUnit, invoicePrice, matched.unit)
+    : { unitPrice: formatPrice(invoicePrice), unitNote: null };
 
   return {
     key: nextKey(),
     target: matched ? matched.id : "new",
     name: matched ? matched.name : item.name,
-    unit: matched ? matched.unit : (item.unit ?? ""),
-    unitPrice: computedUnitPrice != null ? String(Math.round(computedUnitPrice * 100) / 100) : "",
+    unit: matched ? matched.unit : invoiceUnit,
+    unitPrice: resolved.unitPrice,
+    invoiceUnit,
+    invoicePrice,
+    unitNote: resolved.unitNote,
     quantity: item.quantity,
     lowConfidence: item.lowConfidence,
     note: item.note,
@@ -71,9 +110,11 @@ function buildInitialRow(item: ExtractedInvoiceItem, existingByNormalizedName: M
 export function ScanView({
   storeId,
   existingIngredients,
+  initialRemaining,
 }: {
   storeId: string;
   existingIngredients: ExistingIngredientOption[];
+  initialRemaining: number;
 }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -81,6 +122,7 @@ export function ScanView({
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [rows, setRows] = useState<LocalRow[] | null>(null);
+  const [remaining, setRemaining] = useState(initialRemaining);
   const [savingAll, setSavingAll] = useState(false);
 
   const existingById = new Map(existingIngredients.map((i) => [i.id, i]));
@@ -106,6 +148,7 @@ export function ScanView({
     formData.append("photo", file);
     const result = await scanInvoicePhoto(formData);
     setScanning(false);
+    if (result.success) setRemaining(result.remaining);
     if (!result.success) {
       setScanError(result.error);
       return;
@@ -119,12 +162,12 @@ export function ScanView({
 
   function handleTargetChange(row: LocalRow, target: string) {
     if (target === "new") {
-      updateRow(row.key, { target: "new" });
+      updateRow(row.key, { target: "new", unit: row.invoiceUnit, unitPrice: formatPrice(row.invoicePrice), unitNote: null });
       return;
     }
     const existing = existingById.get(target);
     if (!existing) return;
-    updateRow(row.key, { target, name: existing.name, unit: existing.unit });
+    updateRow(row.key, { target, name: existing.name, unit: existing.unit, ...resolvePriceForExisting(row.invoiceUnit, row.invoicePrice, existing.unit) });
   }
 
   async function handleSaveRow(row: LocalRow) {
@@ -190,12 +233,17 @@ export function ScanView({
         <button
           type="button"
           onClick={handleScan}
-          disabled={scanning}
+          disabled={scanning || remaining <= 0}
           className="self-start rounded px-5 py-3 text-base font-bold transition-colors disabled:opacity-40"
           style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
         >
           {scanning ? "読み取り中…" : "この写真を読み取る"}
         </button>
+        <p className="text-sm" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+          {remaining > 0
+            ? `β版期間中の読み取り回数: あと${remaining}回(読み取りに成功したときに数えます)`
+            : "β版期間中の読み取り回数の上限に達しました。ご要望があればお知らせください。"}
+        </p>
       </div>
 
       {rows && rows.length > 0 && (
@@ -289,10 +337,16 @@ export function ScanView({
                   </label>
                 </div>
 
+                {row.unitNote && !row.saved && (
+                  <p className="text-sm font-medium" style={{ color: "var(--warning, #b45309)", fontFamily: "var(--font-noto-sans-jp)" }}>
+                    ⚠ {row.unitNote}
+                  </p>
+                )}
+
                 {row.quantity != null && (
                   <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
                     納品書に記載の数量: {row.quantity}
-                    {row.unit || ""}(参考情報。登録内容には反映されません)
+                    {row.invoiceUnit || ""}(参考情報。登録内容には反映されません)
                   </p>
                 )}
 

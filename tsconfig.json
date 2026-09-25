@@ -31,5 +31,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "design-reference"]
+  "exclude": ["node_modules", "design-reference", "landing"]
 }

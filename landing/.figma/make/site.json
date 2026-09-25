@@ -1,0 +1,12 @@
+{
+  "title": "ゲンカル | 値上げのタイミングを、勝手に教えてくれる。飲食店向け原価計算ツール",
+  "description": "納品書を撮るだけで仕入単価を読み取り、原価率・値上げの目安を自動で見える化する、個人飲食店向けの原価計算・値付けツールです。",
+  "language": "ja",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     // Figma Makeのデザイン参考実装(見た目の参照専用。別プロジェクトとして
     // 独自のpackage.json/tsconfigを持ち、このアプリのビルド・lint対象ではない)。
     "design-reference/**",
+    // LP(Vite製の別プロジェクト。このアプリのビルド・lint対象ではない)。
+    "landing/**",
   ]),
 ]);
 

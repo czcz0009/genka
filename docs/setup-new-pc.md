@@ -61,9 +61,9 @@ Supabaseは1つの共有プロジェクトなので、**マイグレーション
 SQL Editorで実行済みなら、新しいPCから接続してもそのまま同じデータが見える。
 
 新しいPCで作業する前に、`supabase/migrations/`フォルダの中身と、実際に
-Supabase側で最後まで実行したファイル(このファイルより番号が新しいものが
-無いか)を見比べておくと安心。特に直近追加した
-`0017_menu_price_history.sql` は、実行済みかどうか要確認。
+Supabase側で最後まで実行したファイルを見比べておくと安心。2026-09-25時点で
+**0019まで実行済み**(0018・0019は納品書OCRの利用回数の上限用)。これより番号が
+新しいファイルが増えていたら、未実行の可能性があるので要確認。
 
 ## 6. 2台のPCで作業する時の注意
 
@@ -80,6 +80,7 @@ Supabase側で最後まで実行したファイル(このファイルより番�
 - Claude Codeの権限設定(`.claude/settings.local.json`)はPCごとの
   ローカル設定で、gitには含まれない。新しいPCでは、最初は今まで許可した
   コマンドの確認が再度求められることがあるが、想定通りの挙動なので問題ない
-- Vercelに新しいPCから直接デプロイしたい場合は、そのPCで別途
-  `vercel link` が必要(通常はGit連携で自動デプロイされるため、
-  この作業は基本的に不要)
+- **本番へのデプロイは手動**(`git push` だけでは反映されない)。新しいPCで
+  `npx vercel login` → `npx vercel link --project genka --yes` をした上で、
+  `npx vercel --prod` を実行する。詳しくは [HANDOFF.md](HANDOFF.md) を参照
+- LP(`landing/`)は別のVercelプロジェクト(`genkaru-lp`)。手順は HANDOFF.md の5-2

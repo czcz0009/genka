@@ -74,6 +74,17 @@ function IconAlertTriangle({ className }: { className?: string }) {
   );
 }
 
+function IconYen({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="m6 4 6 8 6-8" />
+      <line x1="12" y1="12" x2="12" y2="20" />
+      <line x1="8" y1="14" x2="16" y2="14" />
+      <line x1="8" y1="17" x2="16" y2="17" />
+    </svg>
+  );
+}
+
 function IconSettings({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -91,6 +102,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "ダッシュボード", icon: IconGrid },
   { href: "/menus", label: "メニュー一覧", icon: IconList, tourId: "nav-menus" },
   { href: "/ingredients", label: "食材", icon: IconBox },
+  { href: "/sales", label: "売上管理", icon: IconYen },
   { href: "/ranking", label: "今見直すべきメニュー", icon: IconTrendingUp, tourId: "nav-ranking" },
   { href: "/fl-ratio", label: "FL比率", icon: IconActivity },
   { href: "/alerts", label: "仕入れ値アラート", icon: IconAlertTriangle, tourId: "nav-alerts" },

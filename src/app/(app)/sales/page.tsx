@@ -3,18 +3,25 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getSessionStore } from "@/lib/store";
-import { findPriceHeadroomMenus } from "@/lib/menuRanking";
 import { computeMonthlyMenuSummaries } from "@/lib/monthlyMenuSummaries";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
-import { RankingView } from "./RankingView.tsx";
+import { SalesView } from "./SalesView.tsx";
 
 export const metadata: Metadata = {
-  title: "今見直すべきメニュー",
+  title: "売上管理",
 };
 
-export default async function RankingPage({
+/**
+ * 売上を把握するための画面。
+ *
+ * 「入力ページ」ではなく「どのメニューがどれくらい売れて、実際の売上・
+ * 利益・原価率がどれくらいか」を見る画面にする(販売数量の入力・取り込みは
+ * 補助的な機能として折りたたんでおく)。原価率・利益の計算は「今見直すべき
+ * メニュー」画面と全く同じロジック(computeMonthlyMenuSummaries)を使う。
+ */
+export default async function SalesPage({
   searchParams,
 }: {
   searchParams: Promise<{ month?: string }>;
@@ -22,7 +29,7 @@ export default async function RankingPage({
   if (!isSupabaseConfigured()) {
     return (
       <div className="max-w-6xl space-y-6 p-6 md:p-8">
-        <PageHeader eyebrow="メニュー診断" title="今見直すべきメニュー" />
+        <PageHeader eyebrow="売上" title="売上管理" />
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           Supabaseが未接続のため、この画面はまだ利用できません。
         </p>
@@ -49,25 +56,24 @@ export default async function RankingPage({
   if (!result) {
     return (
       <div className="max-w-6xl space-y-6 p-6 md:p-8">
-        <PageHeader eyebrow="メニュー診断" title="今見直すべきメニュー" />
+        <PageHeader eyebrow="売上" title="売上管理" />
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-          メニューを登録すると、見直しの優先度が高いメニューからここに表示されます。
+          メニューを登録すると、月ごとの売上・利益がここに表示されます。
         </p>
         <StartHerePrompt />
       </div>
     );
   }
   const { month, availableMonths, summaries } = result;
-  const headroomMenus = findPriceHeadroomMenus(summaries);
 
   return (
     <div className="max-w-6xl space-y-6 p-6 md:p-8">
       <PageHeader
-        eyebrow="メニュー診断"
-        title="今見直すべきメニュー"
-        description="対応の優先度が高い順に並んでいます。原価率が目標を超えているメニューを優先して表示し、その中では値上げした場合の月間効果が大きいものから順に並べます。目標内のメニューは、利益貢献度(販売数量×(売価-原価))が高い順です。"
+        eyebrow="売上"
+        title="売上管理"
+        description="どのメニューがどれくらい売れて、実際の売上・利益・原価率がどれくらいかを月ごとに確認できます。販売数量の入力・取り込みは下部にあります。"
       />
-      <RankingView month={month} availableMonths={availableMonths} summaries={summaries} headroomMenus={headroomMenus} />
+      <SalesView storeId={store.id} month={month} availableMonths={availableMonths} summaries={summaries} />
     </div>
   );
 }

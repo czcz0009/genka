@@ -4,13 +4,10 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { MenuCostSummary } from "@/lib/types";
-import type { RankingMenu } from "@/lib/menuRanking";
 import { formatMonthLabel } from "@/lib/period/month";
 import { SearchablePicker } from "@/components/SearchablePicker.tsx";
 import { Notice } from "@/components/Notice.tsx";
 import { StatusBadge } from "@/components/StatusBadge.tsx";
-import { saveManualSales } from "./actions.ts";
-import { SalesImportPanel } from "./SalesImportPanel.tsx";
 
 function formatYen(n: number | null): string {
   if (n == null) return "-";
@@ -25,41 +22,19 @@ function formatSignedYen(n: number): string {
   return `${sign}¥${Math.abs(rounded).toLocaleString()}`;
 }
 
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex-1 rounded border px-3 py-2.5 transition-colors"
-      style={
-        active
-          ? { background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "var(--primary)" }
-          : { borderColor: "var(--border)", color: "var(--foreground)" }
-      }
-    >
-      {children}
-    </button>
-  );
-}
-
 export function RankingView({
-  storeId,
   month,
   availableMonths,
   summaries,
-  menus,
   headroomMenus,
 }: {
-  storeId: string;
   month: string;
   availableMonths: string[];
   summaries: MenuCostSummary[];
-  menus: RankingMenu[];
   /** 原価率が目標より大幅に低い、値上げ余地のあるメニュー(「今見直すべきメニュー」と対になる一覧)。 */
   headroomMenus: MenuCostSummary[];
 }) {
   const router = useRouter();
-  const [showEntry, setShowEntry] = useState(false);
-  const [entryTab, setEntryTab] = useState<"manual" | "csv">("manual");
   const [showMonthPicker, setShowMonthPicker] = useState(false);
 
   const monthOptions = useMemo(() => {
@@ -84,13 +59,18 @@ export function RankingView({
         >
           対象期間: {formatMonthLabel(month)}
         </button>
-        <button
-          onClick={() => setShowEntry((v) => !v)}
+        {/*
+          以前はここに販売数量の入力フォームを埋め込んでいたが、独立した居場所が
+          無く見つけにくい・使いにくいという指摘を受けて「売上管理」画面に分離した。
+        */}
+        <Link
+          href={`/sales?month=${month}`}
+          prefetch={false}
           className="rounded border px-4 py-2.5 text-sm"
           style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
         >
-          {showEntry ? "閉じる" : "販売数量を入力/取り込む"}
-        </button>
+          売上管理で販売数量を入力する →
+        </Link>
       </div>
 
       {showMonthPicker && (
@@ -108,40 +88,6 @@ export function RankingView({
         </div>
       )}
 
-      {showEntry && (
-        <div className="rounded border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-          <div className="mb-3 flex gap-2 text-sm">
-            <TabButton active={entryTab === "manual"} onClick={() => setEntryTab("manual")}>
-              手動入力
-            </TabButton>
-            <TabButton active={entryTab === "csv"} onClick={() => setEntryTab("csv")}>
-              CSV取り込み
-            </TabButton>
-          </div>
-          {entryTab === "manual" ? (
-            <ManualSalesEntry
-              storeId={storeId}
-              month={month}
-              menus={menus}
-              summaries={summaries}
-              onSaved={() => {
-                setShowEntry(false);
-                router.refresh();
-              }}
-            />
-          ) : (
-            <SalesImportPanel
-              storeId={storeId}
-              month={month}
-              onSaved={() => {
-                setShowEntry(false);
-                router.refresh();
-              }}
-            />
-          )}
-        </div>
-      )}
-
       {overTargetCount > 0 && (
         <Notice tone="warn">
           {overTargetCount}品が目標原価率を超えています。対応の優先度が高い順に上から並んでいるので、上のメニューから確認してください。
@@ -155,7 +101,6 @@ export function RankingView({
               <tr>
                 <th className="whitespace-nowrap px-3 py-2.5 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted-foreground)" }}>#</th>
                 <th className="whitespace-nowrap px-3 py-2.5 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted-foreground)" }}>メニュー</th>
-                <th className="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--muted-foreground)" }}>販売数</th>
                 <th
                   className="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide"
                   style={{ color: "var(--muted-foreground)" }}
@@ -167,7 +112,7 @@ export function RankingView({
                 <th
                   className="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide"
                   style={{ color: "var(--muted-foreground)" }}
-                  title="販売数量 ×(売価−原価)。原価率が高くても数が出ないメニューより、実際に利益を多く生んでいるメニューが上位に来ます"
+                  title="販売数量 ×(売価−原価)。原価率が高くても数が出ないメニューより、実際に利益を多く生んでいるメニューが上位に来ます。販売数量は「売上管理」で入力します"
                 >
                   利益貢献度
                 </th>
@@ -189,9 +134,6 @@ export function RankingView({
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 font-medium" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
                     {s.menuName}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono" style={{ color: "var(--muted-foreground)" }}>
-                    {s.quantitySold}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono" style={{ color: "var(--foreground)" }}>
                     {formatYen(s.sellingPrice)}
@@ -225,8 +167,8 @@ export function RankingView({
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono">
                     {s.monthlyProfitImpact == null ? (
-                      <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-                        販売数量を登録すると表示されます
+                      <span className="text-xs" style={{ color: "var(--muted-foreground)" }} title="販売数量を「売上管理」で登録すると表示されます">
+                        -
                       </span>
                     ) : (
                       <span
@@ -320,82 +262,6 @@ export function RankingView({
           </div>
         </section>
       )}
-    </div>
-  );
-}
-
-function ManualSalesEntry({
-  storeId,
-  month,
-  menus,
-  summaries,
-  onSaved,
-}: {
-  storeId: string;
-  month: string;
-  menus: RankingMenu[];
-  summaries: MenuCostSummary[];
-  onSaved: () => void;
-}) {
-  const currentByMenuId = new Map(summaries.map((s) => [s.menuId, s.quantitySold]));
-  const [values, setValues] = useState<Record<string, string>>(
-    Object.fromEntries(menus.map((m) => [m.id, String(currentByMenuId.get(m.id) ?? 0)])),
-  );
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSave() {
-    setSaving(true);
-    setError(null);
-    const entries = menus.map((m) => ({ menuId: m.id, quantitySold: Number(values[m.id] || 0) }));
-    const result = await saveManualSales({ storeId, month, entries });
-    setSaving(false);
-    if (!result.success) {
-      setError(result.error);
-      return;
-    }
-    onSaved();
-  }
-
-  return (
-    <div className="flex flex-col gap-3">
-      <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-        {formatMonthLabel(month)}の販売数量を入力してください。
-      </p>
-      <div className="max-h-80 overflow-y-auto rounded border" style={{ borderColor: "var(--border)" }}>
-        <table className="w-full text-sm">
-          <tbody>
-            {menus.map((m) => (
-              <tr key={m.id} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
-                <td className="px-3 py-2" style={{ color: "var(--foreground)" }}>{m.name}</td>
-                <td className="px-3 py-2">
-                  <input
-                    type="number"
-                    min={0}
-                    value={values[m.id] ?? "0"}
-                    onChange={(e) => setValues({ ...values, [m.id]: e.target.value })}
-                    className="w-24 rounded border px-3 py-2 text-right font-mono text-base"
-                    style={{ background: "var(--background)", borderColor: "var(--border)", color: "var(--foreground)" }}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {error && (
-        <p className="text-sm" style={{ color: "var(--status-danger)" }}>
-          {error}
-        </p>
-      )}
-      <button
-        onClick={handleSave}
-        disabled={saving || menus.length === 0}
-        className="self-end rounded px-5 py-3 text-base font-bold transition-colors disabled:opacity-40"
-        style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
-      >
-        {saving ? "保存中…" : "保存する"}
-      </button>
     </div>
   );
 }

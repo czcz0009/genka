@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -88,11 +89,21 @@ export default async function IngredientsPage() {
 
   return (
     <div className="max-w-2xl space-y-6 p-6 md:p-8">
-      <PageHeader
-        eyebrow="食材"
-        title="食材一覧"
-        description="メニューを作らなくても、ここから食材の登録・価格の修正ができます。出汁やタレなど、仕込んで使い回すものは「仕込み品」として登録すると、材料の価格変更が自動で反映されます。"
-      />
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <PageHeader
+          eyebrow="食材"
+          title="食材一覧"
+          description="メニューを作らなくても、ここから食材の登録・価格の修正ができます。出汁やタレなど、仕込んで使い回すものは「仕込み品」として登録すると、材料の価格変更が自動で反映されます。"
+        />
+        <Link
+          href="/ingredients/scan"
+          prefetch={false}
+          className="shrink-0 rounded border px-5 py-3 text-base font-semibold transition-colors"
+          style={{ borderColor: "var(--border)", color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
+        >
+          納品書から読み取る
+        </Link>
+      </div>
       <IngredientsView
         storeId={store.id}
         initialIngredients={rawIngredients.map((i) => ({

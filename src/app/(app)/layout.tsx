@@ -3,6 +3,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getSessionStore } from "@/lib/store";
 import { Sidebar } from "@/components/Sidebar.tsx";
 import { OnboardingTour } from "@/components/OnboardingTour.tsx";
+import { NumberInputScrollGuard } from "@/components/NumberInputScrollGuard.tsx";
 
 /**
  * ログイン後の全画面(ダッシュボード・メニュー管理・CSV取り込み・収益ランキング・
@@ -41,6 +42,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Sidebar storeName={storeName} />
       <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
       {onboarding && <OnboardingTour storeId={onboarding.storeId} shouldAutoShow={onboarding.shouldAutoShow} />}
+      <NumberInputScrollGuard />
     </div>
   );
 }

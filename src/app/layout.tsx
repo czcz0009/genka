@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Noto_Sans_JP, JetBrains_Mono } from "next/font/google";
+import { SERVICE_NAME } from "@/lib/serviceName.ts";
 import "./globals.css";
 
 // design-reference(Figma Make案)と同じフォント構成。next/fontで自前ホスティングし、
@@ -23,8 +24,8 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: { default: "ゲンカル | 飲食店向け原価計算・値付けツール", template: "%s | ゲンカル" },
-  description: "個人飲食店向けの原価計算・メニュー値付けツール「ゲンカル」",
+  title: { default: `${SERVICE_NAME} | 飲食店向け原価計算・値付けツール`, template: `%s | ${SERVICE_NAME}` },
+  description: `個人飲食店向けの原価計算・メニュー値付けツール「${SERVICE_NAME}」`,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SERVICE_NAME } from "@/lib/serviceName.ts";
 import { LoginForm } from "./LoginForm.tsx";
 
 export const metadata: Metadata = {
@@ -15,7 +16,7 @@ export default function LoginPage() {
         style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
       >
         <div>
-          <div className="mb-8 text-xs font-bold tracking-widest opacity-60">ゲンカル</div>
+          <div className="mb-8 text-xs font-bold tracking-widest opacity-60">{SERVICE_NAME}</div>
           <div className="text-3xl leading-tight font-bold" style={{ fontFamily: "var(--font-noto-sans-jp)" }}>
             飲食店の
             <br />

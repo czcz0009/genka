@@ -1,3 +1,10 @@
+/**
+ * サービスの表示名。今後改名する場合はここだけ書き換える。
+ * ただしHTMLの<title>・OGP(`.figma/make/site.json`のtitle/description)は
+ * ビルド前のJSONで、この定数をimportできないため別途手動で合わせる必要がある。
+ * アプリ側(Next.js)の対応する定数は src/lib/serviceName.ts。
+ */
+const SERVICE_NAME = '原価レンズ'
 /** アプリ本体の新規登録・ログイン画面(「使ってみる」の遷移先) */
 const APP_URL = 'https://genka-one.vercel.app/login'
 /** ご質問・ご感想の受付先(Googleフォーム・mailto・LINEなど)。未定の間は空にする */
@@ -16,7 +23,7 @@ function Logo({ small = false }: { small?: boolean }) {
           <path d="M3 11.5L7 5l3 4 2-2.5 3 5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </div>
-      <span className={`font-bold tracking-tight ${small ? 'text-xs text-navy-200' : 'text-sm text-navy-900'}`}>ゲンカル</span>
+      <span className={`font-bold tracking-tight ${small ? 'text-xs text-navy-200' : 'text-sm text-navy-900'}`}>{SERVICE_NAME}</span>
     </div>
   )
 }
@@ -309,7 +316,7 @@ const faqs = [
   { q: '料金はかかりますか?', a: 'β版の期間中は無料でお使いいただけます。将来の料金体系は未定です。' },
   { q: '納品書の読み取りは、間違えませんか?', a: '読み取り結果は自動では確定せず、必ず画面で確認・修正してから登録します。自信のない箇所には「要確認」が付きます。' },
   { q: '手書きの伝票でも読み取れますか?', a: '印刷された納品書・請求書が対象です。手書きの伝票は対象外です。' },
-  { q: '撮影した写真は保存されますか?', a: '読み取りのために一時的にAIサービスへ送信しますが、ゲンカルのサーバーには保存しません。' },
+  { q: '撮影した写真は保存されますか?', a: `読み取りのために一時的にAIサービスへ送信しますが、${SERVICE_NAME}のサーバーには保存しません。` },
   { q: '読み取りに回数の制限はありますか?', a: 'β版の期間中は、コスト管理のため、納品書の読み取りは1アカウントあたり3回までとしています(読み取りに成功した回数を数えます。失敗が続いた場合も、10回で上限になります)。ExcelやCSVの取り込み、手入力は、この回数に含まれません。' },
   { q: 'レジや会計ソフトとの連携は必要ですか?', a: '必要ありません。納品書の写真か、Excel・CSV、手入力だけで始められます。' },
 ]
@@ -373,7 +380,7 @@ function Footer() {
           <p className="text-xs text-navy-400">© 2026</p>
         </div>
         <div className="text-xs text-navy-400 leading-relaxed space-y-1">
-          <p>運営: ゲンカル運営(個人開発)。現在はβ版として無料で提供しています。</p>
+          <p>運営: {SERVICE_NAME}運営(個人開発)。現在はβ版として無料で提供しています。</p>
           <p>
             お問い合わせフォームにご入力いただいた内容(メールアドレスを含む)は、ご質問・ご感想への返信と、サービス改善の目的にのみ使用し、第三者へは提供しません。
           </p>

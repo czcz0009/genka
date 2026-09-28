@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getSessionStore } from "@/lib/store";
+import { SERVICE_NAME } from "@/lib/serviceName.ts";
 import { Sidebar } from "@/components/Sidebar.tsx";
 import { OnboardingTour } from "@/components/OnboardingTour.tsx";
 import { NumberInputScrollGuard } from "@/components/NumberInputScrollGuard.tsx";
@@ -16,7 +17,7 @@ import { NumberInputScrollGuard } from "@/components/NumberInputScrollGuard.tsx"
  * ここではエラーにせず既定の店名を表示するだけに留める。
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  let storeName = "ゲンカル";
+  let storeName: string = SERVICE_NAME;
   let onboarding: { storeId: string; shouldAutoShow: boolean } | null = null;
 
   if (isSupabaseConfigured()) {

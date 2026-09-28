@@ -1,7 +1,8 @@
 # CLAUDE.md — 飲食店向け原価計算・メニュー値付けツール
 
 > **別PC・新セッションで始めるときは、まず [docs/HANDOFF.md](docs/HANDOFF.md) を読むこと**(現状・決定事項・次のTODO・手順がまとまっている)。
-> サービス名は「ゲンカル」(旧称: 原価計算ツール)。LPは `landing/`(別のVercelプロジェクト)。
+> サービス名は「原価レンズ」(旧称: ゲンカル → さらに前は原価計算ツール)。LPは `landing/`(別のVercelプロジェクト)。
+> サービス名は1か所の定数([src/lib/serviceName.ts](src/lib/serviceName.ts)、LPは `landing/src/App.tsx` の`SERVICE_NAME`)に集約している。改名の決め手は「一目で何のツールか分かること」と「洗練された印象」(2026-09-28決定)。改名時はこの2箇所に加え、`landing/.figma/make/site.json` のtitle/description(ビルド前のJSONのため定数を参照できない)も手動で合わせる。
 
 ## 作業者プロフィール(最重要・毎回意識すること)
 

@@ -1,4 +1,18 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Inter:wght@400;500;600;700;800&display=swap');
+/*
+ * フォントは @fontsource で自前ホスティングする(Googleの
+ * fonts.googleapis.com / fonts.gstatic.com への実行時リクエストを避け、
+ * 訪問者のIPアドレス等がGoogleに送信されないようにするため。
+ * アプリ本体(Next.js)は next/font で同様に自前ホスティングしている)。
+ */
+@import '@fontsource/noto-sans-jp/400.css';
+@import '@fontsource/noto-sans-jp/500.css';
+@import '@fontsource/noto-sans-jp/700.css';
+@import '@fontsource/noto-sans-jp/900.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+@import '@fontsource/inter/800.css';
 @import 'tailwindcss';
 
 @theme {

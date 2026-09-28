@@ -9,6 +9,7 @@ import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
 import { HelpButton } from "@/components/HelpButton.tsx";
+import { MaffAttribution } from "@/components/MaffAttribution.tsx";
 import { AlertsView } from "./AlertsView.tsx";
 import { LivestockLinkSettings } from "./LivestockLinkSettings.tsx";
 import { IngredientOverview } from "./IngredientOverview.tsx";
@@ -114,6 +115,7 @@ export default async function AlertsPage() {
             <span className="text-xs opacity-80">
               畜産物(豚・牛・鶏)は東京市場、青果物は全国の主要な卸売市場をまとめた価格を、値動きの目安として使っています。地域やお店の仕入れルートによっては、実際の仕入れ値との差が大きくなる場合があります。
             </span>
+            <MaffAttribution className="mt-2 text-xs opacity-80" />
           </>
         }
       />

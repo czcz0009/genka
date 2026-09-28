@@ -264,6 +264,31 @@ function Features() {
             <p className="text-xs text-ink-faint leading-relaxed border-l-2 border-amber-200 pl-3">
               畜産物は東京市場、青果物は全国主要卸売市場の価格を参考値として使用(実際の仕入れ値そのものではありません)
             </p>
+            {/*
+              アプリ側(src/components/MaffAttribution.tsx)と同じ内容。別プロジェクトの
+              ためimportできず、ここに複製している。文言を変える場合は両方を合わせる。
+            */}
+            <p className="text-xs text-ink-faint leading-relaxed">
+              出典: 農林水産省「
+              <a
+                href="https://www.maff.go.jp/j/tokei/syohi/shunbetu/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline"
+              >
+                青果物卸売市場調査(旬別結果)
+              </a>
+              」「
+              <a
+                href="https://www.maff.go.jp/j/chikusan/shokuniku/lin/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline"
+              >
+                畜産物卸売価格の推移
+              </a>
+              」。取得したデータをもとに当サービスが加工・試算した参考値であり、国(農林水産省)が内容を保証するものではありません。
+            </p>
           </div>
         </div>
       </div>

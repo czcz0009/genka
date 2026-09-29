@@ -81,7 +81,7 @@ const sections: LegalSection[] = [
   },
   {
     heading: "附則",
-    body: `本規約は、[要確認: 施行日]から施行します。`,
+    body: `本規約は、2026年9月29日から施行します。`,
   },
 ];
 

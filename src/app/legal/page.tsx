@@ -48,7 +48,7 @@ const sections: LegalSection[] = [
   },
   {
     heading: "施行日",
-    body: `[要確認]`,
+    body: `2026年9月29日`,
   },
 ];
 

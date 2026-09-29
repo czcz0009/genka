@@ -89,7 +89,7 @@ export default function PrivacyPage() {
       title={`${SERVICE_NAME} プライバシーポリシー`}
       preamble={`${SERVICE_NAME}運営(以下「当方」)は、「${SERVICE_NAME}」(以下「本サービス」)における利用者情報の取り扱いについて、以下のとおりプライバシーポリシーを定めます。`}
       sections={sections}
-      footer={`制定日: [要確認: 施行日]
+      footer={`制定日: 2026年9月29日
 運営者: ${SERVICE_NAME}運営 [要確認: 表示名・連絡先メールアドレス]`}
     />
   );

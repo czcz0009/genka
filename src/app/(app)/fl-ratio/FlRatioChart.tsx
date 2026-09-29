@@ -17,6 +17,14 @@ export interface TrendPoint {
   flrRate: number | null;
   flSeverity: Severity | null;
   flrSeverity: Severity | null;
+  /** その期間に、単価未設定の食材を含む(販売実績のある)メニューが1つでもあるか。 */
+  hasUnsetMenu: boolean;
+  /** 未計算のため除外した売上額(円)。 */
+  excludedSalesAmount: number;
+  /** 未計算のため除外したメニュー数。 */
+  excludedMenuCount: number;
+  /** 「計算できたメニューだけなら」の食材原価率(%)。補足表示用、hasUnsetMenuがfalseならfoodCostRateと同じ。 */
+  computableOnlyFoodCostRate: number | null;
 }
 
 // dataviz参考パレット slot1(blue)/slot2(orange)。隣接ペアでCVD分離を検証済み

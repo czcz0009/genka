@@ -1,12 +1,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveEffectiveIngredientPrices, wouldCreateCycle, withResolvedPrepItemPrices } from "./prepItemCost.ts";
+import {
+  resolveEffectiveIngredientPrices,
+  resolveIngredientPriceStatus,
+  resolveUnsetLeaves,
+  wouldCreateCycle,
+  withResolvedPrepItemPrices,
+} from "./prepItemCost.ts";
 import type { CostIngredient, PrepItemComponentLine, PrepItemEdge } from "./prepItemCost.ts";
 
 function ingredient(partial: Partial<CostIngredient> & { id: string }): CostIngredient {
   return {
+    name: partial.id,
     isPrepItem: false,
     currentPurchasePrice: 0,
+    priceIsSet: true,
     yieldRatePercent: 100,
     yieldQuantity: null,
     ...partial,
@@ -86,9 +94,17 @@ test("resolveEffectiveIngredientPrices: 循環参照があっても無限ルー�
 
 test("withResolvedPrepItemPrices: 通常の食材はそのまま、仕込み品だけ実質単価に差し替える", () => {
   const rows = [
-    { id: "kombu", currentPurchasePrice: 2, yieldRatePercent: 100, isPrepItem: false, yieldQuantity: null },
-    { id: "katsuobushi", currentPurchasePrice: 4, yieldRatePercent: 100, isPrepItem: false, yieldQuantity: null },
-    { id: "dashi", currentPurchasePrice: 0, yieldRatePercent: null, isPrepItem: true, yieldQuantity: 10000 },
+    { id: "kombu", name: "昆布", currentPurchasePrice: 2, priceIsSet: true, yieldRatePercent: 100, isPrepItem: false, yieldQuantity: null },
+    {
+      id: "katsuobushi",
+      name: "かつお節",
+      currentPurchasePrice: 4,
+      priceIsSet: true,
+      yieldRatePercent: 100,
+      isPrepItem: false,
+      yieldQuantity: null,
+    },
+    { id: "dashi", name: "出汁", currentPurchasePrice: 0, priceIsSet: false, yieldRatePercent: null, isPrepItem: true, yieldQuantity: 10000 },
   ];
   const components: PrepItemComponentLine[] = [
     { prepItemId: "dashi", componentId: "kombu", quantity: 1000 },
@@ -99,6 +115,56 @@ test("withResolvedPrepItemPrices: 通常の食材はそのまま、仕込み品�
   const dashi = result.find((r) => r.id === "dashi");
   assert.equal(dashi?.currentPurchasePrice, 0.4);
   assert.equal(dashi?.yieldRatePercent, 100); // 二重の歩留まり適用を避けるため100に固定
+  assert.equal(dashi?.priceIsSet, true); // 材料が両方設定済みなので、仕込み品自体も設定済みになる
+});
+
+test("resolveIngredientPriceStatus: 通常の食材はpriceIsSetをそのまま返す", () => {
+  const status = resolveIngredientPriceStatus(
+    [ingredient({ id: "water", priceIsSet: false }), ingredient({ id: "kombu", priceIsSet: true })],
+    [],
+  );
+  assert.equal(status.get("water"), false);
+  assert.equal(status.get("kombu"), true);
+});
+
+test("resolveIngredientPriceStatus: 仕込み品は材料が1つでも未設定なら未設定になる", () => {
+  const ingredients = [
+    ingredient({ id: "shoyu", name: "醤油", currentPurchasePrice: 1, priceIsSet: true }),
+    ingredient({ id: "ichimi", name: "一味", priceIsSet: false }),
+    ingredient({ id: "tare", name: "特製だれ", isPrepItem: true, yieldQuantity: 100 }),
+  ];
+  const components: PrepItemComponentLine[] = [
+    { prepItemId: "tare", componentId: "shoyu", quantity: 50 },
+    { prepItemId: "tare", componentId: "ichimi", quantity: 2 },
+  ];
+  const status = resolveIngredientPriceStatus(ingredients, components);
+  assert.equal(status.get("tare"), false);
+});
+
+test("resolveUnsetLeaves: J相当。入れ子の仕込み品でも、一番近い親1つだけを添えて未設定の食材名を報告する", () => {
+  const ingredients = [
+    ingredient({ id: "shoyu", name: "醤油", currentPurchasePrice: 1, priceIsSet: true }),
+    ingredient({ id: "ichimi", name: "一味", priceIsSet: false }),
+    ingredient({ id: "mirin", name: "みりん", currentPurchasePrice: 2, priceIsSet: true }),
+    ingredient({ id: "tare", name: "特製だれ", isPrepItem: true, yieldQuantity: 100 }),
+    ingredient({ id: "sauce", name: "特製ソース", isPrepItem: true, yieldQuantity: 120 }),
+  ];
+  const components: PrepItemComponentLine[] = [
+    { prepItemId: "tare", componentId: "shoyu", quantity: 50 },
+    { prepItemId: "tare", componentId: "ichimi", quantity: 2 },
+    { prepItemId: "sauce", componentId: "tare", quantity: 100 },
+    { prepItemId: "sauce", componentId: "mirin", quantity: 20 },
+  ];
+  const leaves = resolveUnsetLeaves(ingredients, components);
+  assert.deepEqual(leaves.get("tare"), [{ name: "一味", viaPrepItemName: "特製だれ" }]);
+  // sauceはtare経由で一味を含むが、親の表記は一番近い「特製だれ」のまま変わらない
+  assert.deepEqual(leaves.get("sauce"), [{ name: "一味", viaPrepItemName: "特製だれ" }]);
+  assert.deepEqual(leaves.get("shoyu"), []);
+});
+
+test("resolveUnsetLeaves: メニューが仕込み品を介さず直接未設定の食材を使う場合はviaPrepItemNameがnull", () => {
+  const leaves = resolveUnsetLeaves([ingredient({ id: "water", name: "水", priceIsSet: false })], []);
+  assert.deepEqual(leaves.get("water"), [{ name: "水", viaPrepItemName: null }]);
 });
 
 test("wouldCreateCycle: 循環していなければfalse", () => {

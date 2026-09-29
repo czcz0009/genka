@@ -78,6 +78,12 @@ export interface StoreDataIngredient {
   id: string;
   name: string;
   currentPurchasePrice: number;
+  /**
+   * 単価が入力済みかどうか。falseなら未設定(current_purchase_priceは
+   * 参考値の0円で、実際の単価としては使わない)。仕込み品には適用されない
+   * (常にfalse。有効性は材料の組み合わせから別途判定する)。
+   */
+  priceIsSet: boolean;
   /** 歩留まり率(%)。100(初期値)なら歩留まりなし=従来通りの計算。 */
   yieldRatePercent: number;
   /** 仕込み品(サブレシピ)かどうか。trueの場合、currentPurchasePriceは使わない。 */
@@ -130,6 +136,7 @@ interface RawStoreDataRow {
     id: string;
     name: string;
     current_purchase_price: number;
+    price_is_set: boolean;
     yield_rate_percent: number;
     is_prep_item: boolean;
     yield_quantity: number | null;
@@ -187,6 +194,7 @@ export const getStoreData = cache(async function getStoreData(
       id: i.id,
       name: i.name,
       currentPurchasePrice: i.current_purchase_price,
+      priceIsSet: i.price_is_set,
       yieldRatePercent: i.yield_rate_percent,
       isPrepItem: i.is_prep_item,
       yieldQuantity: i.yield_quantity,
@@ -250,6 +258,11 @@ export const getIngredientPriceHistory = cache(async function getIngredientPrice
 ): Promise<PriceHistoryEntry[]> {
   const { data, error } = await supabase.rpc("get_ingredient_price_history");
   if (error || !data) return [];
-  const rows = data as { ingredient_id: string; price: number; recorded_at: string }[];
-  return rows.map((r) => ({ ingredientId: r.ingredient_id, price: r.price, recordedAt: r.recorded_at }));
+  const rows = data as { ingredient_id: string; price: number; recorded_at: string; price_is_set: boolean }[];
+  return rows.map((r) => ({
+    ingredientId: r.ingredient_id,
+    price: r.price,
+    recordedAt: r.recorded_at,
+    priceIsSet: r.price_is_set,
+  }));
 });

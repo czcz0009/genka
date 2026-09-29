@@ -11,8 +11,22 @@ export interface CostCalcMenuIngredient {
   quantity: number;
 }
 
-/** ingredientId -> 現在の仕入単価(単位あたり、歩留まり調整済み) */
-export type UnitPriceMap = Map<string, number>;
+export interface UnitPriceEntry {
+  /** 単位あたりの実質単価(歩留まり調整済み)。isSet=falseのときは参考値(通常0)。 */
+  price: number;
+  /** 単価が入力済みかどうか。falseなら未設定。 */
+  isSet: boolean;
+}
+
+/** ingredientId -> 現在の仕入単価(単位あたり、歩留まり調整済み)と設定状況 */
+export type UnitPriceMap = Map<string, UnitPriceEntry>;
+
+export interface MenuTotalCostResult {
+  /** 単価不明な食材を0円として計算した参考値。集計・下限計算に使う。 */
+  totalCost: number;
+  /** 単価が未設定の食材のID一覧(そのメニューで使われている分、出現順・重複なし)。 */
+  unsetIngredientIds: string[];
+}
 
 /**
  * 歩留まり率(仕入れた量のうち実際に料理に使える割合)を考慮した、実質の仕入単価。
@@ -27,16 +41,29 @@ export function calcEffectiveUnitPrice(purchasePrice: number, yieldRatePercent?:
   return purchasePrice / (yieldRatePercent / 100);
 }
 
-/** メニュー1品分の合計原価。単価が見つからない食材は0円として計算から除外する。 */
+/**
+ * メニュー1品分の合計原価。単価が見つからない食材は0円として計算に含める
+ * (参考値。unsetIngredientIdsに含めて呼び出し側に知らせる)。
+ * 単価が未設定(isSet=false)の食材も同様に0円として合計には加えるが、
+ * unsetIngredientIdsに含める(画面側は、これが1件でもあれば原価率の数字を
+ * 出さずに「計算できていません」を表示する、という使い分けをする)。
+ */
 export function calcMenuTotalCost(
   menuIngredients: CostCalcMenuIngredient[],
   unitPrices: UnitPriceMap,
-): number {
-  return menuIngredients.reduce((sum, line) => {
-    const price = unitPrices.get(line.ingredientId);
-    if (price == null) return sum;
-    return sum + price * line.quantity;
+): MenuTotalCostResult {
+  const unsetIds = new Set<string>();
+  const totalCost = menuIngredients.reduce((sum, line) => {
+    const entry = unitPrices.get(line.ingredientId);
+    // 単価一覧に無い食材(削除済みなどの異常系)も、安全側に倒して未設定扱いにする。
+    if (entry == null) {
+      unsetIds.add(line.ingredientId);
+      return sum;
+    }
+    if (!entry.isSet) unsetIds.add(line.ingredientId);
+    return sum + entry.price * line.quantity;
   }, 0);
+  return { totalCost, unsetIngredientIds: [...unsetIds] };
 }
 
 /** 原価率(%)。売価が未設定(null)または0以下なら計算不能としてnullを返す。 */

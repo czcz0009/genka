@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatMonthLabel } from "@/lib/period/month";
-import type { Severity } from "@/lib/flRatio";
+import { exceedsBenchmark, FL_BENCHMARK_PERCENT, FLR_BENCHMARK_PERCENT, type Severity } from "@/lib/flRatio";
 import { StatusBadge, type BadgeStatus } from "@/components/StatusBadge.tsx";
 import { saveFixedCost } from "./actions.ts";
 import { FlRatioChart, type TrendPoint } from "./FlRatioChart.tsx";
@@ -12,8 +12,8 @@ import { FlRatioChart, type TrendPoint } from "./FlRatioChart.tsx";
 const SEVERITY_STATUS: Record<Severity, BadgeStatus> = { normal: "ok", caution: "warn", danger: "danger" };
 const SEVERITY_LABEL: Record<Severity, string> = { normal: "正常", caution: "注意", danger: "危険" };
 
-function formatPercent(n: number | null): string {
-  return n == null ? "-" : `${n.toFixed(1)}%`;
+function formatPercent(n: number | null, suffix = ""): string {
+  return n == null ? "-" : `${n.toFixed(1)}%${suffix}`;
 }
 
 export function FlRatioView({
@@ -51,11 +51,38 @@ export function FlRatioView({
         />
       </label>
 
+      {current.hasUnsetMenu && (
+        <div className="rounded border p-3 text-sm" style={{ background: "var(--card)", borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
+          売上の{((current.excludedSalesAmount / current.totalSales) * 100).toFixed(1)}%(
+          {Math.round(current.excludedSalesAmount).toLocaleString()}円分・{current.excludedMenuCount}品)は、単価が未設定の食材を含むため原価が未計算です。下の比率には「◯%以上」として反映しています。
+          <Link href="/ranking" prefetch={false} className="ml-1 underline underline-offset-2">
+            対象のメニューを見る →
+          </Link>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <RatioCard label="F比率(食材原価)" value={formatPercent(current.foodCostRate)} />
+        <RatioCard
+          label="F比率(食材原価)"
+          value={formatPercent(current.foodCostRate, current.hasUnsetMenu ? "以上" : "")}
+          isLowerBound={current.hasUnsetMenu}
+          footnote={current.hasUnsetMenu ? `計算できたメニューだけなら${formatPercent(current.computableOnlyFoodCostRate)}` : undefined}
+        />
         <RatioCard label="L比率(人件費)" value={formatPercent(current.laborCostRate)} />
-        <RatioCard label="FL比率" value={formatPercent(current.flRate)} severity={current.flSeverity} />
-        <RatioCard label="FLR比率" value={formatPercent(current.flrRate)} severity={current.flrSeverity} />
+        <RatioCard
+          label="FL比率"
+          value={formatPercent(current.flRate, current.hasUnsetMenu ? "以上" : "")}
+          severity={current.hasUnsetMenu ? undefined : current.flSeverity}
+          isLowerBound={current.hasUnsetMenu}
+          exceedsWarning={current.hasUnsetMenu && exceedsBenchmark(current.flRate, FL_BENCHMARK_PERCENT)}
+        />
+        <RatioCard
+          label="FLR比率"
+          value={formatPercent(current.flrRate, current.hasUnsetMenu ? "以上" : "")}
+          severity={current.hasUnsetMenu ? undefined : current.flrSeverity}
+          isLowerBound={current.hasUnsetMenu}
+          exceedsWarning={current.hasUnsetMenu && exceedsBenchmark(current.flrRate, FLR_BENCHMARK_PERCENT)}
+        />
       </div>
       <p className="-mt-3 text-xs" style={{ color: "var(--muted-foreground)" }}>
         FL比率 = (食材原価 + 人件費)÷ 売上。FLR比率 = そこにさらに家賃を加えたものの割合です。
@@ -64,8 +91,16 @@ export function FlRatioView({
       {hasSalesData && (
         <div className="flex flex-col gap-2">
           <div className="grid grid-cols-2 gap-3">
-            <RatioCard label="理論原価率(レシピ通り)" value={formatPercent(current.foodCostRate)} />
-            <RatioCard label="実質原価率(ロス・値引き込み)" value={formatPercent(current.actualCostRate)} />
+            <RatioCard
+              label="理論原価率(レシピ通り)"
+              value={formatPercent(current.foodCostRate, current.hasUnsetMenu ? "以上" : "")}
+              isLowerBound={current.hasUnsetMenu}
+            />
+            <RatioCard
+              label="実質原価率(ロス・値引き込み)"
+              value={formatPercent(current.actualCostRate, current.hasUnsetMenu ? "以上" : "")}
+              isLowerBound={current.hasUnsetMenu}
+            />
           </div>
           <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
             実質原価率 = 理論原価率 +(ロス・値引き額 ÷ 売上)× 100 の大づかみな概算です。正常/注意/危険の色分けはせず、参考値として表示しています。
@@ -92,18 +127,42 @@ export function FlRatioView({
   );
 }
 
-function RatioCard({ label, value, severity }: { label: string; value: string; severity?: Severity | null }) {
+function RatioCard({
+  label,
+  value,
+  severity,
+  isLowerBound,
+  exceedsWarning,
+  footnote,
+}: {
+  label: string;
+  value: string;
+  severity?: Severity | null;
+  /** 未計算のメニューがあるため、この値が「下限(実際はこれ以上)」であることを示す。 */
+  isLowerBound?: boolean;
+  /** 下限がすでに目安を超えている場合に、色分けはしないが注意だけ表示する。 */
+  exceedsWarning?: boolean;
+  /** カードの下に添える小さな補足(「計算できたメニューだけなら◯%」等)。 */
+  footnote?: string;
+}) {
   return (
     <div className="rounded border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-      <p className="font-mono text-2xl font-bold" style={{ color: "var(--foreground)" }}>
+      <p className="font-mono text-2xl font-bold" style={{ color: isLowerBound ? "var(--muted-foreground)" : "var(--foreground)" }}>
         {value}
       </p>
-      <div className="mt-1 flex items-center gap-2">
+      <div className="mt-1 flex flex-wrap items-center gap-2">
         <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
           {label}
         </p>
         {severity && <StatusBadge status={SEVERITY_STATUS[severity]} label={SEVERITY_LABEL[severity]} />}
+        {isLowerBound && <StatusBadge status="muted" label="参考値(未計算のメニューを含む)" />}
+        {exceedsWarning && <StatusBadge status="warn" label="注意" />}
       </div>
+      {footnote && (
+        <p className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+          {footnote}
+        </p>
+      )}
     </div>
   );
 }

@@ -44,7 +44,7 @@ export async function saveImportPlan(input: SaveImportPlanInput): Promise<SaveIm
   // 1. 既存の食材(正規化名で突き合わせ)を取得し、価格を上書きしすぎないようにする
   const { data: existingIngredients, error: existingIngredientsError } = await supabase
     .from("ingredients")
-    .select("id, normalized_name, current_purchase_price")
+    .select("id, normalized_name, current_purchase_price, price_is_set")
     .eq("store_id", storeId);
   if (existingIngredientsError) {
     return { success: false, error: dbErrorMessage("食材の取得", existingIngredientsError) };
@@ -58,7 +58,10 @@ export async function saveImportPlan(input: SaveImportPlanInput): Promise<SaveIm
   const ingredientRows = plan.ingredients.map((ing) => {
     const existing = existingIngredientByName.get(ing.normalizedName);
     const finalPrice = ing.purchasePrice ?? existing?.current_purchase_price ?? 0;
-    if (!existing || existing.current_purchase_price !== finalPrice) {
+    // 価格列がこの行に無かった(ing.purchasePriceがnull)場合、既存食材ならその
+    // 設定状況を引き継ぎ(上書きしない)、新規食材なら未設定として登録する。
+    const finalPriceIsSet = ing.purchasePrice != null ? true : (existing?.price_is_set ?? false);
+    if (!existing || existing.current_purchase_price !== finalPrice || existing.price_is_set !== finalPriceIsSet) {
       changedPriceNames.add(ing.normalizedName);
     }
     return {
@@ -67,6 +70,7 @@ export async function saveImportPlan(input: SaveImportPlanInput): Promise<SaveIm
       normalized_name: ing.normalizedName,
       unit: ing.unit,
       current_purchase_price: finalPrice,
+      price_is_set: finalPriceIsSet,
       price_updated_at: nowIso,
     };
   });
@@ -83,12 +87,13 @@ export async function saveImportPlan(input: SaveImportPlanInput): Promise<SaveIm
   }
   const ingredientIdByName = new Map(upsertedIngredients.map((i) => [i.normalized_name, i.id]));
 
-  // 価格が実際に変わった食材だけ履歴に記録する
+  // 価格(または設定状況)が実際に変わった食材だけ履歴に記録する
   const priceHistoryRows = ingredientRows
     .filter((r) => changedPriceNames.has(r.normalized_name))
     .map((r) => ({
       ingredient_id: ingredientIdByName.get(r.normalized_name),
       price: r.current_purchase_price,
+      price_is_set: r.price_is_set,
       recorded_at: nowIso,
     }))
     .filter((r) => r.ingredient_id != null);

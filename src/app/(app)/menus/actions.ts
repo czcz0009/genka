@@ -196,6 +196,9 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
             normalized_name: ingNormalized,
             unit: line.newIngredient.unit,
             current_purchase_price: line.newIngredient.purchasePrice,
+            // このフォーム(メニュー編集画面での新規食材追加)は、保存前に必ず
+            // 単価の入力を必須にしているため常に設定済み。
+            price_is_set: true,
             yield_rate_percent: yieldRatePercent,
             price_updated_at: nowIso,
           })
@@ -210,7 +213,7 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
         ingredientId = created.id;
         await supabase
           .from("ingredient_price_history")
-          .insert({ ingredient_id: ingredientId, price: line.newIngredient.purchasePrice, recorded_at: nowIso });
+          .insert({ ingredient_id: ingredientId, price: line.newIngredient.purchasePrice, price_is_set: true, recorded_at: nowIso });
       }
     }
 

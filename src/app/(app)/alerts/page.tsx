@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getSessionStore, getStoreData } from "@/lib/store";
 import { computeStoreAlerts } from "@/lib/marketPrices/computeStoreAlerts";
-import { withResolvedPrepItemPrices } from "@/lib/prepItemCost";
+import { withResolvedPrepItemPrices, resolveUnsetLeaves } from "@/lib/prepItemCost";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
@@ -72,8 +72,10 @@ export default async function AlertsPage() {
     id: i.id,
     name: i.name,
     currentPurchasePrice: i.currentPurchasePrice,
+    priceIsSet: i.priceIsSet,
     yieldRatePercent: i.yieldRatePercent,
   }));
+  const unsetLeavesByIngredientId = resolveUnsetLeaves(storeData?.ingredients ?? [], storeData?.prepItemComponents ?? []);
   const alertMenus = menus.map((m) => ({
     id: m.id,
     name: m.name,
@@ -94,7 +96,7 @@ export default async function AlertsPage() {
     unlinkedIngredients,
     linkedIngredients,
     ingredientOverview,
-  } = await computeStoreAlerts(supabase, store, alertIngredients, alertMenus, alertMenuIngredients);
+  } = await computeStoreAlerts(supabase, store, alertIngredients, alertMenus, alertMenuIngredients, unsetLeavesByIngredientId);
 
   return (
     <div className="max-w-4xl space-y-6 p-6 md:p-8">

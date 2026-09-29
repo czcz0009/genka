@@ -3,8 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MenuCostSummary } from "./types.ts";
 import { getStoreData, getIngredientPreviousPrices, getIngredientPriceHistory } from "./store.ts";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient, type RankingSales } from "./menuRanking.ts";
-import { resolveHistoricalPrice } from "./ingredientPriceHistory.ts";
-import { withResolvedPrepItemPrices } from "./prepItemCost.ts";
+import { resolveHistoricalPrice, resolveHistoricalPriceIsSet } from "./ingredientPriceHistory.ts";
+import { withResolvedPrepItemPrices, resolveUnsetLeaves } from "./prepItemCost.ts";
 import { monthToPeriod, currentMonthString } from "./period/month.ts";
 
 export interface MonthlyMenuSummaries {
@@ -62,14 +62,20 @@ export async function computeMonthlyMenuSummaries(
   // 過去の月を見ても、今の単価で遡及的に再計算されないようにするため)。
   // 仕込み品は仕入単価の履歴を持たないため、通常の食材だけ履歴価格に差し替えたうえで
   // 仕込み品の実質単価をその履歴価格から計算する(withResolvedPrepItemPrices)。
+  // 単価が「当時は未設定だったか」も同様に履歴から再現する(resolveHistoricalPriceIsSet。
+  // 履歴に明示的な記録が無ければ「未設定とは判定しない」という、価格側の
+  // フォールバックと同じ考え方)。
   const historicizedIngredients = (storeData?.ingredients ?? []).map((i) => ({
     ...i,
     currentPurchasePrice: i.isPrepItem ? 0 : resolveHistoricalPrice(priceHistory, i.id, period.end, i.currentPurchasePrice),
+    priceIsSet: i.isPrepItem ? false : resolveHistoricalPriceIsSet(priceHistory, i.id, period.end),
   }));
   const resolvedIngredients = withResolvedPrepItemPrices(historicizedIngredients, storeData?.prepItemComponents ?? []);
+  const unsetLeavesByIngredientId = resolveUnsetLeaves(historicizedIngredients, storeData?.prepItemComponents ?? []);
   const rankingIngredients = resolvedIngredients.map((i) => ({
     id: i.id,
     currentPurchasePrice: i.currentPurchasePrice,
+    priceIsSet: i.priceIsSet,
     previousPurchasePrice: previousPrices.get(i.id) ?? null,
     yieldRatePercent: i.yieldRatePercent,
   }));
@@ -80,6 +86,7 @@ export async function computeMonthlyMenuSummaries(
     ingredients: rankingIngredients,
     sales: rankingSales,
     defaultTargetCostRate: store.defaultTargetCostRate,
+    unsetLeavesByIngredientId,
   });
 
   return { month, availableMonths, summaries, menus: rankingMenus };

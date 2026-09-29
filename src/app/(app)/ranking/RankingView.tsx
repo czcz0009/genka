@@ -14,6 +14,10 @@ function formatYen(n: number | null): string {
   return `¥${Math.round(n).toLocaleString()}`;
 }
 
+function formatUnsetIngredientNames(names: { name: string; viaPrepItemName: string | null }[]): string {
+  return names.map((n) => (n.viaPrepItemName ? `${n.name}(${n.viaPrepItemName}の材料)` : n.name)).join("、");
+}
+
 /** 月間の利益への影響額(円)専用のフォーマッタ。符号を明示する(+値上がり損/-値下がり得、ではなくその逆)。 */
 function formatSignedYen(n: number): string {
   const rounded = Math.round(n);
@@ -43,7 +47,7 @@ export function RankingView({
     return Array.from(set).sort();
   }, [availableMonths, month]);
 
-  const overTargetCount = summaries.filter((s) => s.overTarget).length;
+  const overTargetCount = summaries.filter((s) => s.overTarget && !s.hasUnsetIngredient).length;
   const maxProfit = Math.max(...summaries.map((s) => s.profitContribution ?? 0), 1);
 
   return (
@@ -135,64 +139,75 @@ export function RankingView({
                   <td className="whitespace-nowrap px-3 py-2.5 font-medium" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
                     {s.menuName}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono" style={{ color: "var(--foreground)" }}>
-                    {formatYen(s.sellingPrice)}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right">
-                    <span
-                      className="font-mono font-semibold"
-                      style={{
-                        color: s.overTarget ? "var(--status-danger)" : s.costRate != null ? "var(--status-ok)" : "var(--muted-foreground)",
-                      }}
-                    >
-                      {s.costRate != null ? `${s.costRate.toFixed(1)}%` : "-"}
-                    </span>
-                    <span className="ml-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
-                      (目標{s.targetCostRate}%)
-                    </span>
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono font-bold" style={{ color: "var(--foreground)" }}>
-                    {formatYen(s.profitContribution)}
-                    {maxProfit > 0 && (s.profitContribution ?? 0) > 0 && (
-                      <div className="mt-1.5 h-1 w-16 overflow-hidden rounded-full" style={{ background: "var(--muted)" }}>
-                        <div
-                          className="h-full rounded-full"
+                  {s.hasUnsetIngredient ? (
+                    <td className="px-3 py-2.5" colSpan={5} style={{ color: "var(--muted-foreground)" }}>
+                      計算できていません(未設定: {formatUnsetIngredientNames(s.unsetIngredients)})
+                      <Link href="/ingredients" prefetch={false} className="ml-1 whitespace-nowrap underline underline-offset-2">
+                        単価を設定する →
+                      </Link>
+                    </td>
+                  ) : (
+                    <>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono" style={{ color: "var(--foreground)" }}>
+                        {formatYen(s.sellingPrice)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right">
+                        <span
+                          className="font-mono font-semibold"
                           style={{
-                            width: `${((s.profitContribution ?? 0) / maxProfit) * 100}%`,
-                            background: idx === 0 ? "var(--accent)" : "var(--primary)",
+                            color: s.overTarget ? "var(--status-danger)" : s.costRate != null ? "var(--status-ok)" : "var(--muted-foreground)",
                           }}
-                        />
-                      </div>
-                    )}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono">
-                    {s.monthlyProfitImpact == null ? (
-                      <span className="text-xs" style={{ color: "var(--muted-foreground)" }} title="販売数量を「売上管理」で登録すると表示されます">
-                        -
-                      </span>
-                    ) : (
-                      <span
-                        className="font-semibold"
-                        style={{
-                          color:
-                            s.monthlyProfitImpact < 0
-                              ? "var(--status-danger)"
-                              : s.monthlyProfitImpact > 0
-                                ? "var(--status-ok)"
-                                : "var(--muted-foreground)",
-                        }}
-                      >
-                        {formatSignedYen(s.monthlyProfitImpact)}
-                      </span>
-                    )}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2.5">
-                    {s.overTarget && s.suggestedPriceIncrease ? (
-                      <StatusBadge status="danger" label={`+${s.suggestedPriceIncrease}円が目安`} />
-                    ) : (
-                      ""
-                    )}
-                  </td>
+                        >
+                          {s.costRate != null ? `${s.costRate.toFixed(1)}%` : "-"}
+                        </span>
+                        <span className="ml-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+                          (目標{s.targetCostRate}%)
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono font-bold" style={{ color: "var(--foreground)" }}>
+                        {formatYen(s.profitContribution)}
+                        {maxProfit > 0 && (s.profitContribution ?? 0) > 0 && (
+                          <div className="mt-1.5 h-1 w-16 overflow-hidden rounded-full" style={{ background: "var(--muted)" }}>
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${((s.profitContribution ?? 0) / maxProfit) * 100}%`,
+                                background: idx === 0 ? "var(--accent)" : "var(--primary)",
+                              }}
+                            />
+                          </div>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono">
+                        {s.monthlyProfitImpact == null ? (
+                          <span className="text-xs" style={{ color: "var(--muted-foreground)" }} title="販売数量を「売上管理」で登録すると表示されます">
+                            -
+                          </span>
+                        ) : (
+                          <span
+                            className="font-semibold"
+                            style={{
+                              color:
+                                s.monthlyProfitImpact < 0
+                                  ? "var(--status-danger)"
+                                  : s.monthlyProfitImpact > 0
+                                    ? "var(--status-ok)"
+                                    : "var(--muted-foreground)",
+                            }}
+                          >
+                            {formatSignedYen(s.monthlyProfitImpact)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5">
+                        {s.overTarget && s.suggestedPriceIncrease ? (
+                          <StatusBadge status="danger" label={`+${s.suggestedPriceIncrease}円が目安`} />
+                        ) : (
+                          ""
+                        )}
+                      </td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>

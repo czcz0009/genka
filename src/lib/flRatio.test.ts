@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { selectApplicableFixedCost, aggregateSalesAndFoodCost, calcFlRatios } from "./flRatio.ts";
+import { selectApplicableFixedCost, aggregateSalesAndFoodCost, calcFlRatios, exceedsBenchmark } from "./flRatio.ts";
 import type { MenuCostSummary } from "./types.ts";
 
 function summary(partial: Partial<MenuCostSummary> & { menuId: string }): MenuCostSummary {
@@ -15,8 +15,14 @@ function summary(partial: Partial<MenuCostSummary> & { menuId: string }): MenuCo
     profitContribution: null,
     suggestedPriceIncrease: null,
     monthlyProfitImpact: null,
+    hasUnsetIngredient: false,
+    unsetIngredients: [],
     ...partial,
   };
+}
+
+function closeTo(actual: number | null, expected: number, tolerance = 1e-6) {
+  assert.ok(actual != null && Math.abs(actual - expected) < tolerance, `expected ${actual} to be close to ${expected}`);
 }
 
 test("selectApplicableFixedCost: 期間と重なる行のうち最新のperiod_startを採用する", () => {
@@ -168,4 +174,69 @@ test("calcFlRatios: 売上50万・理論40%・ロス10万→実質60%(③)", () 
   });
   assert.equal(result.foodCostRate, 40);
   assert.equal(result.actualCostRate, 60); // 40 + 10万÷50万×100
+});
+
+// ここから、単価未設定の食材を含むメニューがある場合の集計(I・K)。
+// 事前にMahiroさんに手計算で検算してもらったケース。
+
+test("aggregateSalesAndFoodCost: 未計算メニューが無ければ従来通り(回帰確認)", () => {
+  const summaries = [
+    summary({ menuId: "m1", sellingPrice: 900, totalCost: 300, quantitySold: 10 }),
+    summary({ menuId: "m2", sellingPrice: 1000, totalCost: 400, quantitySold: 5 }),
+  ];
+  const result = aggregateSalesAndFoodCost(summaries);
+  assert.equal(result.totalSales, 900 * 10 + 1000 * 5);
+  assert.equal(result.totalFoodCost, 300 * 10 + 400 * 5);
+  assert.equal(result.totalSalesComputable, result.totalSales);
+  assert.equal(result.hasUnsetMenu, false);
+  assert.equal(result.excludedSalesAmount, 0);
+  assert.equal(result.excludedMenuCount, 0);
+});
+
+test("aggregateSalesAndFoodCost: I相当。未計算メニュー(Y)の原価は除外し、売上は含める", () => {
+  const summaries = [
+    summary({ menuId: "x", sellingPrice: 1000, totalCost: 300, quantitySold: 100, hasUnsetIngredient: false }),
+    summary({ menuId: "y", sellingPrice: 800, totalCost: 0, quantitySold: 50, hasUnsetIngredient: true }),
+  ];
+  const result = aggregateSalesAndFoodCost(summaries);
+  assert.equal(result.totalSales, 140000);
+  assert.equal(result.totalFoodCost, 30000);
+  assert.equal(result.totalSalesComputable, 100000);
+  assert.equal(result.hasUnsetMenu, true);
+  assert.equal(result.excludedSalesAmount, 40000);
+  assert.equal(result.excludedMenuCount, 1);
+});
+
+test("I: F比率・L比率・FL比率・FLR比率・実質原価率(未計算メニューがある間は全売上が分母)", () => {
+  const { totalSales, totalFoodCost } = aggregateSalesAndFoodCost([
+    summary({ menuId: "x", sellingPrice: 1000, totalCost: 300, quantitySold: 100, hasUnsetIngredient: false }),
+    summary({ menuId: "y", sellingPrice: 800, totalCost: 0, quantitySold: 50, hasUnsetIngredient: true }),
+  ]);
+  const result = calcFlRatios({ totalSales, totalFoodCost, laborCost: 42000, rentCost: 8000, lossAmount: 2000 });
+  closeTo(result.foodCostRate, 21.4285714285714); // 30,000÷140,000
+  assert.equal(result.laborCostRate, 30); // 42,000÷140,000
+  closeTo(result.flRate, 51.4285714285714); // (30,000+42,000)÷140,000
+  closeTo(result.flrRate, 57.1428571428571); // (30,000+42,000+8,000)÷140,000
+  closeTo(result.actualCostRate, 22.8571428571429); // (30,000+2,000)÷140,000
+  assert.equal(exceedsBenchmark(result.flRate, 60), false); // 目安60%未満
+  assert.equal(exceedsBenchmark(result.flrRate, 70), false); // 目安70%未満
+});
+
+test("K: 下限(全売上ベース)が目安を超える場合は、exceedsBenchmarkがtrueになる", () => {
+  const { totalSales, totalFoodCost } = aggregateSalesAndFoodCost([
+    summary({ menuId: "x", sellingPrice: 1000, totalCost: 600, quantitySold: 100, hasUnsetIngredient: false }),
+    summary({ menuId: "y", sellingPrice: 800, totalCost: 0, quantitySold: 50, hasUnsetIngredient: true }),
+  ]);
+  const result = calcFlRatios({ totalSales, totalFoodCost, laborCost: 40000, rentCost: 6000, lossAmount: 2000 });
+  closeTo(result.foodCostRate, 42.8571428571429); // 60,000÷140,000
+  closeTo(result.laborCostRate, 28.5714285714286); // 40,000÷140,000
+  closeTo(result.flRate, 71.4285714285714); // (60,000+40,000)÷140,000
+  closeTo(result.flrRate, 75.7142857142857); // (60,000+40,000+6,000)÷140,000
+  closeTo(result.actualCostRate, 44.2857142857143); // (60,000+2,000)÷140,000
+  assert.equal(exceedsBenchmark(result.flRate, 60), true); // 目安60%を超えている→注意表示の対象
+  assert.equal(exceedsBenchmark(result.flrRate, 70), true); // 目安70%を超えている→注意表示の対象
+});
+
+test("exceedsBenchmark: nullはfalse", () => {
+  assert.equal(exceedsBenchmark(null, 60), false);
 });

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { calcCostRate, calcRequiredSellingPrice, calcEffectiveUnitPrice } from "@/lib/costCalc";
 import { normalizeForDedupe, MAX_NAME_LENGTH } from "@/lib/normalize.ts";
 import { ingredientPriceTaxModeLabel, type IngredientPriceTaxMode } from "@/lib/taxMode.ts";
@@ -14,6 +15,8 @@ export interface IngredientOption {
   name: string;
   unit: string;
   currentPurchasePrice: number;
+  /** 単価が入力済みかどうか。falseなら未設定(currentPurchasePriceは参考値)。 */
+  priceIsSet: boolean;
   /** 歩留まり率(%)。100(既定)なら歩留まりなし=従来通りの計算。 */
   yieldRatePercent: number;
   /**
@@ -41,6 +44,12 @@ export interface LocalLine {
   unitPrice: number;
   /** 歩留まり率(%)。100(既定)なら歩留まりなし。原価計算はcalcEffectiveUnitPriceで補正する。 */
   yieldRatePercent: number;
+  /**
+   * 単価が入力済みかどうか。新規食材(source.type==="new")は追加時に必ず
+   * 単価を入力させているため常にtrue。既存食材・仕込み品を選んだ場合だけ
+   * falseになりうる。
+   */
+  priceIsSet: boolean;
   source:
     | { type: "existing"; ingredientId: string }
     | { type: "new"; name: string; unit: string; purchasePrice: number; yieldRatePercent: number };
@@ -128,6 +137,7 @@ export function MenuEditor({
   defaultTargetCostRate,
   currentMonthQuantitySold,
   ingredientPriceTaxMode,
+  unsetLeavesByIngredientId,
 }: {
   storeId: string;
   menuId?: string;
@@ -143,6 +153,12 @@ export function MenuEditor({
   currentMonthQuantitySold: number | null;
   /** 仕入単価の入力欄ラベルを「税込」「税抜」どちらで出すか(店舗設定より)。計算式には影響しない。 */
   ingredientPriceTaxMode: IngredientPriceTaxMode;
+  /**
+   * 食材ID→単価未設定の末端食材一覧(仕込み品の入れ子を解決済み、
+   * prepItemCost.tsのresolveUnsetLeavesの結果)。Mapはサーバーからクライアント
+   * コンポーネントへそのまま渡せないため、プレーンオブジェクトで受け取る。
+   */
+  unsetLeavesByIngredientId?: Record<string, { name: string; viaPrepItemName: string | null }[]>;
 }) {
   const router = useRouter();
   const [name, setName] = useState(initialName);
@@ -171,6 +187,28 @@ export function MenuEditor({
       ),
     [lines],
   );
+  // 単価未設定の食材(仕込み品の入れ子含む)を1つでも使っていれば、原価率・原価合計の
+  // 数字は出さず「計算できていません」+未設定の食材名を表示する。
+  const unsetIngredientNames = useMemo(() => {
+    const seen = new Set<string>();
+    const names: string[] = [];
+    for (const line of lines) {
+      if (line.priceIsSet) continue;
+      const leaves =
+        line.source.type === "existing" ? (unsetLeavesByIngredientId?.[line.source.ingredientId] ?? []) : [];
+      const labels =
+        leaves.length > 0
+          ? leaves.map((leaf) => (leaf.viaPrepItemName ? `${leaf.name}(${leaf.viaPrepItemName}の材料)` : leaf.name))
+          : [line.ingredientName];
+      for (const label of labels) {
+        if (seen.has(label)) continue;
+        seen.add(label);
+        names.push(label);
+      }
+    }
+    return names;
+  }, [lines, unsetLeavesByIngredientId]);
+  const hasUnsetIngredient = unsetIngredientNames.length > 0;
   const sellingPriceNumber = sellingPrice.trim() ? Number(sellingPrice) : null;
   const targetCostRateNumber = targetCostRateInput.trim() ? Number(targetCostRateInput) : null;
   const targetCostRateInputError =
@@ -178,7 +216,7 @@ export function MenuEditor({
       ? "目標原価率は0より大きく100以下の数値で入力してください"
       : null;
   const targetCostRate = targetCostRateNumber ?? defaultTargetCostRate;
-  const costRate = calcCostRate(totalCost, sellingPriceNumber);
+  const costRate = hasUnsetIngredient ? null : calcCostRate(totalCost, sellingPriceNumber);
   const overTarget = costRate != null && costRate > targetCostRate;
 
   function addLine(line: LocalLine) {
@@ -197,6 +235,7 @@ export function MenuEditor({
             name: line.ingredientName,
             unit: line.unit,
             currentPurchasePrice: line.unitPrice,
+            priceIsSet: true, // ここに来る行は新規食材として単価入力済みのものだけ
             yieldRatePercent: line.yieldRatePercent,
             isLocalDraft: true,
           },
@@ -315,37 +354,52 @@ export function MenuEditor({
       </label>
 
       {/* 現在の原価率 */}
-      <div className="flex items-center gap-6 rounded border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-        <div>
-          <div className="text-xs font-medium" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
-            原価率
+      {hasUnsetIngredient ? (
+        <div className="rounded border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+          <p className="text-base font-semibold" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+            計算できていません
+          </p>
+          <p className="mt-1 text-sm" style={{ color: "var(--muted-foreground)" }}>
+            未設定: {unsetIngredientNames.join("、")}
+          </p>
+          <Link href="/ingredients" prefetch={false} className="mt-2 inline-block text-sm underline underline-offset-2">
+            単価を設定する →
+          </Link>
+        </div>
+      ) : (
+        <div className="flex items-center gap-6 rounded border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+          <div>
+            <div className="text-xs font-medium" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+              原価率
+            </div>
+            <div
+              className="mt-1 font-mono text-3xl font-bold leading-none"
+              style={{ color: overTarget ? "var(--status-danger)" : costRate != null ? "var(--status-ok)" : "var(--muted-foreground)" }}
+            >
+              {costRate != null ? `${costRate.toFixed(1)}%` : "-"}
+            </div>
+            <div className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+              目標{targetCostRate}%
+            </div>
           </div>
-          <div
-            className="mt-1 font-mono text-3xl font-bold leading-none"
-            style={{ color: overTarget ? "var(--status-danger)" : costRate != null ? "var(--status-ok)" : "var(--muted-foreground)" }}
-          >
-            {costRate != null ? `${costRate.toFixed(1)}%` : "-"}
-          </div>
-          <div className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
-            目標{targetCostRate}%
+          <div className="h-12 w-px" style={{ background: "var(--border)" }} />
+          <div>
+            <div className="text-xs font-medium" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+              原価合計
+            </div>
+            <div className="mt-1 font-mono text-2xl font-bold" style={{ color: "var(--foreground)" }}>
+              {formatYen(totalCost)}
+            </div>
           </div>
         </div>
-        <div className="h-12 w-px" style={{ background: "var(--border)" }} />
-        <div>
-          <div className="text-xs font-medium" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
-            原価合計
-          </div>
-          <div className="mt-1 font-mono text-2xl font-bold" style={{ color: "var(--foreground)" }}>
-            {formatYen(totalCost)}
-          </div>
-        </div>
-      </div>
+      )}
 
       <PriceSimulation
         totalCost={totalCost}
         targetCostRate={targetCostRate}
         currentSellingPrice={sellingPriceNumber}
         monthlyQuantitySold={currentMonthQuantitySold}
+        hasUnsetIngredient={hasUnsetIngredient}
       />
 
       <IngredientLineForm
@@ -450,12 +504,15 @@ function PriceSimulation({
   targetCostRate,
   currentSellingPrice,
   monthlyQuantitySold,
+  hasUnsetIngredient,
 }: {
   totalCost: number;
   targetCostRate: number;
   /** 実際に保存される売価(未入力ならnull)。試算欄の初期値に使うだけで、以後は連動しない。 */
   currentSellingPrice: number | null;
   monthlyQuantitySold: number | null;
+  /** 単価未設定の食材を含む場合、原価が不明なため試算自体を出さない。 */
+  hasUnsetIngredient: boolean;
 }) {
   const [simulatedPrice, setSimulatedPrice] = useState(
     currentSellingPrice != null ? String(currentSellingPrice) : "",
@@ -488,6 +545,12 @@ function PriceSimulation({
         実際の売価は変えずに、「仮にこの値段だったら」を試算できます。
       </p>
 
+      {hasUnsetIngredient ? (
+        <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+          単価が未設定の食材があるため、試算できません。食材一覧で単価を設定してから、あらためてお試しください。
+        </p>
+      ) : (
+        <>
       {requiredPrice != null && requiredPrice > 0 && (
         <div
           className="flex flex-wrap items-center justify-between gap-3 rounded px-4 py-3 text-sm"
@@ -565,6 +628,8 @@ function PriceSimulation({
           )}
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }
@@ -719,6 +784,7 @@ function IngredientLineForm({
         ingredientName: effectiveExisting.name,
         unitPrice: effectiveExisting.currentPurchasePrice,
         yieldRatePercent: effectiveExisting.yieldRatePercent,
+        priceIsSet: effectiveExisting.priceIsSet,
         source: effectiveExisting.isLocalDraft
           ? {
               type: "new",
@@ -756,6 +822,7 @@ function IngredientLineForm({
         ingredientName: trimmedName,
         unitPrice: price,
         yieldRatePercent,
+        priceIsSet: true, // 新規食材はここで必ず単価を入力させているため常に設定済み
         source: { type: "new", name: trimmedName, unit: newUnit, purchasePrice: price, yieldRatePercent },
       });
       setJustAdded(`${trimmedName} ${quantity}${newUnit}(新規食材として登録)`);

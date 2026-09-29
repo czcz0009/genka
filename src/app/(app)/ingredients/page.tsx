@@ -41,7 +41,7 @@ export default async function IngredientsPage() {
   const [{ data: ingredients }, { data: prepItemComponentsRaw }] = await Promise.all([
     supabase
       .from("ingredients")
-      .select("id, name, unit, current_purchase_price, yield_rate_percent, is_prep_item, yield_quantity")
+      .select("id, name, unit, current_purchase_price, price_is_set, yield_rate_percent, is_prep_item, yield_quantity")
       .eq("store_id", store.id)
       .order("name"),
     supabase.from("prep_item_components").select("prep_item_id, component_id, quantity"),
@@ -62,7 +62,9 @@ export default async function IngredientsPage() {
     withResolvedPrepItemPrices(
       rawIngredients.map((i) => ({
         id: i.id,
+        name: i.name,
         currentPurchasePrice: i.current_purchase_price,
+        priceIsSet: i.price_is_set,
         yieldRatePercent: i.yield_rate_percent,
         isPrepItem: i.is_prep_item,
         yieldQuantity: i.yield_quantity,

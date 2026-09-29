@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getSessionStore, getStoreData } from "@/lib/store";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient } from "@/lib/menuRanking";
-import { withResolvedPrepItemPrices } from "@/lib/prepItemCost";
+import { withResolvedPrepItemPrices, resolveUnsetLeaves } from "@/lib/prepItemCost";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
@@ -79,8 +79,10 @@ export default async function MenusPage() {
   const rankingIngredients = resolvedIngredients.map((i) => ({
     id: i.id,
     currentPurchasePrice: i.currentPurchasePrice,
+    priceIsSet: i.priceIsSet,
     yieldRatePercent: i.yieldRatePercent,
   }));
+  const unsetLeavesByIngredientId = resolveUnsetLeaves(storeData?.ingredients ?? [], storeData?.prepItemComponents ?? []);
 
   const summaries = buildMenuRanking({
     menus: rankingMenus,
@@ -88,6 +90,7 @@ export default async function MenusPage() {
     ingredients: rankingIngredients,
     sales: [],
     defaultTargetCostRate: store.defaultTargetCostRate,
+    unsetLeavesByIngredientId,
   });
   // buildMenuRanking は利益貢献度順に並び替えるため、登録順に戻す
   const orderById = new Map(menus.map((m, idx) => [m.id, idx]));

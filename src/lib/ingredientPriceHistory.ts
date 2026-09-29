@@ -21,6 +21,8 @@ export interface PriceHistoryEntry {
   price: number;
   /** ISO日時文字列(timestamptz) */
   recordedAt: string;
+  /** その時点で単価が入力済みだったか。falseなら当時は未設定(price=0は参考値)。 */
+  priceIsSet: boolean;
 }
 
 /**
@@ -30,12 +32,11 @@ export interface PriceHistoryEntry {
  * (月末当日に記録された価格変更もその月の実績として扱うため)。
  * 該当する履歴が1件もない場合は currentPrice にフォールバックする。
  */
-export function resolveHistoricalPrice(
+function findLatestHistoryEntry(
   history: PriceHistoryEntry[],
   ingredientId: string,
   periodEndDate: string,
-  currentPrice: number,
-): number {
+): PriceHistoryEntry | null {
   const cutoff = `${periodEndDate}T23:59:59.999Z`;
   let latest: PriceHistoryEntry | null = null;
   for (const entry of history) {
@@ -43,5 +44,34 @@ export function resolveHistoricalPrice(
     if (entry.recordedAt > cutoff) continue;
     if (latest == null || entry.recordedAt > latest.recordedAt) latest = entry;
   }
+  return latest;
+}
+
+export function resolveHistoricalPrice(
+  history: PriceHistoryEntry[],
+  ingredientId: string,
+  periodEndDate: string,
+  currentPrice: number,
+): number {
+  const latest = findLatestHistoryEntry(history, ingredientId, periodEndDate);
   return latest ? latest.price : currentPrice;
+}
+
+/**
+ * 指定した期間の末日時点で、単価が「未設定だった」と判定できるかどうか。
+ *
+ * 該当する履歴が1件も無い場合(食材がまだ存在しなかった月を見た場合など)は、
+ * 数値側(resolveHistoricalPrice)が今の仕入単価にフォールバックする既存の
+ * 挙動に合わせ、「未設定とは判定しない」(true=設定済み扱い)を返す。
+ * 「当時は未設定だった」と判定するのは、履歴にpriceIsSet=falseが
+ * 明示的に記録されている場合だけにする(過去に未設定→後日設定、という
+ * 変化があっても、設定される前の月は正しく未設定のまま表示するため)。
+ */
+export function resolveHistoricalPriceIsSet(
+  history: PriceHistoryEntry[],
+  ingredientId: string,
+  periodEndDate: string,
+): boolean {
+  const latest = findLatestHistoryEntry(history, ingredientId, periodEndDate);
+  return latest ? latest.priceIsSet : true;
 }

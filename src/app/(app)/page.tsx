@@ -175,6 +175,11 @@ export default async function Home() {
           <div className="font-mono text-2xl font-bold leading-none" style={{ color: "var(--foreground)" }}>
             {formatPercent(summary.averageCostRate)}
           </div>
+          {summary.uncomputableCount > 0 && (
+            <div className="mt-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+              {summary.uncomputableCount}品は未計算
+            </div>
+          )}
         </div>
         <Link
           href="/ranking"

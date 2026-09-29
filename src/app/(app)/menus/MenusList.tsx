@@ -15,6 +15,9 @@ export interface MenuListRow {
   costRate: number | null;
   targetCostRate: number;
   overTarget: boolean;
+  /** 単価未設定の食材(仕込み品の材料も含む)を使っているか。trueなら原価率を出さない。 */
+  hasUnsetIngredient: boolean;
+  unsetIngredients: { name: string; viaPrepItemName: string | null }[];
 }
 
 function formatYen(n: number | null): string {
@@ -22,15 +25,19 @@ function formatYen(n: number | null): string {
   return `¥${Math.round(n).toLocaleString()}`;
 }
 
-function rowStatus(overTarget: boolean, costRate: number | null): BadgeStatus {
-  if (costRate == null) return "muted";
+function rowStatus(overTarget: boolean, costRate: number | null, hasUnsetIngredient: boolean): BadgeStatus {
+  if (hasUnsetIngredient || costRate == null) return "muted";
   return overTarget ? "danger" : "ok";
 }
 
-function rowStatusLabel(status: BadgeStatus): string {
+function rowStatusLabel(status: BadgeStatus, hasUnsetIngredient: boolean): string {
   if (status === "danger") return "要対応";
-  if (status === "muted") return "-";
+  if (status === "muted") return hasUnsetIngredient ? "計算できていません" : "-";
   return "正常";
+}
+
+function formatUnsetIngredientNames(names: { name: string; viaPrepItemName: string | null }[]): string {
+  return names.map((n) => (n.viaPrepItemName ? `${n.name}(${n.viaPrepItemName}の材料)` : n.name)).join("、");
 }
 
 /**
@@ -89,7 +96,7 @@ export function MenusList({ storeId, rows }: { storeId: string; rows: MenuListRo
       </div>
 
       {items.map((s) => {
-        const status = rowStatus(s.overTarget, s.costRate);
+        const status = rowStatus(s.overTarget, s.costRate, s.hasUnsetIngredient);
         return (
           <div key={s.menuId} className="border-b last:border-0" style={{ borderColor: "var(--border)" }}>
             <div className="flex items-center gap-2 px-5 py-4">
@@ -130,16 +137,24 @@ export function MenusList({ storeId, rows }: { storeId: string; rows: MenuListRo
                       status === "danger" ? "var(--status-danger)" : status === "ok" ? "var(--status-ok)" : "var(--muted-foreground)",
                   }}
                 >
-                  <div>{s.costRate != null ? `${s.costRate.toFixed(1)}%` : "-"}</div>
+                  <div>{!s.hasUnsetIngredient && s.costRate != null ? `${s.costRate.toFixed(1)}%` : "-"}</div>
                   <div className="font-sans text-xs font-normal" style={{ color: "var(--muted-foreground)" }}>
-                    (目標{s.targetCostRate}%)
+                    {s.hasUnsetIngredient ? "単価未設定あり" : `(目標${s.targetCostRate}%)`}
                   </div>
                 </div>
                 <div className="sm:flex sm:justify-end">
-                  <StatusBadge status={status} label={rowStatusLabel(status)} />
+                  <StatusBadge status={status} label={rowStatusLabel(status, s.hasUnsetIngredient)} />
                 </div>
               </div>
             </Link>
+            {s.hasUnsetIngredient && (
+              <p className="px-5 pb-3 text-xs" style={{ color: "var(--muted-foreground)" }}>
+                計算できていません(未設定: {formatUnsetIngredientNames(s.unsetIngredients)})
+                <Link href="/ingredients" prefetch={false} className="ml-1 underline underline-offset-2">
+                  単価を設定する →
+                </Link>
+              </p>
+            )}
             <button
               type="button"
               onClick={() => handleDelete(s)}

@@ -15,13 +15,15 @@ function summary(partial: Partial<MenuCostSummary> & { menuId: string }): MenuCo
     profitContribution: null,
     suggestedPriceIncrease: null,
     monthlyProfitImpact: null,
+    hasUnsetIngredient: false,
+    unsetIngredients: [],
     ...partial,
   };
 }
 
 const ingredients = [
-  { id: "pasta", currentPurchasePrice: 0.8 }, // 円/g
-  { id: "ketchup", currentPurchasePrice: 0.5 },
+  { id: "pasta", currentPurchasePrice: 0.8, priceIsSet: true }, // 円/g
+  { id: "ketchup", currentPurchasePrice: 0.5, priceIsSet: true },
 ];
 
 test("利益貢献度(販売数量×(売価-原価))の降順で並ぶ", () => {
@@ -175,8 +177,8 @@ test("月間の利益への影響額: 食材が値上がりした分、マイナ
   const menuIngredients = [{ menuId: "m1", ingredientId: "pasta", quantity: 100 }];
   // pastaの現在単価は0.8円/g。1つ前は0.5円/gだったとする(=値上がりした)
   const ingredientsWithHistory = [
-    { id: "pasta", currentPurchasePrice: 0.8, previousPurchasePrice: 0.5 },
-    { id: "ketchup", currentPurchasePrice: 0.5 },
+    { id: "pasta", currentPurchasePrice: 0.8, previousPurchasePrice: 0.5, priceIsSet: true },
+    { id: "ketchup", currentPurchasePrice: 0.5, priceIsSet: true },
   ];
   const sales = [{ menuId: "m1", quantitySold: 10 }];
 
@@ -195,7 +197,7 @@ test("月間の利益への影響額: 食材が値下がりした分、プラス
   const menus = [{ id: "m1", name: "ナポリタン", sellingPrice: 900, targetCostRate: 30 }];
   const menuIngredients = [{ menuId: "m1", ingredientId: "pasta", quantity: 100 }];
   // 現在0.5円/g、1つ前は0.8円/gだった(=値下がりした)
-  const ingredientsWithHistory = [{ id: "pasta", currentPurchasePrice: 0.5, previousPurchasePrice: 0.8 }];
+  const ingredientsWithHistory = [{ id: "pasta", currentPurchasePrice: 0.5, previousPurchasePrice: 0.8, priceIsSet: true }];
   const sales = [{ menuId: "m1", quantitySold: 10 }];
 
   const [summary] = buildMenuRanking({
@@ -222,7 +224,7 @@ test("月間の利益への影響額: 1つ前の単価が分からない食材�
 test("月間の利益への影響額: 販売数量が未登録(0件)のメニューはnullにする(0円と誤解させない)", () => {
   const menus = [{ id: "m1", name: "ナポリタン", sellingPrice: 900, targetCostRate: 30 }];
   const menuIngredients = [{ menuId: "m1", ingredientId: "pasta", quantity: 100 }];
-  const ingredientsWithHistory = [{ id: "pasta", currentPurchasePrice: 0.8, previousPurchasePrice: 0.5 }];
+  const ingredientsWithHistory = [{ id: "pasta", currentPurchasePrice: 0.8, previousPurchasePrice: 0.5, priceIsSet: true }];
 
   const [summary] = buildMenuRanking({
     menus,
@@ -247,7 +249,7 @@ test("歩留まり率: 70%の食材は、仕入単価を0.7で割った実質単
   const menus = [{ id: "m1", name: "焼き魚定食", sellingPrice: 900, targetCostRate: 30 }];
   const menuIngredients = [{ menuId: "m1", ingredientId: "fish", quantity: 100 }];
   // 1尾800円(1000gあたり)の魚、歩留まり70% -> 実質単価800/0.7=約1142.86円/1000g
-  const fishIngredients = [{ id: "fish", currentPurchasePrice: 0.8, yieldRatePercent: 70 }];
+  const fishIngredients = [{ id: "fish", currentPurchasePrice: 0.8, yieldRatePercent: 70, priceIsSet: true }];
   const [summary] = buildMenuRanking({
     menus,
     menuIngredients,
@@ -266,7 +268,7 @@ test("歩留まり率: 月間影響額の計算でも、現在・1つ前どち�
   const sales = [{ menuId: "m1", quantitySold: 10 }];
   // 現在0.8円/g、1つ前0.5円/g、歩留まり50%
   const fishIngredients = [
-    { id: "fish", currentPurchasePrice: 0.8, previousPurchasePrice: 0.5, yieldRatePercent: 50 },
+    { id: "fish", currentPurchasePrice: 0.8, previousPurchasePrice: 0.5, yieldRatePercent: 50, priceIsSet: true },
   ];
   const [summary] = buildMenuRanking({
     menus,

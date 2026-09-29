@@ -4,8 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getSessionStore, getIngredientPriceHistory } from "@/lib/store";
 import { currentMonthString, monthToPeriod } from "@/lib/period/month.ts";
-import { withResolvedPrepItemPrices } from "@/lib/prepItemCost";
-import { resolveHistoricalPrice } from "@/lib/ingredientPriceHistory";
+import { withResolvedPrepItemPrices, resolveUnsetLeaves } from "@/lib/prepItemCost";
+import { resolveHistoricalPrice, resolveHistoricalPriceIsSet } from "@/lib/ingredientPriceHistory";
 import { calcMenuTotalCost, calcEffectiveUnitPrice, type UnitPriceMap } from "@/lib/costCalc";
 import { calcPriceChangeImpact, type MonthlyProfitPoint } from "@/lib/priceChangeImpact";
 import { MenuEditor, type LocalLine } from "../MenuEditor.tsx";
@@ -58,7 +58,7 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
       .eq("menu_id", menuId),
     supabase
       .from("ingredients")
-      .select("id, name, unit, current_purchase_price, yield_rate_percent, is_prep_item, yield_quantity")
+      .select("id, name, unit, current_purchase_price, price_is_set, yield_rate_percent, is_prep_item, yield_quantity")
       .eq("store_id", store.id)
       .order("name"),
     supabase.from("prep_item_components").select("prep_item_id, component_id, quantity"),
@@ -91,7 +91,9 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
   const resolvedIngredients = withResolvedPrepItemPrices(
     (allIngredients ?? []).map((i) => ({
       id: i.id,
+      name: i.name,
       currentPurchasePrice: i.current_purchase_price,
+      priceIsSet: i.price_is_set,
       yieldRatePercent: i.yield_rate_percent,
       isPrepItem: i.is_prep_item,
       yieldQuantity: i.yield_quantity,
@@ -99,6 +101,20 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
     prepItemComponentLines,
   );
   const resolvedPriceById = new Map(resolvedIngredients.map((i) => [i.id, i]));
+  const unsetLeavesByIngredientId = Object.fromEntries(
+    resolveUnsetLeaves(
+      (allIngredients ?? []).map((i) => ({
+        id: i.id,
+        name: i.name,
+        currentPurchasePrice: i.current_purchase_price,
+        priceIsSet: i.price_is_set,
+        yieldRatePercent: i.yield_rate_percent,
+        isPrepItem: i.is_prep_item,
+        yieldQuantity: i.yield_quantity,
+      })),
+      prepItemComponentLines,
+    ),
+  );
 
   const initialLines: LocalLine[] = (menuIngredients ?? []).map((mi) => {
     const ing = mi.ingredients as unknown as
@@ -112,6 +128,7 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
       ingredientName: ing?.name ?? "(不明な食材)",
       unitPrice: resolved?.currentPurchasePrice ?? ing?.current_purchase_price ?? 0,
       yieldRatePercent: resolved?.yieldRatePercent ?? ing?.yield_rate_percent ?? 100,
+      priceIsSet: resolved?.priceIsSet ?? true,
       source: { type: "existing", ingredientId: mi.ingredient_id },
     };
   });
@@ -141,16 +158,20 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
     function costAtMonthEnd(monthEndDate: string): number {
       const historicized = (allIngredients ?? []).map((i) => ({
         id: i.id,
+        name: i.name,
         currentPurchasePrice: i.is_prep_item ? 0 : resolveHistoricalPrice(priceHistory, i.id, monthEndDate, i.current_purchase_price),
+        priceIsSet: i.is_prep_item ? false : resolveHistoricalPriceIsSet(priceHistory, i.id, monthEndDate),
         yieldRatePercent: i.yield_rate_percent,
         isPrepItem: i.is_prep_item,
         yieldQuantity: i.yield_quantity,
       }));
       const resolved = withResolvedPrepItemPrices(historicized, prepItemComponentLines);
       const unitPrices: UnitPriceMap = new Map(
-        resolved.map((i) => [i.id, calcEffectiveUnitPrice(i.currentPurchasePrice, i.yieldRatePercent)]),
+        resolved.map((i) => [i.id, { price: calcEffectiveUnitPrice(i.currentPurchasePrice, i.yieldRatePercent), isSet: i.priceIsSet }]),
       );
-      return calcMenuTotalCost(menuIngredientLines, unitPrices);
+      // この「過去の値付け判断の成果追跡」機能は、単価未設定の食材を除外する
+      // UI対応をまだ入れていない(参考値として、未設定を0円扱いのまま計算する)。
+      return calcMenuTotalCost(menuIngredientLines, unitPrices).totalCost;
     }
 
     const monthlyPoints: MonthlyProfitPoint[] = (allMenuSales ?? []).map((s) => {
@@ -187,6 +208,7 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
           name: i.name,
           unit: i.unit,
           currentPurchasePrice: resolvedPriceById.get(i.id)?.currentPurchasePrice ?? i.current_purchase_price,
+          priceIsSet: resolvedPriceById.get(i.id)?.priceIsSet ?? i.price_is_set,
           yieldRatePercent: resolvedPriceById.get(i.id)?.yieldRatePercent ?? i.yield_rate_percent,
           isPrepItem: i.is_prep_item,
         }))}
@@ -194,6 +216,7 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
         defaultTargetCostRate={store.defaultTargetCostRate}
         currentMonthQuantitySold={currentMonthSales?.quantity_sold ?? null}
         ingredientPriceTaxMode={store.ingredientPriceTaxMode}
+        unsetLeavesByIngredientId={unsetLeavesByIngredientId}
       />
 
       {priceChangeOldPrice != null && priceChangeNewPrice != null && (

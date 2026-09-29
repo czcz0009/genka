@@ -32,7 +32,7 @@ test("実データ一式(PDF取得→解析→確定リンク→変動検知→�
   const { alerts } = generateMarketPriceAlerts({
     priceChanges,
     matches,
-    ingredients: [{ id: "ing-pork", name: "豚肉", currentPurchasePrice: 0.7 }],
+    ingredients: [{ id: "ing-pork", name: "豚肉", currentPurchasePrice: 0.7, priceIsSet: true }],
     menus: [{ id: "menu-donkatsu", name: "とんかつ定食", sellingPrice: 1200, targetCostRate: 25 }],
     menuIngredients: [{ menuId: "menu-donkatsu", ingredientId: "ing-pork", quantity: 200 }],
     defaultTargetCostRate: 30,
@@ -54,7 +54,7 @@ test("未確定(リンクなし)の食材は通知対象にならない", async 
   const { alerts } = generateMarketPriceAlerts({
     priceChanges,
     matches: confirmedLinksToMatches([]), // 何も確定していない
-    ingredients: [{ id: "ing-pork", name: "豚肉", currentPurchasePrice: 0.7 }],
+    ingredients: [{ id: "ing-pork", name: "豚肉", currentPurchasePrice: 0.7, priceIsSet: true }],
     menus: [],
     menuIngredients: [],
     defaultTargetCostRate: 30,

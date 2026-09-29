@@ -12,7 +12,7 @@ import {
 import { monthToPeriod, currentMonthString } from "./period/month.ts";
 import { computeStoreAlerts } from "./marketPrices/computeStoreAlerts.ts";
 import { getStoreData, getIngredientPreviousPrices } from "./store.ts";
-import { withResolvedPrepItemPrices } from "./prepItemCost.ts";
+import { withResolvedPrepItemPrices, resolveUnsetLeaves } from "./prepItemCost.ts";
 import { estimateTimeSavedMinutes } from "./timeSavedEstimate.ts";
 
 /**
@@ -36,6 +36,11 @@ export interface FastDashboardSummary {
   averageCostRate: number | null;
   /** 目標原価率を超えている(値上げ検討)メニュー数 */
   overTargetCount: number;
+  /**
+   * 原価率が計算できなかったメニュー数(単価未設定の食材を含む、または
+   * 売価未設定)。averageCostRateの平均には含まれていない。
+   */
+  uncomputableCount: number;
 }
 
 /**
@@ -71,18 +76,32 @@ async function fetchRankingInputs(supabase: SupabaseClient) {
   const rankingIngredients = resolvedIngredients.map((i) => ({
     id: i.id,
     currentPurchasePrice: i.currentPurchasePrice,
+    priceIsSet: i.priceIsSet,
     yieldRatePercent: i.yieldRatePercent,
   }));
   const alertIngredients = resolvedIngredients.map((i) => ({
     id: i.id,
     name: i.name,
     currentPurchasePrice: i.currentPurchasePrice,
+    priceIsSet: i.priceIsSet,
     yieldRatePercent: i.yieldRatePercent,
   }));
+  // 未設定の末端食材の一覧(仕込み品の入れ子も解決済み)。今の設定状況で計算するため
+  // 履歴を使わない生のingredients/prepItemComponentsから作る(過去月を扱う画面は
+  // monthlyMenuSummaries.ts / fl-ratio/page.tsxで別途、履歴ベースのものを作る)。
+  const unsetLeavesByIngredientId = resolveUnsetLeaves(storeData?.ingredients ?? [], storeData?.prepItemComponents ?? []);
   const sales = storeData?.sales ?? [];
   const fixedCosts = storeData?.fixedCosts ?? [];
 
-  return { rankingMenus, rankingMenuIngredients, rankingIngredients, alertIngredients, sales, fixedCosts };
+  return {
+    rankingMenus,
+    rankingMenuIngredients,
+    rankingIngredients,
+    alertIngredients,
+    unsetLeavesByIngredientId,
+    sales,
+    fixedCosts,
+  };
 }
 
 /** 登録メニュー数・平均原価率・値上げ検討数(速い。市場価格データやFL比率は含まない) */
@@ -90,9 +109,10 @@ export async function buildFastDashboardSummary(
   supabase: SupabaseClient,
   store: { id: string; defaultTargetCostRate: number },
 ): Promise<FastDashboardSummary> {
-  const { rankingMenus, rankingMenuIngredients, rankingIngredients } = await fetchRankingInputs(supabase);
+  const { rankingMenus, rankingMenuIngredients, rankingIngredients, unsetLeavesByIngredientId } =
+    await fetchRankingInputs(supabase);
   if (rankingMenus.length === 0) {
-    return { menuCount: 0, averageCostRate: null, overTargetCount: 0 };
+    return { menuCount: 0, averageCostRate: null, overTargetCount: 0, uncomputableCount: 0 };
   }
 
   const summaries = buildMenuRanking({
@@ -101,16 +121,20 @@ export async function buildFastDashboardSummary(
     ingredients: rankingIngredients,
     sales: [],
     defaultTargetCostRate: store.defaultTargetCostRate,
+    unsetLeavesByIngredientId,
   });
 
-  // 売価・原価が未入力のメニューはcostRateがnullになるため、平均の対象から除外する
+  // 売価未設定(costRate=null)・単価未設定の食材を含むメニュー(hasUnsetIngredient)は
+  // どちらも平均の対象から除外する(出し方自体は従来通り、単純平均)。
   // (Number.isFiniteでの二重チェックは、万一計算過程で不正な値が紛れ込んでも
   // 画面に「NaN%」を出さないための保険)。
-  const costRates = summaries.map((s) => s.costRate).filter((r): r is number => r != null && Number.isFinite(r));
+  const computable = summaries.filter((s) => !s.hasUnsetIngredient);
+  const costRates = computable.map((s) => s.costRate).filter((r): r is number => r != null && Number.isFinite(r));
   const averageCostRate = costRates.length > 0 ? costRates.reduce((a, b) => a + b, 0) / costRates.length : null;
-  const overTargetCount = summaries.filter((s) => s.overTarget).length;
+  const overTargetCount = computable.filter((s) => s.overTarget).length;
+  const uncomputableCount = summaries.length - costRates.length;
 
-  return { menuCount: rankingMenus.length, averageCostRate, overTargetCount };
+  return { menuCount: rankingMenus.length, averageCostRate, overTargetCount, uncomputableCount };
 }
 
 /**
@@ -124,7 +148,7 @@ export const getCurrentFlRate = cache(async function getCurrentFlRate(
   supabase: SupabaseClient,
   store: { id: string; defaultTargetCostRate: number },
 ): Promise<number | null> {
-  const { rankingMenus, rankingMenuIngredients, rankingIngredients, sales, fixedCosts } =
+  const { rankingMenus, rankingMenuIngredients, rankingIngredients, unsetLeavesByIngredientId, sales, fixedCosts } =
     await fetchRankingInputs(supabase);
   if (rankingMenus.length === 0) return null;
 
@@ -142,6 +166,7 @@ export const getCurrentFlRate = cache(async function getCurrentFlRate(
     ingredients: rankingIngredients,
     sales: rankingSales,
     defaultTargetCostRate: store.defaultTargetCostRate,
+    unsetLeavesByIngredientId,
   });
 
   const fixedCostRows: FixedCostRow[] = fixedCosts.map((f) => ({
@@ -183,7 +208,8 @@ export const getAlertSummary = cache(async function getAlertSummary(
   supabase: SupabaseClient,
   store: { id: string; defaultTargetCostRate: number },
 ): Promise<AlertSummary> {
-  const { rankingMenus, rankingMenuIngredients, alertIngredients } = await fetchRankingInputs(supabase);
+  const { rankingMenus, rankingMenuIngredients, alertIngredients, unsetLeavesByIngredientId } =
+    await fetchRankingInputs(supabase);
   if (rankingMenus.length === 0) return { count: 0, topAlerts: [] };
 
   const { produceAlerts, livestockAlerts } = await computeStoreAlerts(
@@ -192,6 +218,7 @@ export const getAlertSummary = cache(async function getAlertSummary(
     alertIngredients,
     rankingMenus,
     rankingMenuIngredients,
+    unsetLeavesByIngredientId,
   );
   const allAlerts = [...produceAlerts, ...livestockAlerts].sort(
     (a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent),
@@ -244,7 +271,7 @@ export const getOverTargetMonthlyImpact = cache(async function getOverTargetMont
   });
 
   const impacts = summaries
-    .filter((s) => s.overTarget)
+    .filter((s) => s.overTarget && !s.hasUnsetIngredient)
     .map((s) => s.monthlyProfitImpact)
     .filter((v): v is number => v != null);
   if (impacts.length === 0) return null;

@@ -172,9 +172,14 @@ export function ScanView({
 
   async function handleSaveRow(row: LocalRow) {
     updateRow(row.key, { saving: true, error: null });
-    const price = Number(row.unitPrice);
-    if (!Number.isFinite(price) || price < 0) {
-      updateRow(row.key, { saving: false, error: "単価は0以上の数値で入力してください" });
+    // 空欄(未入力)と、数字として読めない入力を区別する。空欄は「未設定」として
+    // 保存を許すが、既存食材の更新では意図せず単価を消してしまう事故を防ぐため
+    // 別途ブロックする(下記)。
+    const trimmed = row.unitPrice.trim();
+    const isBlank = trimmed === "";
+    const price = isBlank ? 0 : Number(trimmed);
+    if (!isBlank && (!Number.isFinite(price) || price < 0)) {
+      updateRow(row.key, { saving: false, error: "単価は0以上の数値で入力してください(空欄のままなら未設定として保存されます)" });
       return;
     }
 
@@ -183,15 +188,33 @@ export function ScanView({
         updateRow(row.key, { saving: false, error: "食材名と単位を入力してください" });
         return;
       }
-      const result = await createIngredient({ storeId, name: row.name, unit: row.unit, purchasePrice: price, yieldRatePercent: 100 });
+      const result = await createIngredient({
+        storeId,
+        name: row.name,
+        unit: row.unit,
+        purchasePrice: price,
+        priceIsSet: !isBlank,
+        yieldRatePercent: 100,
+      });
       updateRow(row.key, { saving: false, saved: result.success, error: result.success ? null : result.error });
     } else {
+      // 既存食材の更新で単価が空欄なのは、正しい単価を誤って消してしまう事故に
+      // つながるため保存をブロックする。単価を入力するか、この行の「保存対象に
+      // する」を外して更新自体をスキップしてもらう。
+      if (isBlank) {
+        updateRow(row.key, {
+          saving: false,
+          error: "単価を入力するか、上の「保存対象にする」のチェックを外してこの行の更新をスキップしてください",
+        });
+        return;
+      }
       const existing = existingById.get(row.target);
       const result = await updateIngredient({
         storeId,
         ingredientId: row.target,
         name: existing?.name ?? row.name,
         purchasePrice: price,
+        priceIsSet: true,
         yieldRatePercent: existing?.yieldRatePercent ?? 100,
       });
       updateRow(row.key, { saving: false, saved: result.success, error: result.success ? null : result.error });
@@ -271,9 +294,9 @@ export function ScanView({
                     <input
                       type="checkbox"
                       checked={row.included}
-                      onChange={(e) => updateRow(row.key, { included: e.target.checked })}
+                      onChange={(e) => updateRow(row.key, { included: e.target.checked, error: null })}
                     />
-                    保存対象にする
+                    保存対象にする(外すとこの行は更新しない)
                   </label>
                   {row.lowConfidence && <StatusBadge status="warn" label={row.note ? `要確認: ${row.note}` : "要確認"} />}
                   {row.saved && <StatusBadge status="ok" label="保存済み" />}
@@ -356,7 +379,8 @@ export function ScanView({
                   <button
                     type="button"
                     onClick={() => handleSaveRow(row)}
-                    disabled={row.saving}
+                    disabled={row.saving || !row.included}
+                    title={!row.included ? "「保存対象にする」にチェックを入れてください" : undefined}
                     className="self-start rounded border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-40"
                     style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
                   >

@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { detectPriceChanges } from "./detectPriceChanges.ts";
 import { matchIngredientsToItems } from "./matchIngredientToItem.ts";
 import { generateMarketPriceAlerts, type AlertIngredient, type AlertMenu, type AlertMenuIngredient } from "./generateAlerts.ts";
+import type { UnsetLeaf } from "../prepItemCost.ts";
 import { confirmedLinksToMatches } from "./livestock/confirmedLinksToMatches.ts";
 import { CHIKUSAN_COLUMNS, type ChikusanItemCode } from "./livestock/chikusanColumns.ts";
 import { suggestChikusanItems } from "./livestock/suggestChikusanItem.ts";
@@ -116,6 +117,7 @@ export async function computeStoreAlerts(
   alertIngredients: AlertIngredient[],
   alertMenus: AlertMenu[],
   alertMenuIngredients: AlertMenuIngredient[],
+  unsetLeavesByIngredientId?: Map<string, UnsetLeaf[]>,
 ): Promise<StoreAlertsResult> {
   const [produce, livestock, { data: links }] = await Promise.all([
     fetchRecentProduceObservations(supabase),
@@ -143,6 +145,7 @@ export async function computeStoreAlerts(
       menus: alertMenus,
       menuIngredients: alertMenuIngredients,
       defaultTargetCostRate: store.defaultTargetCostRate,
+      unsetLeavesByIngredientId,
     });
     produceAlerts = result.alerts;
     produceNeedsReview = result.needsReviewMatches;
@@ -165,6 +168,7 @@ export async function computeStoreAlerts(
       menus: alertMenus,
       menuIngredients: alertMenuIngredients,
       defaultTargetCostRate: store.defaultTargetCostRate,
+      unsetLeavesByIngredientId,
     });
     livestockAlerts = result.alerts;
   }

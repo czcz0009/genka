@@ -24,8 +24,8 @@ const onionMatch: IngredientItemMatch = {
 };
 
 const ingredients = [
-  { id: "ing-onion", name: "たまねぎ", currentPurchasePrice: 0.2 }, // 円/g (200円/kg)
-  { id: "ing-rice", name: "米", currentPurchasePrice: 0.3 },
+  { id: "ing-onion", name: "たまねぎ", currentPurchasePrice: 0.2, priceIsSet: true }, // 円/g (200円/kg)
+  { id: "ing-rice", name: "米", currentPurchasePrice: 0.3, priceIsSet: true },
 ];
 
 const menuIngredients = [
@@ -113,8 +113,8 @@ test("今回の変動対象になっていない品目のマッチは通知し�
 test("歩留まり率: 食材に歩留まり率が設定されていれば、実質単価で原価率を試算する", () => {
   // たまねぎの歩留まり率50%(現在0.2円/g -> 実質0.4円/g)
   const ingredientsWithYield = [
-    { id: "ing-onion", name: "たまねぎ", currentPurchasePrice: 0.2, yieldRatePercent: 50 },
-    { id: "ing-rice", name: "米", currentPurchasePrice: 0.3 },
+    { id: "ing-onion", name: "たまねぎ", currentPurchasePrice: 0.2, yieldRatePercent: 50, priceIsSet: true },
+    { id: "ing-rice", name: "米", currentPurchasePrice: 0.3, priceIsSet: true },
   ];
   const menus = [{ id: "menu-a", name: "カレーライス", sellingPrice: 800, targetCostRate: 13 }];
   const { alerts } = generateMarketPriceAlerts({

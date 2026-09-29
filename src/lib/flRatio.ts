@@ -44,20 +44,47 @@ export function selectApplicableFixedCost(
   return candidates[0].amount;
 }
 
-/** 対象期間のランキング結果から、総売上・総食材原価を集計する(売価未設定のメニューは除く) */
-export function aggregateSalesAndFoodCost(summaries: MenuCostSummary[]): {
+export interface AggregatedSalesAndFoodCost {
+  /** 全メニュー(単価未設定の食材を含むメニューの売上も含む)の売上合計。 */
   totalSales: number;
+  /**
+   * 食材原価の合計。単価未設定の食材を含むメニューは、原価が不明なため
+   * 合計に含めない(除外する)。未計算メニューが無ければ、従来通り
+   * 全メニューの原価合計と一致する。
+   */
   totalFoodCost: number;
-} {
-  return summaries.reduce(
-    (acc, s) => {
-      if (s.sellingPrice == null) return acc;
-      acc.totalSales += s.sellingPrice * s.quantitySold;
-      acc.totalFoodCost += s.totalCost * s.quantitySold;
-      return acc;
-    },
-    { totalSales: 0, totalFoodCost: 0 },
-  );
+  /** 原価が計算できたメニューだけの売上合計(補足表示用)。 */
+  totalSalesComputable: number;
+  /** 1件でも単価未設定の食材を含む(販売実績がある)メニューがあるか。 */
+  hasUnsetMenu: boolean;
+  /** 除外した売上額(=totalSales - totalSalesComputable)。 */
+  excludedSalesAmount: number;
+  /** 除外したメニュー数(販売実績があるものだけを数える)。 */
+  excludedMenuCount: number;
+}
+
+/** 対象期間のランキング結果から、総売上・総食材原価を集計する(売価未設定のメニューは除く) */
+export function aggregateSalesAndFoodCost(summaries: MenuCostSummary[]): AggregatedSalesAndFoodCost {
+  const result = {
+    totalSales: 0,
+    totalFoodCost: 0,
+    totalSalesComputable: 0,
+    excludedSalesAmount: 0,
+    excludedMenuCount: 0,
+  };
+  for (const s of summaries) {
+    if (s.sellingPrice == null) continue;
+    const salesAmount = s.sellingPrice * s.quantitySold;
+    result.totalSales += salesAmount;
+    if (s.hasUnsetIngredient) {
+      result.excludedSalesAmount += salesAmount;
+      if (s.quantitySold > 0) result.excludedMenuCount += 1;
+      continue;
+    }
+    result.totalFoodCost += s.totalCost * s.quantitySold;
+    result.totalSalesComputable += salesAmount;
+  }
+  return { ...result, hasUnsetMenu: result.excludedMenuCount > 0 };
 }
 
 export const FL_BENCHMARK_PERCENT = 60;
@@ -76,6 +103,16 @@ function classifySeverity(ratio: number | null, benchmark: number): Severity | n
   if (ratio <= benchmark) return "normal";
   if (ratio <= benchmark + CAUTION_MARGIN_POINTS) return "caution";
   return "danger";
+}
+
+/**
+ * 未計算のメニューがある間、FL比率・FLR比率は「◯%以上」の下限としてしか
+ * 分からないため、3段階の色分けはできない。ただし、その下限がすでに
+ * 目安を超えている場合(=実際の値はそれ以上確実に高い)だけは、注意が
+ * 必要であることを別途示す。
+ */
+export function exceedsBenchmark(ratio: number | null, benchmark: number): boolean {
+  return ratio != null && ratio > benchmark;
 }
 
 export interface FlRatioInput {

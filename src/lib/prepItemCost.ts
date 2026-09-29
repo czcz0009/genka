@@ -11,9 +11,16 @@ import { calcEffectiveUnitPrice } from "./costCalc.ts";
 
 export interface CostIngredient {
   id: string;
+  /** 未設定の食材名を表示するために使う。 */
+  name: string;
   isPrepItem: boolean;
   /** 仕込み品の場合は使わない(値があっても無視される)。 */
   currentPurchasePrice: number;
+  /**
+   * 単価が入力済みかどうか。仕込み品の場合は使わない(材料の組み合わせから
+   * 別途判定するため、値があっても無視される)。
+   */
+  priceIsSet: boolean;
   yieldRatePercent?: number | null;
   /** 仕込み品の場合のみ使う。1回の仕込みでできる量(ingredientsのunitと同じ単位)。 */
   yieldQuantity?: number | null;
@@ -86,6 +93,127 @@ export function resolveEffectiveIngredientPrices(
   return resolved;
 }
 
+/**
+ * 食材ID→「単価が設定済みか」の対応表を作る。
+ *
+ * 通常の食材はpriceIsSetをそのまま使う。仕込み品は、自分のレシピの材料が
+ * 1つでも未設定なら、仕込み品自体も未設定として扱う(入れ子も再帰的に判定)。
+ * 循環参照は保険として「未設定」扱いにする(resolveEffectiveIngredientPricesが
+ * 0円扱いにするのと同じ考え方)。
+ */
+export function resolveIngredientPriceStatus(
+  ingredients: CostIngredient[],
+  components: PrepItemComponentLine[],
+): Map<string, boolean> {
+  const ingredientById = new Map(ingredients.map((i) => [i.id, i]));
+  const componentsByPrepItemId = new Map<string, PrepItemComponentLine[]>();
+  for (const c of components) {
+    const list = componentsByPrepItemId.get(c.prepItemId) ?? [];
+    list.push(c);
+    componentsByPrepItemId.set(c.prepItemId, list);
+  }
+
+  const resolved = new Map<string, boolean>();
+  const resolving = new Set<string>();
+
+  function resolve(id: string): boolean {
+    const cached = resolved.get(id);
+    if (cached != null) return cached;
+
+    const ingredient = ingredientById.get(id);
+    if (!ingredient) return false;
+
+    if (!ingredient.isPrepItem) {
+      resolved.set(id, ingredient.priceIsSet);
+      return ingredient.priceIsSet;
+    }
+
+    if (resolving.has(id)) return false; // 循環参照の保険
+    resolving.add(id);
+
+    const lines = componentsByPrepItemId.get(id) ?? [];
+    const isSet = lines.length > 0 && lines.every((line) => resolve(line.componentId));
+
+    resolving.delete(id);
+    resolved.set(id, isSet);
+    return isSet;
+  }
+
+  for (const ingredient of ingredients) {
+    resolve(ingredient.id);
+  }
+
+  return resolved;
+}
+
+export interface UnsetLeaf {
+  /** 未設定の(末端の)食材名。 */
+  name: string;
+  /** その食材を直接使っている仕込み品の名前。メニューが直接使っている場合はnull。 */
+  viaPrepItemName: string | null;
+}
+
+/**
+ * 食材ID→「その食材(仕込み品なら入れ子の材料も含む)の中にある、単価未設定の
+ * 末端食材の一覧」の対応表を作る。
+ *
+ * 表示ルール: 未設定の食材名には、それを直接使っている仕込み品の名前だけを
+ * 添える(何段ネストしていても、一番近い親1つだけ)。メニューが仕込み品を
+ * 介さず直接使っている食材が未設定の場合は、viaPrepItemNameはnullにする。
+ */
+export function resolveUnsetLeaves(
+  ingredients: CostIngredient[],
+  components: PrepItemComponentLine[],
+): Map<string, UnsetLeaf[]> {
+  const ingredientById = new Map(ingredients.map((i) => [i.id, i]));
+  const componentsByPrepItemId = new Map<string, PrepItemComponentLine[]>();
+  for (const c of components) {
+    const list = componentsByPrepItemId.get(c.prepItemId) ?? [];
+    list.push(c);
+    componentsByPrepItemId.set(c.prepItemId, list);
+  }
+
+  const resolved = new Map<string, UnsetLeaf[]>();
+  const resolving = new Set<string>();
+
+  function resolve(id: string): UnsetLeaf[] {
+    const cached = resolved.get(id);
+    if (cached != null) return cached;
+
+    const ingredient = ingredientById.get(id);
+    if (!ingredient) return [];
+
+    if (!ingredient.isPrepItem) {
+      const leaves = ingredient.priceIsSet ? [] : [{ name: ingredient.name, viaPrepItemName: null }];
+      resolved.set(id, leaves);
+      return leaves;
+    }
+
+    if (resolving.has(id)) return []; // 循環参照の保険(通常は保存時に防止済み)
+    resolving.add(id);
+
+    const lines = componentsByPrepItemId.get(id) ?? [];
+    const leaves: UnsetLeaf[] = [];
+    for (const line of lines) {
+      for (const leaf of resolve(line.componentId)) {
+        // 一番近い親だけを残す: まだ親が付いていない(=直接の材料である)ものにだけ
+        // 自分(この仕込み品)の名前を付ける。既に付いている場合はそのまま伝播する。
+        leaves.push(leaf.viaPrepItemName == null ? { name: leaf.name, viaPrepItemName: ingredient.name } : leaf);
+      }
+    }
+
+    resolving.delete(id);
+    resolved.set(id, leaves);
+    return leaves;
+  }
+
+  for (const ingredient of ingredients) {
+    resolve(ingredient.id);
+  }
+
+  return resolved;
+}
+
 export interface PrepItemEdge {
   prepItemId: string;
   componentId: string;
@@ -141,14 +269,24 @@ export function wouldCreateCycle(
 export function withResolvedPrepItemPrices<
   T extends {
     id: string;
+    name: string;
     currentPurchasePrice: number;
+    priceIsSet: boolean;
     yieldRatePercent?: number | null;
     isPrepItem: boolean;
     yieldQuantity: number | null;
   },
 >(ingredients: T[], components: PrepItemComponentLine[]): T[] {
-  const resolved = resolveEffectiveIngredientPrices(ingredients, components);
+  const resolvedPrices = resolveEffectiveIngredientPrices(ingredients, components);
+  const resolvedStatus = resolveIngredientPriceStatus(ingredients, components);
   return ingredients.map((i) =>
-    i.isPrepItem ? { ...i, currentPurchasePrice: resolved.get(i.id) ?? 0, yieldRatePercent: 100 } : i,
+    i.isPrepItem
+      ? {
+          ...i,
+          currentPurchasePrice: resolvedPrices.get(i.id) ?? 0,
+          priceIsSet: resolvedStatus.get(i.id) ?? false,
+          yieldRatePercent: 100,
+        }
+      : i,
   );
 }

@@ -91,4 +91,12 @@ export interface MenuCostSummary {
    * (「販売数量を登録すると表示されます」という案内をUI側で出す)。
    */
   monthlyProfitImpact: number | null;
+  /**
+   * 単価が未設定の食材(仕込み品の材料も含む)を1つでも使っているか。
+   * trueの場合、costRate等の数値は参考値に過ぎないため、画面では原価率を
+   * 表示せず「計算できていません」+ unsetIngredientsを表示する。
+   */
+  hasUnsetIngredient: boolean;
+  /** hasUnsetIngredientがtrueのときの、未設定の食材名の一覧(表示用)。 */
+  unsetIngredients: { name: string; viaPrepItemName: string | null }[];
 }

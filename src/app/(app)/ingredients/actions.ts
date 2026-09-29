@@ -39,6 +39,12 @@ export interface CreateIngredientInput {
   name: string;
   unit: string;
   purchasePrice: number;
+  /**
+   * 単価が入力済みかどうか。未指定ならtrue(既存の呼び出し元は全て、保存前に
+   * 価格の入力を必須にしているため)。空欄のまま登録したい呼び出し元
+   * (納品書OCR等)だけ、明示的にfalseを渡す。
+   */
+  priceIsSet?: boolean;
   /** 歩留まり率(%)。未指定なら100(歩留まりなし)。 */
   yieldRatePercent?: number;
 }
@@ -73,6 +79,7 @@ export async function createIngredient(input: CreateIngredientInput): Promise<Cr
   if (existingErr) return { success: false, error: dbErrorMessage("確認", existingErr) };
   if (existing) return { success: false, error: "同じ名前の食材がすでに登録されています" };
 
+  const priceIsSet = input.priceIsSet ?? true;
   const nowIso = new Date().toISOString();
   const { data: created, error } = await supabase
     .from("ingredients")
@@ -82,6 +89,7 @@ export async function createIngredient(input: CreateIngredientInput): Promise<Cr
       normalized_name: normalizedName,
       unit: input.unit.trim(),
       current_purchase_price: input.purchasePrice,
+      price_is_set: priceIsSet,
       yield_rate_percent: yieldRatePercent,
       price_updated_at: nowIso,
     })
@@ -96,7 +104,7 @@ export async function createIngredient(input: CreateIngredientInput): Promise<Cr
 
   await supabase
     .from("ingredient_price_history")
-    .insert({ ingredient_id: created.id, price: input.purchasePrice, recorded_at: nowIso });
+    .insert({ ingredient_id: created.id, price: input.purchasePrice, price_is_set: priceIsSet, recorded_at: nowIso });
 
   return {
     success: true,
@@ -117,6 +125,8 @@ export interface UpdateIngredientInput {
   ingredientId: string;
   name: string;
   purchasePrice: number;
+  /** 単価が入力済みかどうか。未指定ならtrue(既存の呼び出し元との互換のため)。 */
+  priceIsSet?: boolean;
   /** 歩留まり率(%)。未指定なら100(歩留まりなし)。 */
   yieldRatePercent?: number;
 }
@@ -153,12 +163,16 @@ export async function updateIngredient(input: UpdateIngredientInput): Promise<Up
 
   const { data: current, error: currentErr } = await supabase
     .from("ingredients")
-    .select("current_purchase_price")
+    .select("current_purchase_price, price_is_set")
     .eq("id", input.ingredientId)
     .single();
   if (currentErr) return { success: false, error: dbErrorMessage("確認", currentErr) };
 
-  const priceChanged = current.current_purchase_price !== input.purchasePrice;
+  const priceIsSet = input.priceIsSet ?? true;
+  // 金額そのものだけでなく、「設定済みかどうか」が変わった時も履歴に記録する
+  // (例: 未設定だった食材に初めて単価を入力した場合、金額は0→0のままでも
+  // 「未設定→設定済み」という重要な変化なので記録が必要)。
+  const priceChanged = current.current_purchase_price !== input.purchasePrice || current.price_is_set !== priceIsSet;
   const nowIso = new Date().toISOString();
 
   const { error } = await supabase
@@ -167,6 +181,7 @@ export async function updateIngredient(input: UpdateIngredientInput): Promise<Up
       name: normalizeDisplayName(name),
       normalized_name: normalizedName,
       current_purchase_price: input.purchasePrice,
+      price_is_set: priceIsSet,
       yield_rate_percent: yieldRatePercent,
       ...(priceChanged ? { price_updated_at: nowIso } : {}),
     })
@@ -178,11 +193,11 @@ export async function updateIngredient(input: UpdateIngredientInput): Promise<Up
     };
   }
 
-  // 仕入単価が実際に変わった時だけ履歴に記録する(①のCSV取り込みと同じ規約)
+  // 仕入単価(または設定状況)が実際に変わった時だけ履歴に記録する(①のCSV取り込みと同じ規約)
   if (priceChanged) {
     await supabase
       .from("ingredient_price_history")
-      .insert({ ingredient_id: input.ingredientId, price: input.purchasePrice, recorded_at: nowIso });
+      .insert({ ingredient_id: input.ingredientId, price: input.purchasePrice, price_is_set: priceIsSet, recorded_at: nowIso });
   }
 
   return { success: true };
@@ -389,6 +404,7 @@ export async function savePrepItem(input: SavePrepItemInput): Promise<SavePrepIt
         normalized_name: normalizedName,
         unit: input.unit.trim(),
         current_purchase_price: 0, // 仕込み品は使わない(レシピからその場で計算するため)
+        price_is_set: false, // 仕込み品には適用しない列だが、列のデフォルト(false)を明示しておく
         is_prep_item: true,
         yield_quantity: input.yieldQuantity,
       })

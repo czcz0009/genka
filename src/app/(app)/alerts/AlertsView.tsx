@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { MarketPriceAlert } from "@/lib/marketPrices/generateAlerts";
 import { StatusBadge } from "@/components/StatusBadge.tsx";
 
@@ -31,11 +32,22 @@ function AlertCard({ alert }: { alert: MarketPriceAlert }) {
           {alert.affectedMenus.map((m) => (
             <li key={m.menuId} className="flex flex-wrap items-center gap-2">
               <span style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>{m.menuName}</span>
-              <span className="font-mono" style={{ color: "var(--muted-foreground)" }}>
-                原価率 {m.oldCostRate != null ? `${m.oldCostRate.toFixed(1)}%` : "-"} →{" "}
-                {m.projectedCostRate != null ? `${m.projectedCostRate.toFixed(1)}%` : "-"}(試算)
-              </span>
-              {m.newlyOverTarget && <StatusBadge status="warn" label="目標超過見込み" />}
+              {m.hasUnsetIngredient ? (
+                <span style={{ color: "var(--muted-foreground)" }}>
+                  計算できていません(未設定: {m.unsetIngredientNames.join("、")})
+                  <Link href="/ingredients" className="ml-1 underline underline-offset-2">
+                    単価を設定する →
+                  </Link>
+                </span>
+              ) : (
+                <>
+                  <span className="font-mono" style={{ color: "var(--muted-foreground)" }}>
+                    原価率 {m.oldCostRate != null ? `${m.oldCostRate.toFixed(1)}%` : "-"} →{" "}
+                    {m.projectedCostRate != null ? `${m.projectedCostRate.toFixed(1)}%` : "-"}(試算)
+                  </span>
+                  {m.newlyOverTarget && <StatusBadge status="warn" label="目標超過見込み" />}
+                </>
+              )}
             </li>
           ))}
         </ul>

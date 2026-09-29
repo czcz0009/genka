@@ -6,25 +6,81 @@ import {
   calcSuggestedPriceIncrease,
   calcRequiredSellingPrice,
   calcEffectiveUnitPrice,
+  type UnitPriceMap,
 } from "./costCalc.ts";
 
-test("calcMenuTotalCost: 各食材の分量×単価を合計する", () => {
+test("calcMenuTotalCost: 各食材の分量×単価を合計する(A: 全食材が設定済み)", () => {
   const lines = [
     { ingredientId: "pasta", quantity: 120 },
     { ingredientId: "ketchup", quantity: 30 },
   ];
-  const prices = new Map([
-    ["pasta", 0.8], // 円/g
-    ["ketchup", 0.5],
+  const prices: UnitPriceMap = new Map([
+    ["pasta", { price: 0.8, isSet: true }], // 円/g
+    ["ketchup", { price: 0.5, isSet: true }],
   ]);
-  const total = calcMenuTotalCost(lines, prices);
-  assert.ok(Math.abs(total - (120 * 0.8 + 30 * 0.5)) < 1e-9);
+  const result = calcMenuTotalCost(lines, prices);
+  assert.ok(Math.abs(result.totalCost - (120 * 0.8 + 30 * 0.5)) < 1e-9);
+  assert.deepEqual(result.unsetIngredientIds, []);
 });
 
-test("calcMenuTotalCost: 単価が見つからない食材は0円として無視する", () => {
+test("calcMenuTotalCost: 単価一覧に無い食材は0円として合計し、未設定として報告する(異常系)", () => {
   const lines = [{ ingredientId: "unknown", quantity: 100 }];
-  const total = calcMenuTotalCost(lines, new Map());
-  assert.equal(total, 0);
+  const result = calcMenuTotalCost(lines, new Map());
+  assert.equal(result.totalCost, 0);
+  assert.deepEqual(result.unsetIngredientIds, ["unknown"]);
+});
+
+test("calcMenuTotalCost: B相当(一部の食材が単価未設定)。合計は参考値として計算するが未設定として報告する", () => {
+  const lines = [
+    { ingredientId: "ginger", quantity: 5 }, // 生姜5g、未設定
+    { ingredientId: "chicken", quantity: 200 }, // 鶏もも肉200g、1.2円/g
+  ];
+  const prices: UnitPriceMap = new Map([
+    ["ginger", { price: 0, isSet: false }],
+    ["chicken", { price: 1.2, isSet: true }],
+  ]);
+  const result = calcMenuTotalCost(lines, prices);
+  assert.equal(result.totalCost, 240); // 内部の参考値(画面には出さない)
+  assert.deepEqual(result.unsetIngredientIds, ["ginger"]);
+});
+
+test("calcMenuTotalCost: C相当(唯一の食材が単価未設定)。0%ではなく未設定として報告する", () => {
+  const lines = [{ ingredientId: "cabbage", quantity: 50 }];
+  const prices: UnitPriceMap = new Map([["cabbage", { price: 0, isSet: false }]]);
+  const result = calcMenuTotalCost(lines, prices);
+  assert.equal(result.totalCost, 0);
+  assert.deepEqual(result.unsetIngredientIds, ["cabbage"]);
+});
+
+test("calcMenuTotalCost: E相当(0円と明示された食材はisSet=trueとして正しく計算に入る)", () => {
+  const lines = [
+    { ingredientId: "kombu", quantity: 10 }, // 昆布10g×2円/g
+    { ingredientId: "katsuobushi", quantity: 5 }, // かつお節5g×4円/g
+    { ingredientId: "water", quantity: 300 }, // 水300ml×0円/ml(明示)
+  ];
+  const prices: UnitPriceMap = new Map([
+    ["kombu", { price: 2, isSet: true }],
+    ["katsuobushi", { price: 4, isSet: true }],
+    ["water", { price: 0, isSet: true }],
+  ]);
+  const result = calcMenuTotalCost(lines, prices);
+  assert.equal(result.totalCost, 40);
+  assert.deepEqual(result.unsetIngredientIds, []);
+});
+
+test("calcMenuTotalCost: F相当(Eと同条件で水が未設定)。原価は計算せず未設定として報告する", () => {
+  const lines = [
+    { ingredientId: "kombu", quantity: 10 },
+    { ingredientId: "katsuobushi", quantity: 5 },
+    { ingredientId: "water", quantity: 300 },
+  ];
+  const prices: UnitPriceMap = new Map([
+    ["kombu", { price: 2, isSet: true }],
+    ["katsuobushi", { price: 4, isSet: true }],
+    ["water", { price: 0, isSet: false }],
+  ]);
+  const result = calcMenuTotalCost(lines, prices);
+  assert.deepEqual(result.unsetIngredientIds, ["water"]);
 });
 
 test("calcCostRate: 原価÷売価×100", () => {

@@ -57,7 +57,7 @@ test("実データ一式(取得→解析→前回比較→マッチング→通�
   const result = await runMarketPriceCollectionCycle({
     period: { year: 2026, month: 7, third: 3 },
     previousItems,
-    ingredients: [{ id: "ing-onion", name: "玉ねぎ", currentPurchasePrice: 0.15 }],
+    ingredients: [{ id: "ing-onion", name: "玉ねぎ", currentPurchasePrice: 0.15, priceIsSet: true }],
     menus: [{ id: "menu-a", name: "カレーライス", sellingPrice: 800, targetCostRate: 10 }],
     menuIngredients: [{ menuId: "menu-a", ingredientId: "ing-onion", quantity: 300 }],
     defaultTargetCostRate: 30,

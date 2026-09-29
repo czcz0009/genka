@@ -4,8 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getSessionStore, getStoreData, getIngredientPriceHistory } from "@/lib/store";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient, type RankingSales } from "@/lib/menuRanking";
-import { resolveHistoricalPrice } from "@/lib/ingredientPriceHistory";
-import { withResolvedPrepItemPrices } from "@/lib/prepItemCost";
+import { resolveHistoricalPrice, resolveHistoricalPriceIsSet } from "@/lib/ingredientPriceHistory";
+import { withResolvedPrepItemPrices, resolveUnsetLeaves } from "@/lib/prepItemCost";
 import {
   aggregateSalesAndFoodCost,
   calcFlRatios,
@@ -119,16 +119,20 @@ export default async function FlRatioPage({
     // 月ごとに単価が変わるため、trend内の月ごとに解決し直す必要がある。
     // 仕込み品は履歴を持たないため、通常の食材の履歴価格から実質単価を計算し直す
     // (withResolvedPrepItemPrices。詳細はranking/page.tsxの同様のコメントを参照)。
+    // 単価が「当時は未設定だったか」も履歴から再現する(resolveHistoricalPriceIsSet)。
     const historicizedIngredients = (storeData?.ingredients ?? []).map((i) => ({
       ...i,
       currentPurchasePrice: i.isPrepItem ? 0 : resolveHistoricalPrice(priceHistory, i.id, period.end, i.currentPurchasePrice),
+      priceIsSet: i.isPrepItem ? false : resolveHistoricalPriceIsSet(priceHistory, i.id, period.end),
     }));
+    const unsetLeavesByIngredientId = resolveUnsetLeaves(historicizedIngredients, storeData?.prepItemComponents ?? []);
     const rankingIngredients = withResolvedPrepItemPrices(
       historicizedIngredients,
       storeData?.prepItemComponents ?? [],
     ).map((i) => ({
       id: i.id,
       currentPurchasePrice: i.currentPurchasePrice,
+      priceIsSet: i.priceIsSet,
       yieldRatePercent: i.yieldRatePercent,
     }));
 
@@ -138,14 +142,30 @@ export default async function FlRatioPage({
       ingredients: rankingIngredients,
       sales: monthSales,
       defaultTargetCostRate: store.defaultTargetCostRate,
+      unsetLeavesByIngredientId,
     });
-    const { totalSales, totalFoodCost } = aggregateSalesAndFoodCost(summaries);
+    const { totalSales, totalFoodCost, totalSalesComputable, hasUnsetMenu, excludedSalesAmount, excludedMenuCount } =
+      aggregateSalesAndFoodCost(summaries);
     const laborCost = selectApplicableFixedCost(fixedCostRows, "labor", period);
     const rentCost = selectApplicableFixedCost(fixedCostRows, "rent", period);
     const lossAmount = selectApplicableFixedCost(fixedCostRows, "loss", period);
     const ratios = calcFlRatios({ totalSales, totalFoodCost, laborCost, rentCost, lossAmount });
+    // 「計算できたメニューだけなら◯%」の補足表示用(未計算メニューが無ければratios.foodCostRateと同じ値になる)。
+    const computableOnlyFoodCostRate = totalSalesComputable > 0 ? (totalFoodCost / totalSalesComputable) * 100 : null;
 
-    return { month: m, label: formatMonthLabel(m), totalSales, laborCost, rentCost, lossAmount, ...ratios };
+    return {
+      month: m,
+      label: formatMonthLabel(m),
+      totalSales,
+      laborCost,
+      rentCost,
+      lossAmount,
+      hasUnsetMenu,
+      excludedSalesAmount,
+      excludedMenuCount,
+      computableOnlyFoodCostRate,
+      ...ratios,
+    };
   });
 
   const current = trend[trend.length - 1];

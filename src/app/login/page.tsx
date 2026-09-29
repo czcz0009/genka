@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { SERVICE_NAME } from "@/lib/serviceName.ts";
 import { LoginForm } from "./LoginForm.tsx";
 
@@ -31,7 +32,7 @@ export default function LoginPage() {
             電話・FAXでの仕入れでも、特別なシステム連携なしでそのまま使えます。
           </div>
         </div>
-        <div className="text-xs opacity-40">© 2026 Genka Kanri</div>
+        <div className="text-xs opacity-40">© 2026 {SERVICE_NAME}</div>
       </div>
 
       <div className="flex flex-1 flex-col justify-center px-6 py-16">
@@ -43,6 +44,17 @@ export default function LoginPage() {
             メールアドレスとパスワードでログイン、または新規登録してください。
           </p>
           <LoginForm />
+          <div className="mt-8 flex flex-wrap gap-x-3 gap-y-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
+            <Link href="/terms" prefetch={false} className="underline underline-offset-2">
+              利用規約
+            </Link>
+            <Link href="/privacy" prefetch={false} className="underline underline-offset-2">
+              プライバシーポリシー
+            </Link>
+            <Link href="/legal" prefetch={false} className="underline underline-offset-2">
+              特定商取引法に基づく表示
+            </Link>
+          </div>
         </div>
       </div>
     </div>

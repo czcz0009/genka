@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { recordTermsConsent } from "../consentActions.ts";
 
 type Mode = "signin" | "signup" | "reset";
 
@@ -36,6 +38,7 @@ export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -59,6 +62,10 @@ export function LoginForm() {
       setError("パスワードが一致しません。もう一度入力してください。");
       return;
     }
+    if (mode === "signup" && !agreedToTerms) {
+      setError("利用規約とプライバシーポリシーへの同意が必要です。");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -77,6 +84,12 @@ export function LoginForm() {
           return;
         }
         if (data.session) {
+          // メール確認が不要な設定の場合はここで既にログイン済みのため、
+          // 同意を記録できる。確認メールが必要な設定の場合はセッションが
+          // まだ無く記録できないが、その場合も次回ログイン時に
+          // ConsentGateが未同意を検知して再度同意を求めるため、
+          // ここでの記録失敗は無視してよい(取りこぼしても後で必ず拾える)。
+          void recordTermsConsent();
           router.push("/");
           router.refresh();
         } else {
@@ -180,6 +193,27 @@ export function LoginForm() {
         </label>
       )}
 
+      {mode === "signup" && (
+        <label className="flex items-start gap-2 text-sm" style={{ color: "var(--foreground)" }}>
+          <input
+            type="checkbox"
+            checked={agreedToTerms}
+            onChange={(e) => setAgreedToTerms(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            <Link href="/terms" target="_blank" className="underline underline-offset-2">
+              利用規約
+            </Link>
+            と
+            <Link href="/privacy" target="_blank" className="underline underline-offset-2">
+              プライバシーポリシー
+            </Link>
+            に同意する
+          </span>
+        </label>
+      )}
+
       {mode === "signin" && (
         <button
           type="button"
@@ -222,7 +256,7 @@ export function LoginForm() {
 
       <button
         type="submit"
-        disabled={isSubmitting}
+        disabled={isSubmitting || (mode === "signup" && !agreedToTerms)}
         className="rounded px-5 py-4 text-base font-bold transition-colors disabled:opacity-40"
         style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
       >

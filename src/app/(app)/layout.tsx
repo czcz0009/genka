@@ -4,10 +4,12 @@ import { getSessionStore } from "@/lib/store";
 import { SERVICE_NAME } from "@/lib/serviceName.ts";
 import { getPendingAccountDeletion } from "./settings/accountDeletionActions.ts";
 import { daysRemaining as calcDaysRemaining } from "@/lib/accountDeletion.ts";
+import { hasCurrentTermsConsent } from "../consentActions.ts";
 import { Sidebar } from "@/components/Sidebar.tsx";
 import { OnboardingTour } from "@/components/OnboardingTour.tsx";
 import { NumberInputScrollGuard } from "@/components/NumberInputScrollGuard.tsx";
 import { AccountDeletionBanner } from "@/components/AccountDeletionBanner.tsx";
+import { ConsentGate } from "@/components/ConsentGate.tsx";
 
 /**
  * ログイン後の全画面(ダッシュボード・メニュー管理・CSV取り込み・収益ランキング・
@@ -23,6 +25,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   let storeName: string = SERVICE_NAME;
   let onboarding: { storeId: string; shouldAutoShow: boolean } | null = null;
   let pendingDeletionDays: number | null = null;
+  let needsConsent = false;
 
   if (isSupabaseConfigured()) {
     const supabase = await createClient();
@@ -31,10 +34,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       storeName = session.store.name;
       // オンボーディングツアーの自動表示要否をここでまとめて判定する。
       // 「メニュー0件」かつ「まだ完了・スキップしていない」の両方を満たす時だけ自動表示する。
-      const [{ count: menuCount }, { data: storeRow }, pendingDeletion] = await Promise.all([
+      const [{ count: menuCount }, { data: storeRow }, pendingDeletion, hasConsent] = await Promise.all([
         supabase.from("menus").select("id", { count: "exact", head: true }).eq("store_id", session.store.id),
         supabase.from("stores").select("onboarding_completed_at").eq("id", session.store.id).maybeSingle(),
         getPendingAccountDeletion(),
+        hasCurrentTermsConsent(),
       ]);
       onboarding = {
         storeId: session.store.id,
@@ -43,6 +47,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       if (pendingDeletion) {
         pendingDeletionDays = calcDaysRemaining(new Date(pendingDeletion.scheduledFor));
       }
+      needsConsent = !hasConsent;
     }
   }
 
@@ -51,9 +56,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Sidebar storeName={storeName} />
       <div className="flex min-h-0 flex-1 flex-col">
         {pendingDeletionDays != null && <AccountDeletionBanner daysRemaining={pendingDeletionDays} />}
-        <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
+        {needsConsent ? (
+          <ConsentGate />
+        ) : (
+          <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
+        )}
       </div>
-      {onboarding && <OnboardingTour storeId={onboarding.storeId} shouldAutoShow={onboarding.shouldAutoShow} />}
+      {onboarding && !needsConsent && <OnboardingTour storeId={onboarding.storeId} shouldAutoShow={onboarding.shouldAutoShow} />}
       <NumberInputScrollGuard />
     </div>
   );

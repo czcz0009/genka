@@ -257,6 +257,17 @@ function SidebarFooter() {
   return (
     <div className="border-t border-white/10 px-5 py-4">
       <SignOutButton className="flex w-full items-center gap-3 text-sm font-medium opacity-75 transition-opacity hover:opacity-100" />
+      <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs opacity-60">
+        <Link href="/terms" prefetch={false} className="underline underline-offset-2 hover:opacity-100">
+          利用規約
+        </Link>
+        <Link href="/privacy" prefetch={false} className="underline underline-offset-2 hover:opacity-100">
+          プライバシーポリシー
+        </Link>
+        <Link href="/legal" prefetch={false} className="underline underline-offset-2 hover:opacity-100">
+          特定商取引法
+        </Link>
+      </div>
     </div>
   );
 }

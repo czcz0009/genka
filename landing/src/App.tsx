@@ -6,7 +6,7 @@
  */
 const SERVICE_NAME = '原価レンズ'
 /** アプリ本体の新規登録・ログイン画面(「使ってみる」の遷移先) */
-const APP_URL = 'https://genka-one.vercel.app/login'
+const APP_URL = 'https://app.genka-lens.com/login'
 /** ご質問・ご感想の受付先(Googleフォーム・mailto・LINEなど)。未定の間は空にする */
 const CONTACT_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfKevfXMlqDf8deogpss-HfgUCqTz5-fKUyNO4eUrGu7-f7Lw/viewform'
 

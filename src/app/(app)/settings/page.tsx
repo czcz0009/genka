@@ -6,6 +6,8 @@ import { getSessionStore } from "@/lib/store";
 import { selectApplicableFixedCost, type FixedCostRow } from "@/lib/flRatio";
 import { monthToPeriod, currentMonthString } from "@/lib/period/month";
 import { SettingsForm } from "./SettingsForm.tsx";
+import { AccountDeletionSection } from "./AccountDeletionSection.tsx";
+import { getPendingAccountDeletion } from "./accountDeletionActions.ts";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
 
@@ -52,6 +54,7 @@ export default async function SettingsPage() {
     periodEnd: f.period_end,
   }));
   const currentRent = selectApplicableFixedCost(fixedCostRows, "rent", period);
+  const pendingDeletion = await getPendingAccountDeletion();
 
   return (
     <div className="max-w-xl space-y-6 p-6 md:p-8">
@@ -68,6 +71,8 @@ export default async function SettingsPage() {
         currentRent={currentRent}
         initialIngredientPriceTaxMode={store.ingredientPriceTaxMode}
       />
+
+      <AccountDeletionSection hasPendingDeletion={pendingDeletion != null} />
     </div>
   );
 }

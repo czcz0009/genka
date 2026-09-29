@@ -2,9 +2,12 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getSessionStore } from "@/lib/store";
 import { SERVICE_NAME } from "@/lib/serviceName.ts";
+import { getPendingAccountDeletion } from "./settings/accountDeletionActions.ts";
+import { daysRemaining as calcDaysRemaining } from "@/lib/accountDeletion.ts";
 import { Sidebar } from "@/components/Sidebar.tsx";
 import { OnboardingTour } from "@/components/OnboardingTour.tsx";
 import { NumberInputScrollGuard } from "@/components/NumberInputScrollGuard.tsx";
+import { AccountDeletionBanner } from "@/components/AccountDeletionBanner.tsx";
 
 /**
  * ログイン後の全画面(ダッシュボード・メニュー管理・CSV取り込み・収益ランキング・
@@ -19,6 +22,7 @@ import { NumberInputScrollGuard } from "@/components/NumberInputScrollGuard.tsx"
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   let storeName: string = SERVICE_NAME;
   let onboarding: { storeId: string; shouldAutoShow: boolean } | null = null;
+  let pendingDeletionDays: number | null = null;
 
   if (isSupabaseConfigured()) {
     const supabase = await createClient();
@@ -27,21 +31,28 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       storeName = session.store.name;
       // オンボーディングツアーの自動表示要否をここでまとめて判定する。
       // 「メニュー0件」かつ「まだ完了・スキップしていない」の両方を満たす時だけ自動表示する。
-      const [{ count: menuCount }, { data: storeRow }] = await Promise.all([
+      const [{ count: menuCount }, { data: storeRow }, pendingDeletion] = await Promise.all([
         supabase.from("menus").select("id", { count: "exact", head: true }).eq("store_id", session.store.id),
         supabase.from("stores").select("onboarding_completed_at").eq("id", session.store.id).maybeSingle(),
+        getPendingAccountDeletion(),
       ]);
       onboarding = {
         storeId: session.store.id,
         shouldAutoShow: (menuCount ?? 0) === 0 && storeRow?.onboarding_completed_at == null,
       };
+      if (pendingDeletion) {
+        pendingDeletionDays = calcDaysRemaining(new Date(pendingDeletion.scheduledFor));
+      }
     }
   }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col md:flex-row" style={{ background: "var(--background)" }}>
       <Sidebar storeName={storeName} />
-      <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
+      <div className="flex min-h-0 flex-1 flex-col">
+        {pendingDeletionDays != null && <AccountDeletionBanner daysRemaining={pendingDeletionDays} />}
+        <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
+      </div>
       {onboarding && <OnboardingTour storeId={onboarding.storeId} shouldAutoShow={onboarding.shouldAutoShow} />}
       <NumberInputScrollGuard />
     </div>

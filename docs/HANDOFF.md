@@ -22,9 +22,9 @@
 
 | もの | URL・場所 | 状態 |
 |---|---|---|
-| アプリ本体 | **独自ドメイン移行中(2026-09-29開始)**: `https://app.genka-lens.com`(DNS設定待ち・未反映)。旧URL `https://genka-one.vercel.app` は今後も自動転送先として残す予定 | コミット `2cff081` で再デプロイ済み(2026-09-26。機能は `b260c23` と同じ。旧LPを消すための再デプロイ) |
+| アプリ本体 | **独自ドメイン移行完了(2026-10-02)**: `https://app.genka-lens.com`。旧URL `https://genka-one.vercel.app` も引き続き正常稼働(友人に配布済みのため残してある) | コミット `2cff081` で再デプロイ済み(2026-09-26。機能は `b260c23` と同じ。旧LPを消すための再デプロイ) |
 | DB(Supabase) | ap-southeast-2(Sydney) | マイグレーション **0019まで実行済み** |
-| LP | **独自ドメイン移行中(2026-09-29開始)**: `https://genka-lens.com`(DNS設定待ち・未反映)。旧URL `https://genkaru-lp.vercel.app` は今後も自動転送先として残す予定 | **最新版を公開済み**(2026-09-26、コミット `a24fa90` の内容。ソースは `landing/`)。noindex(検索に載せない設定) |
+| LP | **独自ドメイン移行完了(2026-10-02)**: `https://genka-lens.com`(→`https://www.genka-lens.com`へ308リダイレクト)。旧URL `https://genkaru-lp.vercel.app` も引き続き正常稼働 | **最新版を公開済み**(2026-09-26、コミット `a24fa90` の内容。ソースは `landing/`)。noindex(検索に載せない設定) |
 
 ### LPの最新版で変わったこと(2026-09-26 公開)
 - ヒーローに実画面、機能は2列のカード、3ステップ、FAQ(6問)、最後にもう一度ボタン。ページ高さは約7,500px → 約4,300px。
@@ -37,7 +37,8 @@
 ## 2. 決定事項(再度聞き直さなくてよいもの)
 
 - **サービス名: 「原価レンズ」**(2026-09-28変更。旧名「ゲンカル」)。決め手は「一目で何のツールか分かること」「洗練された印象」。アプリは `src/lib/serviceName.ts`、LPは `landing/src/App.tsx` の`SERVICE_NAME`に集約(改名時はこの2箇所+`landing/.figma/make/site.json`のtitle/descriptionを手動で合わせる)。
-  - **独自ドメイン`genka-lens.com`を取得し、移行中(2026-09-29開始)**。割り振り: LP=`genka-lens.com`/`www.genka-lens.com`、アプリ=`app.genka-lens.com`。旧URL(`genka-one.vercel.app`・`genkaru-lp.vercel.app`)は既に配布済みのため、リンク切れ防止のためVercel側の設定で新ドメインへの転送先として残す(削除しない)。Vercelプロジェクト名`genkaru-lp`・内部パッケージ名`genkasan`はURLではないため変更していない。Supabase Authenticationのリダイレクト許可リストに新ドメインを追加する必要あり(Mahiro作業)。
+  - **独自ドメイン`genka-lens.com`に移行完了(2026-09-29開始、2026-10-02完了)**。割り振り: LP=`genka-lens.com`/`www.genka-lens.com`(Vercelプロジェクト`genkaru-lp`)、アプリ=`app.genka-lens.com`(Vercelプロジェクト`genka`)。旧URL(`genka-one.vercel.app`・`genkaru-lp.vercel.app`)は既に配布済みのため削除せず残してある(どちらも正常稼働中)。Vercelプロジェクト名`genkaru-lp`・内部パッケージ名`genkasan`はURLではないため変更していない。Supabase AuthenticationのRedirect URLsに`https://app.genka-lens.com/**`・`https://app.genka-lens.com/reset-password`を追加済み。
+  - **ハマりどころ**: お名前.comで「DNSレコード設定」にAレコードを正しく入力しても、**「ネームサーバーの変更」画面が「初期設定」のままだと一切反映されない**(編集した場所と、ドメインが実際に参照する場所が別物になる)。新規ドメインを設定する際は、先に「ドメイン機能一覧」→「ネームサーバーの変更」で対象ドメインに「お名前.comのネームサーバーを使う」(`01〜04.dnsv.jp`)を選択してから、DNSレコードを編集すること。この順序を間違えると、DNSの値は合っているのに2日近く反映されないという紛らわしい症状になる(権威サーバーに直接問い合わせても古い値が返るため、キャッシュの問題ではないと気づくまで時間がかかった)。
 - **問い合わせ窓口: Googleフォーム**。URLは `landing/src/App.tsx` の `CONTACT_URL`。フォーム側の「回答の通知メール」がオンか、Mahiroが確認する(未確認)。
 - **納品書OCRの利用上限(β期間)**: 1ユーザー累計 **成功3回**、かつ **AIを呼んだ試行10回**(失敗し続ける画像による費用の垂れ流しを防ぐため)。値は `src/lib/invoiceOcr/usageLimit.ts`。
 - **LPの運営者表記**: 暫定で「原価レンズ運営(個人開発)」。本名・屋号を出すかは未決。

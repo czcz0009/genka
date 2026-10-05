@@ -4,6 +4,7 @@ import { normalizeDisplayName, normalizeForDedupe, validateNameLength } from "@/
 import { requireAuthedClient } from "@/lib/supabase/requireAuthedClient";
 import { friendlyDbError, dbErrorMessage } from "@/lib/supabase/friendlyDbError";
 import { wouldCreateCycle } from "@/lib/prepItemCost";
+import { validateCategoryAssignment } from "@/lib/categoryAssignment";
 
 /**
  * 食材の単独登録・編集(メニュー登録画面を経由しない、食材だけの追加・編集)。
@@ -30,6 +31,8 @@ export interface IngredientRow {
   isPrepItem: boolean;
   /** 仕込み品の場合のみ使う。1回の仕込みでできる量(unitと同じ単位)。 */
   yieldQuantity: number | null;
+  /** カテゴリ(null=未分類)。仕込み品には付けない(食材一覧の「仕込み品」タブで別枠表示する)。 */
+  categoryId: string | null;
   /** 仕込み品の場合のみ使う。レシピ明細(表示・編集用)。 */
   components?: { componentId: string; componentName: string; componentUnit: string; quantity: number }[];
 }
@@ -47,6 +50,11 @@ export interface CreateIngredientInput {
   priceIsSet?: boolean;
   /** 歩留まり率(%)。未指定なら100(歩留まりなし)。 */
   yieldRatePercent?: number;
+  /**
+   * カテゴリ(任意)。未指定なら未分類。食材一覧の追加画面だけが指定する
+   * (納品書の読み取り等、他の登録経路は手順を増やさないよう未分類のまま登録する)。
+   */
+  categoryId?: string | null;
 }
 
 export type CreateIngredientResult = { success: true; ingredient: IngredientRow } | { success: false; error: string };
@@ -79,6 +87,10 @@ export async function createIngredient(input: CreateIngredientInput): Promise<Cr
   if (existingErr) return { success: false, error: dbErrorMessage("確認", existingErr) };
   if (existing) return { success: false, error: "同じ名前の食材がすでに登録されています" };
 
+  const categoryId = input.categoryId ?? null;
+  const categoryError = await validateCategoryAssignment(supabase, input.storeId, "ingredient", categoryId);
+  if (categoryError) return { success: false, error: categoryError };
+
   const priceIsSet = input.priceIsSet ?? true;
   const nowIso = new Date().toISOString();
   const { data: created, error } = await supabase
@@ -92,8 +104,9 @@ export async function createIngredient(input: CreateIngredientInput): Promise<Cr
       price_is_set: priceIsSet,
       yield_rate_percent: yieldRatePercent,
       price_updated_at: nowIso,
+      category_id: categoryId,
     })
-    .select("id, name, unit, current_purchase_price, yield_rate_percent")
+    .select("id, name, unit, current_purchase_price, yield_rate_percent, category_id")
     .single();
   if (error || !created) {
     return {
@@ -116,6 +129,7 @@ export async function createIngredient(input: CreateIngredientInput): Promise<Cr
       yieldRatePercent: created.yield_rate_percent,
       isPrepItem: false,
       yieldQuantity: null,
+      categoryId: created.category_id,
     },
   };
 }
@@ -129,6 +143,8 @@ export interface UpdateIngredientInput {
   priceIsSet?: boolean;
   /** 歩留まり率(%)。未指定なら100(歩留まりなし)。 */
   yieldRatePercent?: number;
+  /** カテゴリ。null = 未分類にする。未指定(undefined) = 変更しない(納品書の読み取り等、カテゴリ欄の無い呼び出し元のため)。 */
+  categoryId?: string | null;
 }
 
 export type UpdateIngredientResult = { success: true } | { success: false; error: string };
@@ -161,6 +177,9 @@ export async function updateIngredient(input: UpdateIngredientInput): Promise<Up
   if (conflictErr) return { success: false, error: dbErrorMessage("確認", conflictErr) };
   if (conflict) return { success: false, error: "同じ名前の食材が他に登録されています" };
 
+  const categoryError = await validateCategoryAssignment(supabase, input.storeId, "ingredient", input.categoryId);
+  if (categoryError) return { success: false, error: categoryError };
+
   const { data: current, error: currentErr } = await supabase
     .from("ingredients")
     .select("current_purchase_price, price_is_set")
@@ -184,6 +203,7 @@ export async function updateIngredient(input: UpdateIngredientInput): Promise<Up
       price_is_set: priceIsSet,
       yield_rate_percent: yieldRatePercent,
       ...(priceChanged ? { price_updated_at: nowIso } : {}),
+      ...(input.categoryId === undefined ? {} : { category_id: input.categoryId }),
     })
     .eq("id", input.ingredientId);
   if (error) {

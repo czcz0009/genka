@@ -3,7 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { getSessionStore } from "@/lib/store";
+import { getSessionStore, getCategories } from "@/lib/store";
+import { sortCategories } from "@/lib/categories";
 import { withResolvedPrepItemPrices } from "@/lib/prepItemCost";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
@@ -13,7 +14,7 @@ export const metadata: Metadata = {
   title: "食材",
 };
 
-export default async function IngredientsPage() {
+export default async function IngredientsPage({ searchParams }: { searchParams: Promise<{ category?: string | string[] }> }) {
   if (!isSupabaseConfigured()) {
     return (
       <div className="max-w-2xl space-y-6 p-6 md:p-8">
@@ -38,14 +39,17 @@ export default async function IngredientsPage() {
   }
   const { store } = session;
 
-  const [{ data: ingredients }, { data: prepItemComponentsRaw }] = await Promise.all([
+  const [{ data: ingredients }, { data: prepItemComponentsRaw }, allCategories, { category: categoryParamRaw }] = await Promise.all([
     supabase
       .from("ingredients")
-      .select("id, name, unit, current_purchase_price, price_is_set, yield_rate_percent, is_prep_item, yield_quantity")
+      .select("id, name, unit, current_purchase_price, price_is_set, yield_rate_percent, is_prep_item, yield_quantity, category_id")
       .eq("store_id", store.id)
       .order("name"),
     supabase.from("prep_item_components").select("prep_item_id, component_id, quantity"),
+    getCategories(supabase),
+    searchParams,
   ]);
+  const ingredientCategories = sortCategories(allCategories.filter((c) => c.kind === "ingredient"));
 
   const rawIngredients = ingredients ?? [];
   const nameById = new Map(rawIngredients.map((i) => [i.id, i.name]));
@@ -117,7 +121,10 @@ export default async function IngredientsPage() {
           isPrepItem: i.is_prep_item,
           yieldQuantity: i.yield_quantity,
           components: i.is_prep_item ? (componentsByPrepItemId.get(i.id) ?? []) : undefined,
+          categoryId: i.category_id,
         }))}
+        categories={ingredientCategories}
+        initialCategoryParam={typeof categoryParamRaw === "string" ? categoryParamRaw : null}
         ingredientPriceTaxMode={store.ingredientPriceTaxMode}
       />
     </div>

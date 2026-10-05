@@ -190,6 +190,8 @@ export function PrepItemForm({
       yieldRatePercent: 100,
       isPrepItem: true,
       yieldQuantity: yieldQuantityNumber,
+      // 仕込み品にはカテゴリを付けない(食材一覧の固定の「仕込み品」タブで別枠表示する)。
+      categoryId: null,
       components: lines.map((l) => ({
         componentId: l.componentId,
         componentName: l.componentName,

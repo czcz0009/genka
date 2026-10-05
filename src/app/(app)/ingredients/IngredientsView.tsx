@@ -8,6 +8,17 @@ import { createIngredient, updateIngredient, deleteIngredient, type IngredientRo
 import { ActionErrorMessage } from "@/components/ActionErrorMessage.tsx";
 import { Modal } from "@/components/Modal.tsx";
 import { PrepItemForm, type PrepItemComponentOption } from "./PrepItemForm.tsx";
+import { CategoryTabs, replaceCategoryParamInUrl } from "@/components/CategoryTabs.tsx";
+import { CategoryPickerField } from "@/components/CategoryPickerField.tsx";
+import {
+  buildCategoryChips,
+  categoryTabToParam,
+  filterByCategoryTab,
+  initialCategoryIdForNewItem,
+  parseCategoryTab,
+  type Category,
+  type CategoryTab,
+} from "@/lib/categories";
 
 function formatUnitPrice(n: number): string {
   const rounded = Math.round(n * 100) / 100;
@@ -211,13 +222,20 @@ function PriceInputFields({
 function AddIngredientForm({
   storeId,
   ingredientPriceTaxMode,
+  categories,
+  initialCategoryId,
   onAdded,
 }: {
   storeId: string;
   ingredientPriceTaxMode: IngredientPriceTaxMode;
+  categories: Category[];
+  /** カテゴリ欄の初期値(食材一覧で開いていたタブのカテゴリ)。 */
+  initialCategoryId: string | null;
   onAdded: (i: IngredientRow) => void;
 }) {
   const [name, setName] = useState("");
+  // 続けて追加する時は同じカテゴリのことが多いため、追加後もカテゴリ欄はリセットしない。
+  const [categoryId, setCategoryId] = useState<string | null>(initialCategoryId);
   const [unit, setUnit] = useState("g");
   const price = usePriceInput();
   const yieldRate = useYieldRateInput();
@@ -253,6 +271,7 @@ function AddIngredientForm({
       unit: unit.trim(),
       purchasePrice: price.resolvedPrice,
       yieldRatePercent: yieldRate.resolvedPercent,
+      categoryId: categoryId != null && categories.some((c) => c.id === categoryId) ? categoryId : null,
     });
     setSaving(false);
     if (!result.success) {
@@ -289,6 +308,7 @@ function AddIngredientForm({
 
       <PriceInputFields unit={unit} price={price} ingredientPriceTaxMode={ingredientPriceTaxMode} />
       <YieldRateField yieldRate={yieldRate} />
+      {categories.length > 0 && <CategoryPickerField categories={categories} value={categoryId} onChange={setCategoryId} />}
 
       {error && <ActionErrorMessage error={error} />}
       {justAdded && !error && (
@@ -314,18 +334,21 @@ function IngredientEditRow({
   storeId,
   ingredient,
   ingredientPriceTaxMode,
+  categories,
   onSaved,
   onCancel,
 }: {
   storeId: string;
   ingredient: IngredientRow;
   ingredientPriceTaxMode: IngredientPriceTaxMode;
+  categories: Category[];
   onSaved: (i: IngredientRow) => void;
   onCancel: () => void;
 }) {
   const [name, setName] = useState(ingredient.name);
   const price = usePriceInput(ingredient.currentPurchasePrice);
   const yieldRate = useYieldRateInput(ingredient.yieldRatePercent);
+  const [categoryId, setCategoryId] = useState<string | null>(ingredient.categoryId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -347,12 +370,15 @@ function IngredientEditRow({
       return;
     }
     setSaving(true);
+    // 一覧に無いカテゴリ(別の画面で削除された等)を選んだままなら未分類として保存する。
+    const savedCategoryId = categoryId != null && categories.some((c) => c.id === categoryId) ? categoryId : null;
     const result = await updateIngredient({
       storeId,
       ingredientId: ingredient.id,
       name: trimmedName,
       purchasePrice: price.resolvedPrice,
       yieldRatePercent: yieldRate.resolvedPercent,
+      categoryId: savedCategoryId,
     });
     setSaving(false);
     if (!result.success) {
@@ -367,6 +393,7 @@ function IngredientEditRow({
       yieldRatePercent: yieldRate.resolvedPercent,
       isPrepItem: false,
       yieldQuantity: null,
+      categoryId: savedCategoryId,
     });
   }
 
@@ -396,6 +423,7 @@ function IngredientEditRow({
 
       <PriceInputFields unit={ingredient.unit} price={price} ingredientPriceTaxMode={ingredientPriceTaxMode} />
       <YieldRateField yieldRate={yieldRate} />
+      {categories.length > 0 && <CategoryPickerField categories={categories} value={categoryId} onChange={setCategoryId} />}
 
       {error && <ActionErrorMessage error={error} />}
 
@@ -426,10 +454,16 @@ export function IngredientsView({
   storeId,
   initialIngredients,
   ingredientPriceTaxMode,
+  categories,
+  initialCategoryParam,
 }: {
   storeId: string;
   initialIngredients: IngredientRow[];
   ingredientPriceTaxMode: IngredientPriceTaxMode;
+  /** 食材用のカテゴリ(並び順どおり)。 */
+  categories: Category[];
+  /** 画面を開いた時のURLの ?category= の値。 */
+  initialCategoryParam: string | null;
 }) {
   const router = useRouter();
   const [ingredients, setIngredients] = useState<IngredientRow[]>(initialIngredients);
@@ -443,12 +477,35 @@ export function IngredientsView({
   // 食材IDごとに保持してその行の直下に表示する。
   const [deleteErrors, setDeleteErrors] = useState<Record<string, string>>({});
 
+  // カテゴリのタブ。食材一覧だけ、固定の「仕込み品」タブがある(仕込み品はカテゴリを付けず、ここで別枠表示する)。
+  const [tab, setTab] = useState<CategoryTab>(() => parseCategoryTab(initialCategoryParam, categories, { allowPrepTab: true }));
+  const chips = useMemo(() => buildCategoryChips(ingredients, categories, { includePrepTab: true }), [ingredients, categories]);
+  const activeParam = categoryTabToParam(tab);
+  // 未分類を全部カテゴリ分けし終えると未分類のタブが消えるため、その時は「すべて」に戻す。
+  const effectiveTab = useMemo<CategoryTab>(
+    () => (chips.some((c) => c.param === activeParam) ? tab : { type: "all" }),
+    [chips, activeParam, tab],
+  );
+  const effectiveParam = categoryTabToParam(effectiveTab);
+
+  function selectTab(next: CategoryTab) {
+    setTab(next);
+    replaceCategoryParamInUrl(categoryTabToParam(next));
+  }
+
   const filtered = useMemo(() => {
     const normalize = (s: string) => s.normalize("NFKC").toLowerCase();
     const q = normalize(query.trim());
-    const list = q ? ingredients.filter((i) => normalize(i.name).includes(q)) : ingredients;
+    const inTab = filterByCategoryTab(ingredients, effectiveTab, categories);
+    const list = q ? inTab.filter((i) => normalize(i.name).includes(q)) : inTab;
     return [...list].sort((a, b) => a.name.localeCompare(b.name, "ja"));
-  }, [ingredients, query]);
+  }, [ingredients, query, effectiveTab, categories]);
+
+  function openAddModal() {
+    // 「仕込み品」タブから追加する時は、仕込み品の入力から始める。
+    setAddMode(effectiveTab.type === "prep" ? "prepItem" : "ingredient");
+    setShowAddModal(true);
+  }
 
   // 仕込み品の材料として選べる候補(通常の食材・別の仕込み品どちらも含む)。
   const componentOptions: PrepItemComponentOption[] = useMemo(
@@ -501,13 +558,17 @@ export function IngredientsView({
           </p>
           <button
             type="button"
-            onClick={() => setShowAddModal(true)}
+            onClick={openAddModal}
             className="shrink-0 rounded px-4 py-2.5 text-sm font-bold transition-colors"
             style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
           >
             ＋ 食材を追加
           </button>
         </div>
+
+        {ingredients.length > 0 && categories.length > 0 && (
+          <CategoryTabs chips={chips} activeParam={effectiveParam} onSelect={(chip) => selectTab(chip.tab)} ariaLabel="食材のカテゴリ" />
+        )}
 
         {ingredients.length > 0 && (
           <input
@@ -528,7 +589,11 @@ export function IngredientsView({
           </p>
         ) : filtered.length === 0 ? (
           <p className="rounded border border-dashed px-4 py-6 text-center text-sm" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
-            「{query}」に一致する食材が見つかりませんでした。
+            {query.trim()
+              ? `「${query}」に一致する食材が見つかりませんでした。`
+              : effectiveTab.type === "prep"
+                ? "まだ仕込み品が登録されていません。上の「＋ 食材を追加」から「仕込み品」を選んで追加してください。"
+                : "このカテゴリの食材はまだありません。"}
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
@@ -561,6 +626,7 @@ export function IngredientsView({
                       storeId={storeId}
                       ingredient={ing}
                       ingredientPriceTaxMode={ingredientPriceTaxMode}
+                      categories={categories}
                       onSaved={handleSaved}
                       onCancel={() => setEditingId(null)}
                     />
@@ -629,7 +695,13 @@ export function IngredientsView({
             </TabButton>
           </div>
           {addMode === "ingredient" ? (
-            <AddIngredientForm storeId={storeId} ingredientPriceTaxMode={ingredientPriceTaxMode} onAdded={handleAdded} />
+            <AddIngredientForm
+              storeId={storeId}
+              ingredientPriceTaxMode={ingredientPriceTaxMode}
+              categories={categories}
+              initialCategoryId={initialCategoryIdForNewItem(effectiveTab)}
+              onAdded={handleAdded}
+            />
           ) : (
             <PrepItemForm
               storeId={storeId}

@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { getSessionStore, getIngredientPriceHistory } from "@/lib/store";
+import { getSessionStore, getIngredientPriceHistory, getCategories } from "@/lib/store";
+import { categoryTabToParam, parseCategoryTab, sortCategories } from "@/lib/categories";
 import { currentMonthString, monthToPeriod } from "@/lib/period/month.ts";
 import { withResolvedPrepItemPrices, resolveUnsetLeaves } from "@/lib/prepItemCost";
 import { resolveHistoricalPrice, resolveHistoricalPriceIsSet } from "@/lib/ingredientPriceHistory";
@@ -17,7 +18,13 @@ export const metadata: Metadata = {
   title: "メニューを編集",
 };
 
-export default async function MenuDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function MenuDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ category?: string | string[] }>;
+}) {
   if (!isSupabaseConfigured()) redirect("/");
 
   const supabase = await createClient();
@@ -45,8 +52,10 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
     { data: priceHistoryRows },
     { data: allMenuSales },
     priceHistory,
+    allCategories,
+    { category: categoryParamRaw },
   ] = await Promise.all([
-    supabase.from("menus").select("id, name, selling_price, target_cost_rate").eq("id", menuId).eq(
+    supabase.from("menus").select("id, name, selling_price, target_cost_rate, category_id").eq("id", menuId).eq(
       "store_id",
       store.id,
     ).maybeSingle(),
@@ -75,7 +84,14 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
     supabase.from("menu_price_history").select("price, recorded_at").eq("menu_id", menuId).order("recorded_at", { ascending: true }),
     supabase.from("menu_sales").select("quantity_sold, period_start, period_end").eq("menu_id", menuId),
     getIngredientPriceHistory(supabase),
+    getCategories(supabase),
+    searchParams,
   ]);
+  const menuCategories = sortCategories(allCategories.filter((c) => c.kind === "menu"));
+  // 保存後は、メニュー一覧で開いていたタブ(?category=)に戻す。
+  const returnCategoryParam = categoryTabToParam(
+    parseCategoryTab(typeof categoryParamRaw === "string" ? categoryParamRaw : null, menuCategories, { allowPrepTab: false }),
+  );
 
   if (!menu) notFound();
 
@@ -217,6 +233,9 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
         currentMonthQuantitySold={currentMonthSales?.quantity_sold ?? null}
         ingredientPriceTaxMode={store.ingredientPriceTaxMode}
         unsetLeavesByIngredientId={unsetLeavesByIngredientId}
+        categories={menuCategories}
+        initialCategoryId={menu.category_id}
+        returnCategoryParam={returnCategoryParam}
       />
 
       {priceChangeOldPrice != null && priceChangeNewPrice != null && (

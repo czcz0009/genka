@@ -3,6 +3,7 @@
 import { normalizeDisplayName, normalizeForDedupe, validateNameLength } from "@/lib/normalize";
 import { requireAuthedClient } from "@/lib/supabase/requireAuthedClient";
 import { friendlyDbError, dbErrorMessage } from "@/lib/supabase/friendlyDbError";
+import { validateCategoryAssignment } from "@/lib/categoryAssignment";
 
 /**
  * メニュー1つ分(メニュー名・売価・食材の行すべて)を1回の保存操作でまとめて
@@ -33,6 +34,11 @@ export interface SaveMenuInput {
   sellingPrice: number | null;
   /** このメニュー個別の目標原価率(%)。未設定(null)なら店舗全体の目標原価率を使う。 */
   targetCostRatePercent?: number | null;
+  /**
+   * カテゴリ(任意)。null = 未分類にする。未指定(undefined) = カテゴリは変更しない
+   * (カテゴリ欄を持たない呼び出し元のため)。
+   */
+  categoryId?: string | null;
   lines: SaveMenuLineInput[];
   /**
    * この編集画面を開いた(＝最後にサーバーから読み込んだ)時点で使っていた既存食材のID一覧。
@@ -66,6 +72,10 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
     return { success: false, error: "目標原価率は0より大きく100以下の数値で入力してください" };
   }
   const normalizedName = normalizeForDedupe(name);
+  const categoryError = await validateCategoryAssignment(supabase, input.storeId, "menu", input.categoryId);
+  if (categoryError) return { success: false, error: categoryError };
+  // undefinedのときはカテゴリ列に触れない(update/insertの対象に含めない)。
+  const categoryColumn = input.categoryId === undefined ? {} : { category_id: input.categoryId };
 
   let menuId = input.menuId;
   const nowIso = new Date().toISOString();
@@ -95,6 +105,7 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
         normalized_name: normalizedName,
         selling_price: input.sellingPrice,
         target_cost_rate: targetCostRatePercent,
+        ...categoryColumn,
       })
       .eq("id", menuId)
       .eq("store_id", input.storeId);
@@ -114,7 +125,13 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
       priceChanged = input.sellingPrice != null && existing.selling_price !== input.sellingPrice;
       await supabase
         .from("menus")
-        .update({ selling_price: input.sellingPrice, target_cost_rate: targetCostRatePercent })
+        .update({
+          selling_price: input.sellingPrice,
+          target_cost_rate: targetCostRatePercent,
+          // 新規登録画面から既存と同じ名前で保存した場合、既に付いているカテゴリを
+          // 「未分類」で上書きしない(カテゴリを選んだ時だけ反映する)。
+          ...(input.categoryId != null ? { category_id: input.categoryId } : {}),
+        })
         .eq("id", menuId);
     } else {
       const { data, error } = await supabase
@@ -125,6 +142,7 @@ export async function saveMenuWithIngredients(input: SaveMenuInput): Promise<Sav
           normalized_name: normalizedName,
           selling_price: input.sellingPrice,
           target_cost_rate: targetCostRatePercent,
+          ...categoryColumn,
         })
         .select("id")
         .single();

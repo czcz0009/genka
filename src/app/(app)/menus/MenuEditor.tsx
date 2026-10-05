@@ -9,6 +9,8 @@ import { ingredientPriceTaxModeLabel, type IngredientPriceTaxMode } from "@/lib/
 import { saveMenuWithIngredients, type SaveMenuLineInput } from "./actions.ts";
 import { ActionErrorMessage } from "@/components/ActionErrorMessage.tsx";
 import { HelpButton } from "@/components/HelpButton.tsx";
+import { CategoryPickerField } from "@/components/CategoryPickerField.tsx";
+import type { Category } from "@/lib/categories";
 
 export interface IngredientOption {
   id: string;
@@ -138,6 +140,9 @@ export function MenuEditor({
   currentMonthQuantitySold,
   ingredientPriceTaxMode,
   unsetLeavesByIngredientId,
+  categories,
+  initialCategoryId,
+  returnCategoryParam,
 }: {
   storeId: string;
   menuId?: string;
@@ -159,6 +164,12 @@ export function MenuEditor({
    * コンポーネントへそのまま渡せないため、プレーンオブジェクトで受け取る。
    */
   unsetLeavesByIngredientId?: Record<string, { name: string; viaPrepItemName: string | null }[]>;
+  /** メニュー用のカテゴリ(並び順どおり)。 */
+  categories: Category[];
+  /** カテゴリ欄の初期値。新規登録なら一覧で開いていたタブのカテゴリ、編集なら今のカテゴリ。 */
+  initialCategoryId: string | null;
+  /** 保存後に戻るメニュー一覧のタブ(URLの ?category= の値)。「すべて」ならnull。 */
+  returnCategoryParam: string | null;
 }) {
   const router = useRouter();
   const [name, setName] = useState(initialName);
@@ -167,6 +178,7 @@ export function MenuEditor({
   const [targetCostRateInput, setTargetCostRateInput] = useState(
     individualTargetCostRate != null ? String(individualTargetCostRate) : "",
   );
+  const [categoryId, setCategoryId] = useState<string | null>(initialCategoryId);
   const [saving, setSaving] = useState<"save" | "saveAndNew" | null>(null);
   const [error, setError] = useState<string | null>(null);
   // このメニュー編集中に「新規食材」として追加した食材の下書き一覧。
@@ -283,6 +295,8 @@ export function MenuEditor({
       name,
       sellingPrice: sellingPriceNumber,
       targetCostRatePercent: targetCostRateNumber,
+      // 一覧に無いカテゴリ(別の画面で削除された等)を選んだままなら未分類として保存する。
+      categoryId: categoryId != null && categories.some((c) => c.id === categoryId) ? categoryId : null,
       lines: lineInputs,
       // この画面を開いた(＝最後にサーバーから読み込んだ)時点で使っていた既存食材のID一覧。
       // 別のタブ等で先に保存されて追加された食材行を、こちらの保存時に「知らずに削除して
@@ -296,10 +310,11 @@ export function MenuEditor({
       setError(result.error);
       return;
     }
+    const returnQuery = returnCategoryParam ? `?category=${encodeURIComponent(returnCategoryParam)}` : "";
     if (mode === "saveAndNew") {
-      router.push("/menus/new");
+      router.push(`/menus/new${returnQuery}`);
     } else {
-      router.push("/menus");
+      router.push(`/menus${returnQuery}`);
     }
     router.refresh();
   }
@@ -352,6 +367,8 @@ export function MenuEditor({
           未設定の場合は店舗全体の目標({defaultTargetCostRate}%)が使われます。海鮮など構造的に原価率が高いメニューだけ、個別に目標を上げたい場合に使ってください。
         </span>
       </label>
+
+      {categories.length > 0 && <CategoryPickerField categories={categories} value={categoryId} onChange={setCategoryId} />}
 
       {/* 現在の原価率 */}
       {hasUnsetIngredient ? (

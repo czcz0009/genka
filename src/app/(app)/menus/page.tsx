@@ -1,22 +1,24 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { getSessionStore, getStoreData } from "@/lib/store";
+import { getSessionStore, getStoreData, getCategories } from "@/lib/store";
+import { sortCategories } from "@/lib/categories";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient } from "@/lib/menuRanking";
 import { withResolvedPrepItemPrices, resolveUnsetLeaves } from "@/lib/prepItemCost";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
 import { Notice } from "@/components/Notice.tsx";
-import { MenusList } from "./MenusList.tsx";
+import { MenusList, AddMenuLink } from "./MenusList.tsx";
 
 export const metadata: Metadata = {
   title: "メニュー一覧",
 };
 
-export default async function MenusPage() {
+export default async function MenusPage({ searchParams }: { searchParams: Promise<{ category?: string | string[] }> }) {
   if (!isSupabaseConfigured()) {
     return (
       <div className="max-w-4xl space-y-6 p-6 md:p-8">
@@ -46,7 +48,14 @@ export default async function MenusPage() {
   // メニュー一覧に必要なのは「原価・原価率」だけで、販売実績は使わないため
   // sales は渡さない(渡さなければ利益貢献度は常に0/null扱いになり、ソート順に
   // 影響しない=登録順のまま表示される)。
-  const storeData = await getStoreData(supabase);
+  // カテゴリ(タブ用)は計算に使わないため、get_store_dataとは別のRPCで並列に取得する。
+  const [storeData, allCategories, { category: categoryParamRaw }] = await Promise.all([
+    getStoreData(supabase),
+    getCategories(supabase),
+    searchParams,
+  ]);
+  const menuCategories = sortCategories(allCategories.filter((c) => c.kind === "menu"));
+  const initialCategoryParam = typeof categoryParamRaw === "string" ? categoryParamRaw : null;
   const menus = storeData?.menus ?? [];
 
   if (menus.length === 0) {
@@ -94,7 +103,10 @@ export default async function MenusPage() {
   });
   // buildMenuRanking は利益貢献度順に並び替えるため、登録順に戻す
   const orderById = new Map(menus.map((m, idx) => [m.id, idx]));
-  const rows = [...summaries].sort((a, b) => (orderById.get(a.menuId) ?? 0) - (orderById.get(b.menuId) ?? 0));
+  const categoryIdByMenuId = new Map(menus.map((m) => [m.id, m.categoryId]));
+  const rows = [...summaries]
+    .sort((a, b) => (orderById.get(a.menuId) ?? 0) - (orderById.get(b.menuId) ?? 0))
+    .map((r) => ({ ...r, categoryId: categoryIdByMenuId.get(r.menuId) ?? null }));
   const overTargetCount = rows.filter((r) => r.overTarget).length;
 
   return (
@@ -114,14 +126,20 @@ export default async function MenusPage() {
           >
             Excelから取り込む
           </Link>
-          <Link
-            href="/menus/new"
-            prefetch={false}
-            className="rounded px-5 py-3 text-base font-semibold transition-colors"
-            style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
+          <Suspense
+            fallback={
+              <Link
+                href="/menus/new"
+                prefetch={false}
+                className="rounded px-5 py-3 text-base font-semibold transition-colors"
+                style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
+              >
+                ＋ メニューを追加
+              </Link>
+            }
           >
-            ＋ メニューを追加
-          </Link>
+            <AddMenuLink />
+          </Suspense>
         </div>
       </div>
 
@@ -139,7 +157,7 @@ export default async function MenusPage() {
         </Notice>
       )}
 
-      <MenusList storeId={store.id} rows={rows} />
+      <MenusList storeId={store.id} rows={rows} categories={menuCategories} initialCategoryParam={initialCategoryParam} />
     </div>
   );
 }

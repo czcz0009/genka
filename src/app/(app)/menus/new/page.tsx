@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { getSessionStore } from "@/lib/store";
+import { getSessionStore, getCategories } from "@/lib/store";
+import { categoryTabToParam, initialCategoryIdForNewItem, parseCategoryTab, sortCategories } from "@/lib/categories";
 import { withResolvedPrepItemPrices, resolveUnsetLeaves } from "@/lib/prepItemCost";
 import { MenuEditor } from "../MenuEditor.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
   title: "メニューを登録",
 };
 
-export default async function NewMenuPage() {
+export default async function NewMenuPage({ searchParams }: { searchParams: Promise<{ category?: string | string[] }> }) {
   if (!isSupabaseConfigured()) redirect("/");
 
   const supabase = await createClient();
@@ -28,14 +29,21 @@ export default async function NewMenuPage() {
   }
   const { store } = session;
 
-  const [{ data: allIngredients }, { data: prepItemComponents }] = await Promise.all([
+  const [{ data: allIngredients }, { data: prepItemComponents }, allCategories, { category: categoryParamRaw }] = await Promise.all([
     supabase
       .from("ingredients")
       .select("id, name, unit, current_purchase_price, price_is_set, yield_rate_percent, is_prep_item, yield_quantity")
       .eq("store_id", store.id)
       .order("name"),
     supabase.from("prep_item_components").select("prep_item_id, component_id, quantity"),
+    getCategories(supabase),
+    searchParams,
   ]);
+  // メニュー一覧で開いていたタブ(?category=)のカテゴリを、カテゴリ欄の初期値にする。
+  const menuCategories = sortCategories(allCategories.filter((c) => c.kind === "menu"));
+  const categoryTab = parseCategoryTab(typeof categoryParamRaw === "string" ? categoryParamRaw : null, menuCategories, {
+    allowPrepTab: false,
+  });
 
   // 仕込み品(サブレシピ)は仕入単価を持たないため、レシピから計算した実質単価に
   // 差し替える。メニュー編集画面(MenuEditor.tsx)は差し替え後の値をただの
@@ -103,6 +111,9 @@ export default async function NewMenuPage() {
         currentMonthQuantitySold={null}
         ingredientPriceTaxMode={store.ingredientPriceTaxMode}
         unsetLeavesByIngredientId={unsetLeavesByIngredientId}
+        categories={menuCategories}
+        initialCategoryId={initialCategoryIdForNewItem(categoryTab)}
+        returnCategoryParam={categoryTabToParam(categoryTab)}
       />
     </div>
   );

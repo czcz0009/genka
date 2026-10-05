@@ -158,8 +158,12 @@ export function MenusList({
         </p>
       ) : (
         <div className="overflow-hidden rounded border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+          {/*
+            状態の列は144px。以前は80pxで、「計算できていません」のバッジが列に収まらず
+            左隣の原価率の列(「単価未設定あり」)に重なっていた(2026-10-05修正)。
+          */}
           <div
-            className="hidden grid-cols-[1fr_96px_96px_128px_80px_88px] border-b px-5 py-3 text-xs font-semibold uppercase tracking-wide sm:grid"
+            className="hidden grid-cols-[1fr_96px_96px_128px_144px_88px] border-b px-5 py-3 text-xs font-semibold uppercase tracking-wide sm:grid"
             style={{ borderColor: "var(--border)", color: "var(--muted-foreground)", background: "var(--muted)" }}
           >
             <div>メニュー名</div>
@@ -182,7 +186,7 @@ export function MenusList({
                   // 走ってしまうのを避けるため、ここもprefetchを無効化する
                   href={`/menus/${s.menuId}${categoryQuery(effectiveParam)}`}
                   prefetch={false}
-                  className="flex min-w-0 flex-1 flex-col gap-2 text-left transition-colors hover:opacity-80 sm:grid sm:grid-cols-[1fr_96px_96px_128px_80px] sm:items-center sm:gap-0"
+                  className="flex min-w-0 flex-1 flex-col gap-2 text-left transition-colors hover:opacity-80 sm:grid sm:grid-cols-[1fr_96px_96px_128px_144px] sm:items-center sm:gap-0"
                 >
                   {/*
                     min-w-0 + break-words: 配布前QAで発見。非常に長いメニュー名(スペースを
@@ -224,14 +228,6 @@ export function MenusList({
                     </div>
                   </div>
                 </Link>
-                {s.hasUnsetIngredient && (
-                  <p className="px-5 pb-3 text-xs" style={{ color: "var(--muted-foreground)" }}>
-                    計算できていません(未設定: {formatUnsetIngredientNames(s.unsetIngredients)})
-                    <Link href="/ingredients" prefetch={false} className="ml-1 underline underline-offset-2">
-                      単価を設定する →
-                    </Link>
-                  </p>
-                )}
                 <button
                   type="button"
                   onClick={() => handleDelete(s)}
@@ -242,6 +238,19 @@ export function MenusList({
                   {deletingId === s.menuId ? "削除中…" : "削除する"}
                 </button>
               </div>
+              {/*
+                不具合修正(2026-10-05): 以前はこの案内文が上の横並びの行(メニュー名・削除ボタンと
+                同じflex)の中にあり、メニュー名の幅が潰れて縦書きのように崩れていた。
+                行の下に独立して表示する(文言は変えない)。
+              */}
+              {s.hasUnsetIngredient && (
+                <p className="px-5 pb-3 text-xs" style={{ color: "var(--muted-foreground)" }}>
+                  計算できていません(未設定: {formatUnsetIngredientNames(s.unsetIngredients)})
+                  <Link href="/ingredients" prefetch={false} className="ml-1 underline underline-offset-2">
+                    単価を設定する →
+                  </Link>
+                </p>
+              )}
               {deleteErrors[s.menuId] && (
                 <div className="px-5 pb-3">
                   <ActionErrorMessage error={deleteErrors[s.menuId]} />

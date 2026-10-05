@@ -117,7 +117,8 @@ export default async function MenusPage({ searchParams }: { searchParams: Promis
           title="メニュー一覧"
           description="登録済みのメニューと、それぞれの原価・原価率です。原価率は「原価 ÷ 売価」で、低いほど利益が残ります。タップすると食材の追加・編集ができます。"
         />
-        <div className="flex shrink-0 gap-3">
+        {/* flex-wrap: スマホ幅(375px)で2つのボタンが横に収まらず、画面の右にはみ出していたため折り返す。 */}
+        <div className="flex flex-wrap gap-3">
           <Link
             href="/import"
             prefetch={false}

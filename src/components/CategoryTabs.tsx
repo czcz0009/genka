@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import type { CategoryChip } from "@/lib/categories";
 
 /**
@@ -20,8 +21,20 @@ export function CategoryTabs({
   onSelect: (chip: CategoryChip) => void;
   ariaLabel: string;
 }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  // URLで指定されたタブ(例: 詳細画面から戻った時)が右側の見えない位置にあっても
+  // 分かるよう、最初の表示時だけ選択中のタブまで横スクロールする(縦方向には動かさない)。
+  useEffect(() => {
+    const list = listRef.current;
+    const active = list?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!list || !active) return;
+    const overflowRight = active.getBoundingClientRect().right - list.getBoundingClientRect().right;
+    if (overflowRight > 0) list.scrollLeft += overflowRight + 16;
+    // 最初の表示時だけ動かす(タブを押すたびに動くと、押した位置がずれて操作しにくいため)
+  }, []);
+
   return (
-    <div role="tablist" aria-label={ariaLabel} className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
+    <div ref={listRef} role="tablist" aria-label={ariaLabel} className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
       {chips.map((chip) => {
         const active = chip.param === activeParam;
         return (

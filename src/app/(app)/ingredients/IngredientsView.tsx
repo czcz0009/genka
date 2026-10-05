@@ -638,7 +638,11 @@ export function IngredientsView({
                   className="flex flex-col gap-2 rounded border px-4 py-3"
                   style={{ borderColor: "var(--border)", background: "var(--card)" }}
                 >
-                  <div className="flex items-center justify-between gap-3">
+                  {/*
+                    flex-wrap: スマホ幅で長い食材名の時、名前が編集・削除ボタンに押されて狭い列で
+                    何行にも折り返されていたため、収まらない時だけボタンを次の行に回す(2026-10-05修正)。
+                  */}
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex min-w-0 flex-col gap-0.5">
                       <span className="break-words text-base font-medium" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
                         {ing.name}

@@ -934,7 +934,9 @@ function IngredientLineForm({
                   key={i.id}
                   type="button"
                   onClick={() => handleSelectSuggestion(i)}
-                  className="flex w-full items-center justify-between border-b px-4 py-3 text-left text-base transition-colors last:border-0 hover:bg-[color:var(--muted)]"
+                  // flex-wrap: スマホ幅で長い食材名の時、右側の単価(「gあたり¥0」)が縦に1文字ずつ
+                  // 潰れていたため、収まらない時だけ単価を次の行に回す(2026-10-05修正)。
+                  className="flex w-full flex-wrap items-center justify-between gap-x-3 border-b px-4 py-3 text-left text-base transition-colors last:border-0 hover:bg-[color:var(--muted)]"
                   style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
                 >
                   <span style={{ fontFamily: "var(--font-noto-sans-jp)" }}>

@@ -93,20 +93,26 @@ export function SearchablePicker({
       </div>
 
       {/* 一覧内のハイライトだけでは「本当に選ばれているか分からない」という
-          指摘を受けたため、選んだ内容をテキストボックスにもはっきり表示する。 */}
-      <label className="flex flex-col gap-1 text-sm" style={{ color: "var(--muted-foreground)" }}>
+          指摘を受けたため、選んだ内容をテキストボックスにもはっきり表示する。
+          以前は読み取り専用の<input>だったが、1行しか表示できず、スマホ幅で長い名前
+          (20文字のカテゴリ名・長い列名等)の末尾が切れていたため、折り返して全文を
+          出せる枠にした(2026-10-05)。1行に収まる名前の時の高さ・見た目は以前と同じ。 */}
+      <div className="flex flex-col gap-1 text-sm" style={{ color: "var(--muted-foreground)" }}>
         {selectedLabelPrefix}
-        <input
-          readOnly
-          value={selected ? selected.label : emptyLabel}
-          className="rounded border px-4 py-3 text-base"
+        <div
+          role="status"
+          aria-label={selectedLabelPrefix}
+          className="break-words rounded border px-4 py-3 text-base"
           style={
             selected
               ? { borderColor: "var(--border)", background: "var(--muted)", color: "var(--foreground)", fontWeight: 500 }
               : { borderColor: "var(--border)", background: "transparent", color: "var(--muted-foreground)" }
           }
-        />
-      </label>
+        >
+          {/* 空文字の名前でも枠の高さが潰れないよう、ノーブレークスペースを入れる */}
+          {(selected ? selected.label : emptyLabel) || " "}
+        </div>
+      </div>
     </div>
   );
 }

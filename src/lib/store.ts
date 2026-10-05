@@ -3,6 +3,7 @@ import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { IngredientPriceTaxMode } from "./taxMode.ts";
 import type { PriceHistoryEntry } from "./ingredientPriceHistory.ts";
+import type { Category, CategoryKind } from "./categories.ts";
 
 export type { IngredientPriceTaxMode } from "./taxMode.ts";
 
@@ -72,6 +73,8 @@ export interface StoreDataMenu {
   sellingPrice: number | null;
   targetCostRate: number | null;
   createdAt: string;
+  /** カテゴリ(null=未分類)。整理用で、原価計算等には使わない。 */
+  categoryId: string | null;
 }
 
 export interface StoreDataIngredient {
@@ -131,7 +134,15 @@ export interface StoreData {
 
 interface RawStoreDataRow {
   store: { id: string; name: string; default_target_cost_rate: number; ingredient_price_tax_mode: string };
-  menus: { id: string; name: string; selling_price: number | null; target_cost_rate: number | null; created_at: string }[];
+  menus: {
+    id: string;
+    name: string;
+    selling_price: number | null;
+    target_cost_rate: number | null;
+    created_at: string;
+    // 0025マイグレーションで追加。未適用のDBでも動くよう省略可にしている。
+    category_id?: string | null;
+  }[];
   ingredients: {
     id: string;
     name: string;
@@ -189,6 +200,7 @@ export const getStoreData = cache(async function getStoreData(
       sellingPrice: m.selling_price,
       targetCostRate: m.target_cost_rate,
       createdAt: m.created_at,
+      categoryId: m.category_id ?? null,
     })),
     ingredients: raw.ingredients.map((i) => ({
       id: i.id,
@@ -265,4 +277,24 @@ export const getIngredientPriceHistory = cache(async function getIngredientPrice
     recordedAt: r.recorded_at,
     priceIsSet: r.price_is_set,
   }));
+});
+
+/**
+ * 自分の店舗のカテゴリ一覧(メニュー用・食材用の両方)を取得する(0025マイグレーションの
+ * get_categories)。デフォルトカテゴリがまだ作られていない店舗(作成に失敗した店舗)は、
+ * このRPCの中で自動的に補われる。
+ *
+ * カテゴリは任意の整理機能のため、取得に失敗しても画面は止めず空配列を返す
+ * (タブが「すべて」だけになるだけで、一覧・計算はそのまま使える)。
+ *
+ * cache()でラップし、同一リクエスト内での重複呼び出しを避ける。
+ */
+export const getCategories = cache(async function getCategories(supabase: SupabaseClient): Promise<Category[]> {
+  const { data, error } = await supabase.rpc("get_categories");
+  if (error || !data) {
+    if (error) console.error("[get_categories]", error);
+    return [];
+  }
+  const rows = data as { id: string; kind: CategoryKind; name: string; sort_order: number }[];
+  return rows.map((r) => ({ id: r.id, kind: r.kind, name: r.name, sortOrder: r.sort_order }));
 });

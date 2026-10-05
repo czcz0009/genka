@@ -56,11 +56,20 @@ async function main() {
         normalized_name: normalize(ing.name),
         unit: ing.unit,
         current_purchase_price: ing.price,
+        // 単価入力済みの印(0020で追加)。付けないと「単価未設定」扱いになり、全メニューが
+        // 「計算できていません」と表示される。
+        price_is_set: true,
       })
       .select("id")
       .single();
     if (error) throw error;
     ingredientIds[ing.name] = data.id;
+    // アプリで食材を登録した時と同じく、価格の履歴を1件作る(今見直すべきメニュー等の
+    // 過去月の再現は、この履歴から単価・単価入力済みかどうかを判定するため)。
+    const { error: historyError } = await supabase
+      .from("ingredient_price_history")
+      .insert({ ingredient_id: data.id, price: ing.price, price_is_set: true, recorded_at: "2026-07-01T00:00:00Z" });
+    if (historyError) throw historyError;
   }
   console.log("created ingredients:", Object.keys(ingredientIds).length);
 

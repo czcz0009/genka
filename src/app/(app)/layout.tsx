@@ -54,7 +54,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-0 flex-1 flex-col md:flex-row" style={{ background: "var(--background)" }}>
       <Sidebar storeName={storeName} />
-      <div className="flex min-h-0 flex-1 flex-col">
+      {/*
+        min-w-0: PC幅(サイドバーと横並び)の時、本文の列が「中身の幅より縮まない」
+        (flexの既定)ため、長いメニュー名の表(折り返さない設定)があると、ページ全体が
+        表の幅まで横に広がり、見出しやボタンが画面の右外に切れていた(2026-10-05修正)。
+        表は各画面の横スクロール枠の中でスクロールさせる。
+      */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {pendingDeletionDays != null && <AccountDeletionBanner daysRemaining={pendingDeletionDays} />}
         {needsConsent ? (
           <ConsentGate />

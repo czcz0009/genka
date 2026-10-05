@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { recordTermsConsent } from "../consentActions.ts";
+import { isAlreadyRegisteredSignUp, ALREADY_REGISTERED_MESSAGE } from "@/lib/signUpResult.ts";
 
 type Mode = "signin" | "signup" | "reset";
 
@@ -81,6 +82,12 @@ export function LoginForm() {
         const { data, error } = await supabase!.auth.signUp({ email, password });
         if (error) {
           setError(translateAuthError(error.message));
+          return;
+        }
+        // 登録済みのメールアドレスだった場合、Supabaseはエラーを返さないため
+        // (詳細は signUpResult.ts)、ここで見分けてログインへ案内する。
+        if (isAlreadyRegisteredSignUp(data.user)) {
+          setError(ALREADY_REGISTERED_MESSAGE);
           return;
         }
         if (data.session) {

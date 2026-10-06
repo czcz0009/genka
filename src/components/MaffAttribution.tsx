@@ -12,8 +12,11 @@
  * 両方を必ず合わせること。
  */
 export function MaffAttribution({ className }: { className?: string }) {
+  // <p>ではなく<span className="block">にしている: 見出し(PageHeader)の説明文(<p>)の中に
+  // 置かれるため、<p>の中に<p>が入るHTMLの規則違反になり、hydration mismatch
+  // (本番ではReact error #418)が起きていた(2026-10-06修正)。見た目は同じ。
   return (
-    <p className={className}>
+    <span className={`block ${className ?? ""}`}>
       出典: 農林水産省「
       <a href="https://www.maff.go.jp/j/tokei/syohi/shunbetu/" target="_blank" rel="noopener noreferrer" className="underline">
         青果物卸売市場調査(旬別結果)
@@ -23,6 +26,6 @@ export function MaffAttribution({ className }: { className?: string }) {
         畜産物卸売価格の推移
       </a>
       」。取得したデータをもとに当サービスが加工・試算した参考値であり、国(農林水産省)が内容を保証するものではありません。
-    </p>
+    </span>
   );
 }

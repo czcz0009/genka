@@ -7,6 +7,7 @@ import type { MenuCostSummary } from "@/lib/types";
 import { formatMonthLabel } from "@/lib/period/month";
 import { SearchablePicker } from "@/components/SearchablePicker.tsx";
 import { Notice } from "@/components/Notice.tsx";
+import { maxProfitForBars } from "@/lib/menuRanking";
 import { StatusBadge } from "@/components/StatusBadge.tsx";
 
 function formatYen(n: number | null): string {
@@ -48,7 +49,8 @@ export function RankingView({
   }, [availableMonths, month]);
 
   const overTargetCount = summaries.filter((s) => s.overTarget && !s.hasUnsetIngredient).length;
-  const maxProfit = Math.max(...summaries.map((s) => s.profitContribution ?? 0), 1);
+  // 棒の長さの基準。単価未設定の食材を含むメニュー(誤った利益)は外す(maxProfitForBars)。
+  const maxProfit = maxProfitForBars(summaries);
 
   return (
     <div className="flex flex-col gap-6">

@@ -251,3 +251,12 @@ export function sumOverTargetMonthlyProfitImpact(summaries: MenuCostSummary[]): 
   if (impacts.length === 0) return null;
   return impacts.reduce((a, b) => a + b, 0);
 }
+
+/**
+ * 今見直すべきメニューの「利益貢献度」の棒グラフの基準(最大値)。
+ * 単価未設定の食材を含むメニューは、0円扱いの誤った利益になっているため外す(2026-10-06修正。
+ * 以前は含めていたため、他のメニューの棒が短く見えることがあった)。0で割らないよう最低1。
+ */
+export function maxProfitForBars(summaries: MenuCostSummary[]): number {
+  return Math.max(...summaries.filter((s) => !s.hasUnsetIngredient).map((s) => s.profitContribution ?? 0), 1);
+}

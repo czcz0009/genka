@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ingredientPriceTaxModeLabel, type IngredientPriceTaxMode } from "@/lib/taxMode.ts";
 import { MAX_NAME_LENGTH } from "@/lib/normalize";
 import { unitPriceDisplay, unitPriceLabel } from "@/lib/unitPriceDisplay";
+import { initialDirectPriceInput, resolveEditedPrice } from "@/lib/ingredientEditPrice";
 import { createIngredient, updateIngredient, deleteIngredient, type IngredientRow } from "./actions.ts";
 import { ActionErrorMessage } from "@/components/ActionErrorMessage.tsx";
 import { Modal } from "@/components/Modal.tsx";
@@ -68,11 +69,11 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
  * 価格入力欄(仕入れ数量・仕入れ価格からの自動計算 / 直接入力の切り替え)。
  * MenuEditor.tsxの食材追加フォームと同じ操作感にしている。
  */
-function usePriceInput(initialPrice?: number) {
-  const [priceMode, setPriceMode] = useState<"calc" | "direct">("calc");
+function usePriceInput(options?: { initialDirectPrice?: string; initialMode?: "calc" | "direct" }) {
+  const [priceMode, setPriceMode] = useState<"calc" | "direct">(options?.initialMode ?? "calc");
   const [purchaseQuantity, setPurchaseQuantity] = useState("");
   const [purchasePriceTotal, setPurchasePriceTotal] = useState("");
-  const [directPrice, setDirectPrice] = useState(initialPrice != null ? String(initialPrice) : "");
+  const [directPrice, setDirectPrice] = useState(options?.initialDirectPrice ?? "");
 
   const computedUnitPrice = computeUnitPriceFromPackage(Number(purchaseQuantity), Number(purchasePriceTotal));
   const resolvedPrice = priceMode === "calc" ? computedUnitPrice : directPrice.trim() ? Number(directPrice) : null;
@@ -347,7 +348,9 @@ function IngredientEditRow({
   onCancel: () => void;
 }) {
   const [name, setName] = useState(ingredient.name);
-  const price = usePriceInput(ingredient.currentPurchasePrice);
+  // 「単価を直接入力する」で、保存されている単価を丸めずにそのまま入れて開く(未設定なら空欄)。
+  // カテゴリや名前だけを変える時に、仕入れ数量と仕入れ価格を入れ直さなくて済むようにするため。
+  const price = usePriceInput({ initialDirectPrice: initialDirectPriceInput(ingredient), initialMode: "direct" });
   const yieldRate = useYieldRateInput(ingredient.yieldRatePercent);
   const [categoryId, setCategoryId] = useState<string | null>(ingredient.categoryId);
   const [saving, setSaving] = useState(false);
@@ -360,11 +363,29 @@ function IngredientEditRow({
       setError("食材名を入力してください");
       return;
     }
-    if (price.resolvedPrice == null || price.resolvedPrice < 0) {
-      setError(
-        price.priceMode === "calc" ? "仕入れ数量と仕入れ価格を入力してください" : "仕入単価は0以上の数値で入力してください",
-      );
-      return;
+    // 直接入力: 未設定の食材は空欄のまま保存すれば未設定のまま(ingredientEditPrice.ts)
+    // 仕入れ価格から計算: 計算できた単価で、設定済みとして保存する
+    let purchasePrice: number;
+    let priceIsSet: boolean;
+    if (price.priceMode === "direct") {
+      const edited = resolveEditedPrice({
+        wasSet: ingredient.priceIsSet,
+        currentPurchasePrice: ingredient.currentPurchasePrice,
+        directInput: price.directPrice,
+      });
+      if (!edited.ok) {
+        setError(edited.error);
+        return;
+      }
+      purchasePrice = edited.purchasePrice;
+      priceIsSet = edited.priceIsSet;
+    } else {
+      if (price.computedUnitPrice == null || price.computedUnitPrice < 0) {
+        setError("仕入れ数量と仕入れ価格を入力してください");
+        return;
+      }
+      purchasePrice = price.computedUnitPrice;
+      priceIsSet = true;
     }
     if (!Number.isFinite(yieldRate.resolvedPercent) || yieldRate.resolvedPercent <= 0 || yieldRate.resolvedPercent > 100) {
       setError("歩留まり率は0より大きく100以下の数値で入力してください");
@@ -377,7 +398,8 @@ function IngredientEditRow({
       storeId,
       ingredientId: ingredient.id,
       name: trimmedName,
-      purchasePrice: price.resolvedPrice,
+      purchasePrice,
+      priceIsSet,
       yieldRatePercent: yieldRate.resolvedPercent,
       categoryId: savedCategoryId,
     });
@@ -390,8 +412,8 @@ function IngredientEditRow({
       id: ingredient.id,
       name: trimmedName,
       unit: ingredient.unit,
-      currentPurchasePrice: price.resolvedPrice,
-      priceIsSet: true,
+      currentPurchasePrice: purchasePrice,
+      priceIsSet,
       yieldRatePercent: yieldRate.resolvedPercent,
       isPrepItem: false,
       yieldQuantity: null,
@@ -423,6 +445,11 @@ function IngredientEditRow({
         単位はここでは変更できません(既存メニューの分量の意味が変わってしまうため)。単位を変えたい場合は、新しい食材として登録してください。
       </p>
 
+      {!ingredient.priceIsSet && (
+        <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+          この食材の単価はまだ未設定です。単価を入力すると設定されます(空欄のまま保存すると未設定のままです)。
+        </p>
+      )}
       <PriceInputFields unit={ingredient.unit} price={price} ingredientPriceTaxMode={ingredientPriceTaxMode} />
       <YieldRateField yieldRate={yieldRate} />
       {categories.length > 0 && <CategoryPickerField categories={categories} value={categoryId} onChange={setCategoryId} />}

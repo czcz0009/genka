@@ -5,6 +5,7 @@ import { requireAuthedClient } from "@/lib/supabase/requireAuthedClient";
 import { friendlyDbError, dbErrorMessage } from "@/lib/supabase/friendlyDbError";
 import { wouldCreateCycle } from "@/lib/prepItemCost";
 import { validateCategoryAssignment } from "@/lib/categoryAssignment";
+import { isPriceChanged } from "@/lib/ingredientEditPrice";
 
 /**
  * 食材の単独登録・編集(メニュー登録画面を経由しない、食材だけの追加・編集)。
@@ -194,10 +195,16 @@ export async function updateIngredient(input: UpdateIngredientInput): Promise<Up
   if (currentErr) return { success: false, error: dbErrorMessage("確認", currentErr) };
 
   const priceIsSet = input.priceIsSet ?? true;
+  // 未設定のまま保存する時は、単価(参考値)はDBの今の値から変えない。
+  const purchasePrice = priceIsSet ? input.purchasePrice : current.current_purchase_price;
   // 金額そのものだけでなく、「設定済みかどうか」が変わった時も履歴に記録する
   // (例: 未設定だった食材に初めて単価を入力した場合、金額は0→0のままでも
-  // 「未設定→設定済み」という重要な変化なので記録が必要)。
-  const priceChanged = current.current_purchase_price !== input.purchasePrice || current.price_is_set !== priceIsSet;
+  // 「未設定→設定済み」という重要な変化なので記録が必要)。比較はDBから読んだ値どうしで行う
+  // (編集画面には読み戻した値を丸めずに入れているため、変えていなければ完全に一致する)。
+  const priceChanged = isPriceChanged(
+    { price: current.current_purchase_price, isSet: current.price_is_set },
+    { price: purchasePrice, isSet: priceIsSet },
+  );
   const nowIso = new Date().toISOString();
 
   const { error } = await supabase
@@ -205,7 +212,7 @@ export async function updateIngredient(input: UpdateIngredientInput): Promise<Up
     .update({
       name: normalizeDisplayName(name),
       normalized_name: normalizedName,
-      current_purchase_price: input.purchasePrice,
+      current_purchase_price: purchasePrice,
       price_is_set: priceIsSet,
       yield_rate_percent: yieldRatePercent,
       ...(priceChanged ? { price_updated_at: nowIso } : {}),
@@ -223,7 +230,7 @@ export async function updateIngredient(input: UpdateIngredientInput): Promise<Up
   if (priceChanged) {
     await supabase
       .from("ingredient_price_history")
-      .insert({ ingredient_id: input.ingredientId, price: input.purchasePrice, price_is_set: priceIsSet, recorded_at: nowIso });
+      .insert({ ingredient_id: input.ingredientId, price: purchasePrice, price_is_set: priceIsSet, recorded_at: nowIso });
   }
 
   return { success: true };

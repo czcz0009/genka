@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ingredientPriceTaxModeLabel, type IngredientPriceTaxMode } from "@/lib/taxMode.ts";
 import { MAX_NAME_LENGTH } from "@/lib/normalize";
+import { unitPriceDisplay, unitPriceLabel } from "@/lib/unitPriceDisplay";
 import { createIngredient, updateIngredient, deleteIngredient, type IngredientRow } from "./actions.ts";
 import { ActionErrorMessage } from "@/components/ActionErrorMessage.tsx";
 import { Modal } from "@/components/Modal.tsx";
@@ -390,6 +391,7 @@ function IngredientEditRow({
       name: trimmedName,
       unit: ingredient.unit,
       currentPurchasePrice: price.resolvedPrice,
+      priceIsSet: true,
       yieldRatePercent: yieldRate.resolvedPercent,
       isPrepItem: false,
       yieldQuantity: null,
@@ -467,6 +469,14 @@ export function IngredientsView({
 }) {
   const router = useRouter();
   const [ingredients, setIngredients] = useState<IngredientRow[]>(initialIngredients);
+  // 追加・編集のあとのrouter.refresh()で、サーバーから最新の一覧(仕込み品の単価や
+  // 「未設定を含む」の判定を含む)が届いたら、画面の一覧もそれに置き換える。
+  // 以前は届いた一覧を使っておらず、追加直後の仕込み品が再読み込みするまで¥0と表示されていた。
+  const [prevInitialIngredients, setPrevInitialIngredients] = useState(initialIngredients);
+  if (initialIngredients !== prevInitialIngredients) {
+    setPrevInitialIngredients(initialIngredients);
+    setIngredients(initialIngredients);
+  }
   const [query, setQuery] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [addMode, setAddMode] = useState<"ingredient" | "prepItem">("ingredient");
@@ -653,8 +663,9 @@ export function IngredientsView({
                         )}
                       </span>
                       <span className="font-mono text-sm" style={{ color: "var(--muted-foreground)" }}>
-                        {ing.unit}あたり{formatUnitPrice(ing.currentPurchasePrice)}
-                        {!ing.isPrepItem && ing.yieldRatePercent < 100 && `(歩留まり${ing.yieldRatePercent}%)`}
+                        {/* 単価未設定は「未設定」、材料に未設定を含む仕込み品は「未設定を含む」(unitPriceDisplay.ts) */}
+                        {unitPriceLabel(ing.unit, unitPriceDisplay(ing), formatUnitPrice)}
+                        {!ing.isPrepItem && ing.priceIsSet && ing.yieldRatePercent < 100 && `(歩留まり${ing.yieldRatePercent}%)`}
                       </span>
                     </div>
                     <div className="flex shrink-0 gap-2">

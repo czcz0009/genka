@@ -25,6 +25,11 @@ export interface IngredientRow {
   name: string;
   unit: string;
   currentPurchasePrice: number;
+  /**
+   * 単価が入力済みかどうか。falseなら未設定(一覧に「未設定」と出す)。仕込み品は、材料を
+   * たどって1つでも未設定があればfalse(一覧に「未設定を含む」と出す)。
+   */
+  priceIsSet: boolean;
   /** 歩留まり率(%)。100(既定)なら歩留まりなし。 */
   yieldRatePercent: number;
   /** 仕込み品(サブレシピ)かどうか。 */
@@ -126,6 +131,7 @@ export async function createIngredient(input: CreateIngredientInput): Promise<Cr
       name: created.name,
       unit: created.unit,
       currentPurchasePrice: created.current_purchase_price,
+      priceIsSet,
       yieldRatePercent: created.yield_rate_percent,
       isPrepItem: false,
       yieldQuantity: null,

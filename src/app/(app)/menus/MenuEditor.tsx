@@ -11,6 +11,7 @@ import { ActionErrorMessage } from "@/components/ActionErrorMessage.tsx";
 import { HelpButton } from "@/components/HelpButton.tsx";
 import { CategoryPickerField } from "@/components/CategoryPickerField.tsx";
 import type { Category } from "@/lib/categories";
+import { unitPriceDisplay, unitPriceLabel, unitPriceText } from "@/lib/unitPriceDisplay";
 
 export interface IngredientOption {
   id: string;
@@ -443,6 +444,12 @@ export function MenuEditor({
               const hasYieldLoss = l.yieldRatePercent < 100;
               const effectivePrice = calcEffectiveUnitPrice(l.unitPrice, l.yieldRatePercent);
               const subtotal = qty * effectivePrice;
+              // 単価未設定の食材は「未設定」、材料に未設定を含む仕込み品は「未設定を含む」と出し、
+              // 0円扱いの金額は出さない(unitPriceDisplay.ts)。
+              const lineIsPrepItem =
+                l.source.type === "existing" &&
+                combinedIngredients.some((i) => i.id === (l.source as { ingredientId: string }).ingredientId && i.isPrepItem);
+              const priceDisplay = unitPriceDisplay({ priceIsSet: l.priceIsSet, isPrepItem: lineIsPrepItem, currentPurchasePrice: l.unitPrice });
               return (
                 <li
                   key={l.key}
@@ -455,13 +462,16 @@ export function MenuEditor({
                     </span>
                     <span className="font-mono text-sm" style={{ color: "var(--muted-foreground)" }}>
                       {qty}
-                      {l.unit} × {formatUnitPrice(l.unitPrice)}
-                      {hasYieldLoss && ` (歩留まり${l.yieldRatePercent}%→実質${formatUnitPrice(effectivePrice)})`}
+                      {l.unit} × {unitPriceText(priceDisplay, formatUnitPrice)}
+                      {hasYieldLoss && priceDisplay.kind === "price" && ` (歩留まり${l.yieldRatePercent}%→実質${formatUnitPrice(effectivePrice)})`}
                     </span>
                   </div>
                   <div className="flex items-center gap-4">
-                    <span className="font-mono text-base font-semibold" style={{ color: "var(--foreground)" }}>
-                      {formatYen(subtotal)}
+                    <span
+                      className="whitespace-nowrap font-mono text-base font-semibold"
+                      style={{ color: priceDisplay.kind === "price" ? "var(--foreground)" : "var(--muted-foreground)" }}
+                    >
+                      {priceDisplay.kind === "price" ? formatYen(subtotal) : unitPriceText(priceDisplay, formatUnitPrice)}
                     </span>
                     <button
                       onClick={() => removeLine(l.key)}
@@ -908,9 +918,8 @@ function IngredientLineForm({
             <span style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
               ✓ 登録済みの「{effectiveExisting.name}」
               {effectiveExisting.isPrepItem && <span style={{ color: "var(--accent)" }}>(仕込み品)</span>}
-              を使います({effectiveExisting.unit}あたり
-              {formatUnitPrice(effectiveExisting.currentPurchasePrice)}
-              {effectiveExisting.yieldRatePercent < 100 && `・歩留まり${effectiveExisting.yieldRatePercent}%`})
+              を使います({unitPriceLabel(effectiveExisting.unit, unitPriceDisplay({ ...effectiveExisting, isPrepItem: !!effectiveExisting.isPrepItem }), formatUnitPrice)}
+              {effectiveExisting.priceIsSet && effectiveExisting.yieldRatePercent < 100 && `・歩留まり${effectiveExisting.yieldRatePercent}%`})
               {existingNames.has(effectiveExisting.name) && (
                 <span className="ml-2" style={{ color: "var(--muted-foreground)" }}>
                   (このメニューに追加済み)
@@ -953,8 +962,8 @@ function IngredientLineForm({
                     )}
                   </span>
                   <span className="font-mono text-sm" style={{ color: "var(--muted-foreground)" }}>
-                    {i.unit}あたり{formatUnitPrice(i.currentPurchasePrice)}
-                    {i.yieldRatePercent < 100 && `(歩留まり${i.yieldRatePercent}%)`}
+                    {unitPriceLabel(i.unit, unitPriceDisplay({ ...i, isPrepItem: !!i.isPrepItem }), formatUnitPrice)}
+                    {i.priceIsSet && i.yieldRatePercent < 100 && `(歩留まり${i.yieldRatePercent}%)`}
                   </span>
                 </button>
               ))}

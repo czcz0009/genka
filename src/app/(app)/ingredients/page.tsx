@@ -117,6 +117,8 @@ export default async function IngredientsPage({ searchParams }: { searchParams: 
           name: i.name,
           unit: i.unit,
           currentPurchasePrice: resolvedById.get(i.id)?.currentPurchasePrice ?? i.current_purchase_price,
+          // 仕込み品は材料をたどって解決した値(1つでも未設定があればfalse)
+          priceIsSet: resolvedById.get(i.id)?.priceIsSet ?? i.price_is_set,
           yieldRatePercent: i.yield_rate_percent,
           isPrepItem: i.is_prep_item,
           yieldQuantity: i.yield_quantity,

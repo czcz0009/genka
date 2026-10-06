@@ -187,6 +187,8 @@ export function PrepItemForm({
       name: name.trim(),
       unit: unit.trim(),
       currentPurchasePrice: 0,
+      // 仮の値。直後のrouter.refresh()で、材料をたどって解決した単価・状態に置き換わる(IngredientsView)。
+      priceIsSet: true,
       yieldRatePercent: 100,
       isPrepItem: true,
       yieldQuantity: yieldQuantityNumber,

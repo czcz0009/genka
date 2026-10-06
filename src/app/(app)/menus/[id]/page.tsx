@@ -6,9 +6,7 @@ import { getSessionStore, getIngredientPriceHistory, getCategories } from "@/lib
 import { categoryTabToParam, parseCategoryTab, sortCategories } from "@/lib/categories";
 import { currentMonthString, monthToPeriod } from "@/lib/period/month.ts";
 import { withResolvedPrepItemPrices, resolveUnsetLeaves } from "@/lib/prepItemCost";
-import { resolveHistoricalPrice, resolveHistoricalPriceIsSet } from "@/lib/ingredientPriceHistory";
-import { calcMenuTotalCost, calcEffectiveUnitPrice, type UnitPriceMap } from "@/lib/costCalc";
-import { calcPriceChangeImpact, type MonthlyProfitPoint } from "@/lib/priceChangeImpact";
+import { evaluateMenuPriceChangeImpact } from "@/lib/priceChangeImpactEvaluation";
 import { MenuEditor, type LocalLine } from "../MenuEditor.tsx";
 import { PriceChangeImpactCard } from "../PriceChangeImpactCard.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
@@ -151,59 +149,25 @@ export default async function MenuDetailPage({
 
   // 「過去の値付け判断の成果追跡」: 直近の売価変更が1回でも記録されていれば
   // (履歴が2件以上=最初の価格+その後の変更)、変更前後の月次利益を比較する。
-  // 履歴が1件以下(まだ一度も値上げ・値下げしていない)は何も表示しない。
-  const priceHistory2 = priceHistoryRows ?? [];
-  let priceChangeImpactResult: ReturnType<typeof calcPriceChangeImpact> = null;
-  let priceChangeOldPrice: number | null = null;
-  let priceChangeNewPrice: number | null = null;
-
-  if (priceHistory2.length >= 2) {
-    priceChangeNewPrice = priceHistory2[priceHistory2.length - 1].price;
-    priceChangeOldPrice = priceHistory2[priceHistory2.length - 2].price;
-    const changeMonth = priceHistory2[priceHistory2.length - 1].recorded_at.slice(0, 7);
-    // それより前の変更(あれば)の月。基準期間がさらに古い価格regimeまで
-    // 遡ってしまわないよう、この月以前は基準の対象から除外する。
-    const secondToLastChangeMonth =
-      priceHistory2.length >= 3 ? priceHistory2[priceHistory2.length - 3].recorded_at.slice(0, 7) : null;
-
-    const menuIngredientLines = (menuIngredients ?? []).map((mi) => ({ ingredientId: mi.ingredient_id, quantity: mi.quantity }));
-
-    // その月の末日時点で実際に使われていた仕入単価をもとに、その月の原価を再現する
-    // (ranking/fl-ratio画面と同じ考え方。当時からレシピ自体を変更している場合は
-    // その影響までは反映されない、という同じ限界を受け入れている)。
-    function costAtMonthEnd(monthEndDate: string): number {
-      const historicized = (allIngredients ?? []).map((i) => ({
-        id: i.id,
-        name: i.name,
-        currentPurchasePrice: i.is_prep_item ? 0 : resolveHistoricalPrice(priceHistory, i.id, monthEndDate, i.current_purchase_price),
-        priceIsSet: i.is_prep_item ? false : resolveHistoricalPriceIsSet(priceHistory, i.id, monthEndDate),
-        yieldRatePercent: i.yield_rate_percent,
-        isPrepItem: i.is_prep_item,
-        yieldQuantity: i.yield_quantity,
-      }));
-      const resolved = withResolvedPrepItemPrices(historicized, prepItemComponentLines);
-      const unitPrices: UnitPriceMap = new Map(
-        resolved.map((i) => [i.id, { price: calcEffectiveUnitPrice(i.currentPurchasePrice, i.yieldRatePercent), isSet: i.priceIsSet }]),
-      );
-      // この「過去の値付け判断の成果追跡」機能は、単価未設定の食材を除外する
-      // UI対応をまだ入れていない(参考値として、未設定を0円扱いのまま計算する)。
-      return calcMenuTotalCost(menuIngredientLines, unitPrices).totalCost;
-    }
-
-    const monthlyPoints: MonthlyProfitPoint[] = (allMenuSales ?? []).map((s) => {
-      const month = s.period_start.slice(0, 7);
-      const cost = costAtMonthEnd(s.period_end);
-      const price = month < changeMonth ? priceChangeOldPrice! : priceChangeNewPrice!;
-      return { month, quantitySold: s.quantity_sold, profitPerUnit: price - cost };
-    });
-
-    const beforeMonths = monthlyPoints.filter(
-      (p) => p.month < changeMonth && (secondToLastChangeMonth == null || p.month > secondToLastChangeMonth),
-    );
-    const afterMonths = monthlyPoints.filter((p) => p.month >= changeMonth).sort((a, b) => a.month.localeCompare(b.month));
-
-    priceChangeImpactResult = calcPriceChangeImpact(priceChangeOldPrice!, priceChangeNewPrice!, beforeMonths, afterMonths);
-  }
+  // 履歴が1件以下(まだ一度も値上げ・値下げしていない)は何も表示しない(null)。
+  // 計算に使う月のどこかで単価未設定の食材を含んでいたら「計算できていません」にする
+  // (判定はpriceChangeImpactEvaluation.ts。以前は未設定を0円扱いのまま計算していた)。
+  const priceChangeOutcome = evaluateMenuPriceChangeImpact({
+    menuPriceHistory: (priceHistoryRows ?? []).map((r) => ({ price: r.price, recordedAt: r.recorded_at })),
+    menuSales: (allMenuSales ?? []).map((s) => ({ periodStart: s.period_start, periodEnd: s.period_end, quantitySold: s.quantity_sold })),
+    menuIngredientLines: (menuIngredients ?? []).map((mi) => ({ ingredientId: mi.ingredient_id, quantity: mi.quantity })),
+    ingredients: (allIngredients ?? []).map((i) => ({
+      id: i.id,
+      name: i.name,
+      currentPurchasePrice: i.current_purchase_price,
+      priceIsSet: i.price_is_set,
+      yieldRatePercent: i.yield_rate_percent,
+      isPrepItem: i.is_prep_item,
+      yieldQuantity: i.yield_quantity,
+    })),
+    prepItemComponents: prepItemComponentLines,
+    ingredientPriceHistory: priceHistory,
+  });
 
   return (
     <div className="max-w-2xl p-6 md:p-8">
@@ -238,9 +202,9 @@ export default async function MenuDetailPage({
         returnCategoryParam={returnCategoryParam}
       />
 
-      {priceChangeOldPrice != null && priceChangeNewPrice != null && (
+      {priceChangeOutcome && (
         <div className="mt-6">
-          <PriceChangeImpactCard oldPrice={priceChangeOldPrice} newPrice={priceChangeNewPrice} result={priceChangeImpactResult} />
+          <PriceChangeImpactCard outcome={priceChangeOutcome} />
         </div>
       )}
     </div>

@@ -1,4 +1,5 @@
-import type { PriceChangeImpactResult } from "@/lib/priceChangeImpact.ts";
+import Link from "next/link";
+import { formatPriceChangeUnsetReason, type MenuPriceChangeImpactOutcome } from "@/lib/priceChangeImpactEvaluation.ts";
 import { HelpButton } from "@/components/HelpButton.tsx";
 
 function formatYen(n: number): string {
@@ -8,19 +9,13 @@ function formatYen(n: number): string {
 
 /**
  * 直近の売価変更の成果(過去の値付け判断の追跡)。
- * 変更前の販売実績が無くまだ比較できない場合(result===null)と、比較できた
- * 場合の両方をこのコンポーネントで扱う。呼び出し側(menus/[id]/page.tsx)は
- * 「売価変更が1回でも記録されている時だけ」このコンポーネントを描画する。
+ * 比較できた場合・変更前の販売実績が無くまだ比較できない場合・単価未設定の食材を
+ * 含む月があり計算できない場合を、このコンポーネントで扱う。呼び出し側
+ * (menus/[id]/page.tsx)は「売価変更が1回でも記録されている時だけ」描画する。
  */
-export function PriceChangeImpactCard({
-  oldPrice,
-  newPrice,
-  result,
-}: {
-  oldPrice: number;
-  newPrice: number;
-  result: PriceChangeImpactResult | null;
-}) {
+export function PriceChangeImpactCard({ outcome }: { outcome: MenuPriceChangeImpactOutcome }) {
+  const { oldPrice, newPrice } = outcome;
+  const result = outcome.status === "ok" ? outcome.result : null;
   return (
     <div className="flex flex-col gap-3 rounded border p-5" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
       <div className="flex items-center gap-2">
@@ -40,7 +35,16 @@ export function PriceChangeImpactCard({
         </HelpButton>
       </div>
 
-      {result == null ? (
+      {outcome.status === "unset" ? (
+        // 単価未設定の食材を含む月があると、改善額・内訳・基準は一切出さない。後から単価を
+        // 設定してもその月は未設定のままなので、どの月の時点だったかを明記する。
+        <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+          {formatPriceChangeUnsetReason(outcome)}
+          <Link href="/ingredients" prefetch={false} className="ml-1 whitespace-nowrap underline underline-offset-2">
+            単価を設定する →
+          </Link>
+        </p>
+      ) : result == null ? (
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           売価を¥{oldPrice.toLocaleString()}から¥{newPrice.toLocaleString()}に変更した記録がありますが、変更前の販売実績の記録がまだ無いため、効果を比較できません。
         </p>

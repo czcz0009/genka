@@ -1,9 +1,9 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MenuCostSummary } from "./types.ts";
-import { getStoreData, getIngredientPreviousPrices, getIngredientPriceHistory } from "./store.ts";
+import { getStoreData, getIngredientPriceHistory } from "./store.ts";
 import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient, type RankingSales } from "./menuRanking.ts";
-import { resolveHistoricalPrice, resolveHistoricalPriceIsSet } from "./ingredientPriceHistory.ts";
+import { resolveHistoricalPrice, resolveHistoricalPriceIsSet, resolvePreviousPurchasePrices } from "./ingredientPriceHistory.ts";
 import { withResolvedPrepItemPrices, resolveUnsetLeaves } from "./prepItemCost.ts";
 import { monthToPeriod, currentMonthString } from "./period/month.ts";
 
@@ -30,11 +30,9 @@ export async function computeMonthlyMenuSummaries(
   store: { id: string; defaultTargetCostRate: number },
   monthParam?: string | null,
 ): Promise<MonthlyMenuSummaries | null> {
-  const [storeData, previousPrices, priceHistory] = await Promise.all([
-    getStoreData(supabase),
-    getIngredientPreviousPrices(supabase),
-    getIngredientPriceHistory(supabase),
-  ]);
+  const [storeData, priceHistory] = await Promise.all([getStoreData(supabase), getIngredientPriceHistory(supabase)]);
+  // 1つ前の単価は、全件の価格履歴(未設定の印つき)から判定する(resolvePreviousPurchasePrices)。
+  const previousPrices = resolvePreviousPurchasePrices(priceHistory);
   const menus = storeData?.menus ?? [];
   if (menus.length === 0) return null;
 
@@ -76,7 +74,11 @@ export async function computeMonthlyMenuSummaries(
     id: i.id,
     currentPurchasePrice: i.currentPurchasePrice,
     priceIsSet: i.priceIsSet,
-    previousPurchasePrice: previousPrices.get(i.id) ?? null,
+    previousPurchasePrice: (() => {
+      const previous = previousPrices.get(i.id);
+      return previous?.kind === "known" ? previous.price : null;
+    })(),
+    previousPriceUnknown: previousPrices.get(i.id)?.kind === "unknown",
     yieldRatePercent: i.yieldRatePercent,
   }));
 

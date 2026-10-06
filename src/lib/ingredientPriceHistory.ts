@@ -75,3 +75,36 @@ export function resolveHistoricalPriceIsSet(
   const latest = findLatestHistoryEntry(history, ingredientId, periodEndDate);
   return latest ? latest.priceIsSet : true;
 }
+
+export type PreviousPurchasePrice = { kind: "known"; price: number } | { kind: "unknown" };
+
+/**
+ * 食材ごとの「1つ前の仕入単価」(今の単価より前に記録されていた単価)を、全件の価格履歴から解決する。
+ * 今見直すべきメニューの月間影響額・ダッシュボードの値上げの影響額に使う。
+ *
+ * 以前はDBの関数get_ingredient_previous_prices(0009)で直近2件目の価格を取っていたが、
+ * 履歴の「未設定」の印を見ていなかったため、未設定(0円)の食材に後から単価を入れると
+ * 「0円から値上がりした」と扱われ、大きなマイナスの影響額が出ていた(2026-10-06修正)。
+ *
+ * - 記録が2件以上: 日時が新しい順の2件目を「1つ前」とする。1つ前か今の記録が未設定なら
+ *   { kind: "unknown" }(変化前の単価が分からない)、どちらも設定済みなら { kind: "known" }
+ * - 記録が1件以下: 結果に含めない(一度も変わっていない=変化なしとして扱う)
+ */
+export function resolvePreviousPurchasePrices(history: PriceHistoryEntry[]): Map<string, PreviousPurchasePrice> {
+  const byIngredient = new Map<string, PriceHistoryEntry[]>();
+  for (const entry of history) {
+    const list = byIngredient.get(entry.ingredientId) ?? [];
+    list.push(entry);
+    byIngredient.set(entry.ingredientId, list);
+  }
+  const result = new Map<string, PreviousPurchasePrice>();
+  for (const [ingredientId, entries] of byIngredient) {
+    if (entries.length < 2) continue;
+    const [latest, previous] = [...entries].sort((a, b) => (a.recordedAt < b.recordedAt ? 1 : a.recordedAt > b.recordedAt ? -1 : 0));
+    result.set(
+      ingredientId,
+      latest.priceIsSet && previous.priceIsSet ? { kind: "known", price: previous.price } : { kind: "unknown" },
+    );
+  }
+  return result;
+}

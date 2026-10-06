@@ -51,6 +51,11 @@ export interface RankingIngredient {
    * 価格が変わっていないものとして扱う=影響額の計算に0円として寄与する)。
    */
   previousPurchasePrice?: number | null;
+  /**
+   * 1つ前の単価が分からない(履歴の1つ前か今が未設定。resolvePreviousPurchasePrices)。
+   * trueの食材を使うメニューは、月間影響額をnullにする(0円から値上がりした等と誤って出さないため)。
+   */
+  previousPriceUnknown?: boolean;
   /** 歩留まり率(%)。未指定・100なら仕入単価をそのまま使う(従来通り)。 */
   yieldRatePercent?: number | null;
 }
@@ -167,6 +172,7 @@ export function buildMenuRanking(input: BuildMenuRankingInput): MenuCostSummary[
       },
     ]),
   );
+  const unknownPreviousIds = new Set(ingredients.filter((i) => i.previousPriceUnknown).map((i) => i.id));
   const salesByMenuId = new Map(sales.map((s) => [s.menuId, s.quantitySold]));
   const linesByMenuId = new Map<string, RankingMenuIngredient[]>();
   for (const line of menuIngredients) {
@@ -204,7 +210,9 @@ export function buildMenuRanking(input: BuildMenuRankingInput): MenuCostSummary[
     // 販売数量が未登録(0件)の場合は「まだ計算できない」ものとしてnullにする
     // (0円と表示すると、実際には影響があるのに登録漏れで0円に見えてしまうため)。
     const { totalCost: previousTotalCost } = calcMenuTotalCost(lines, previousUnitPrices);
-    const monthlyProfitImpact = quantitySold > 0 ? (previousTotalCost - totalCost) * quantitySold : null;
+    const previousPriceUnknown = lines.some((l) => unknownPreviousIds.has(l.ingredientId));
+    const monthlyProfitImpact =
+      quantitySold > 0 && !previousPriceUnknown ? (previousTotalCost - totalCost) * quantitySold : null;
 
     return {
       menuId: menu.id,
@@ -218,6 +226,7 @@ export function buildMenuRanking(input: BuildMenuRankingInput): MenuCostSummary[
       profitContribution,
       suggestedPriceIncrease,
       monthlyProfitImpact,
+      previousPriceUnknown,
       hasUnsetIngredient,
       unsetIngredients,
     };
@@ -226,4 +235,19 @@ export function buildMenuRanking(input: BuildMenuRankingInput): MenuCostSummary[
   summaries.sort(compareByReviewPriority);
 
   return summaries;
+}
+
+/**
+ * ダッシュボードの「値上げの影響額」: 目標原価率を超えている、計算できたメニューの
+ * 月間影響額の合計。影響額が分かるメニューが1つも無ければnull。
+ * (単価未設定の食材を含むメニュー・1つ前の単価が分からないメニュー・販売数量が
+ * 未登録のメニューは、月間影響額がnullなので合計に含まれない)
+ */
+export function sumOverTargetMonthlyProfitImpact(summaries: MenuCostSummary[]): number | null {
+  const impacts = summaries
+    .filter((s) => s.overTarget && !s.hasUnsetIngredient)
+    .map((s) => s.monthlyProfitImpact)
+    .filter((v): v is number => v != null);
+  if (impacts.length === 0) return null;
+  return impacts.reduce((a, b) => a + b, 0);
 }

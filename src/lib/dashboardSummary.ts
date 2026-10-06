@@ -1,7 +1,14 @@
 import "server-only";
 import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { buildMenuRanking, type RankingMenu, type RankingMenuIngredient, type RankingSales } from "./menuRanking.ts";
+import {
+  buildMenuRanking,
+  sumOverTargetMonthlyProfitImpact,
+  type RankingMenu,
+  type RankingMenuIngredient,
+  type RankingSales,
+} from "./menuRanking.ts";
+import { resolvePreviousPurchasePrices } from "./ingredientPriceHistory.ts";
 import {
   aggregateSalesAndFoodCost,
   calcFlRatios,
@@ -11,7 +18,7 @@ import {
 } from "./flRatio.ts";
 import { monthToPeriod, currentMonthString } from "./period/month.ts";
 import { computeStoreAlerts } from "./marketPrices/computeStoreAlerts.ts";
-import { getStoreData, getIngredientPreviousPrices } from "./store.ts";
+import { getStoreData, getIngredientPriceHistory } from "./store.ts";
 import { withResolvedPrepItemPrices, resolveUnsetLeaves } from "./prepItemCost.ts";
 import { estimateTimeSavedMinutes } from "./timeSavedEstimate.ts";
 
@@ -237,19 +244,20 @@ export const getAlertSummary = cache(async function getAlertSummary(
  * 目標原価率を超えているメニューの、今月の利益への影響額の合計(円)。
  * 「前回から変わったこと」ダイジェストにだけ添える追加情報のため、
  * 高速表示用のbuildFastDashboardSummaryとは別の独立した取得にしている
- * (食材の「1つ前の仕入単価」を別RPC(get_ingredient_previous_prices)で
- * 取得する必要があり、その分だけ他の2つの遅い集計と同様にSuspenseで
+ * (食材の「1つ前の仕入単価」を全件の価格履歴(get_ingredient_price_history)から
+ * 判定する必要があり、その分だけ他の2つの遅い集計と同様にSuspenseで
  * 非同期表示させる)。該当メニューが無い、またはどのメニューも販売数量
- * 未登録で影響額を計算できない場合はnull。
+ * 未登録・1つ前の単価が分からない等で影響額を計算できない場合はnull。
  */
 export const getOverTargetMonthlyImpact = cache(async function getOverTargetMonthlyImpact(
   supabase: SupabaseClient,
   store: { id: string; defaultTargetCostRate: number },
 ): Promise<number | null> {
-  const [{ rankingMenus, rankingMenuIngredients, rankingIngredients, sales }, previousPrices] = await Promise.all([
+  const [{ rankingMenus, rankingMenuIngredients, rankingIngredients, sales }, priceHistory] = await Promise.all([
     fetchRankingInputs(supabase),
-    getIngredientPreviousPrices(supabase),
+    getIngredientPriceHistory(supabase),
   ]);
+  const previousPrices = resolvePreviousPurchasePrices(priceHistory);
   if (rankingMenus.length === 0) return null;
 
   const currentMonth = currentMonthString();
@@ -257,10 +265,14 @@ export const getOverTargetMonthlyImpact = cache(async function getOverTargetMont
   const rankingSales: RankingSales[] = sales
     .filter((s) => s.periodStart === period.start && s.periodEnd === period.end)
     .map((s) => ({ menuId: s.menuId, quantitySold: s.quantitySold }));
-  const ingredientsWithHistory = rankingIngredients.map((i) => ({
-    ...i,
-    previousPurchasePrice: previousPrices.get(i.id) ?? null,
-  }));
+  const ingredientsWithHistory = rankingIngredients.map((i) => {
+    const previous = previousPrices.get(i.id);
+    return {
+      ...i,
+      previousPurchasePrice: previous?.kind === "known" ? previous.price : null,
+      previousPriceUnknown: previous?.kind === "unknown",
+    };
+  });
 
   const summaries = buildMenuRanking({
     menus: rankingMenus,
@@ -270,12 +282,7 @@ export const getOverTargetMonthlyImpact = cache(async function getOverTargetMont
     defaultTargetCostRate: store.defaultTargetCostRate,
   });
 
-  const impacts = summaries
-    .filter((s) => s.overTarget && !s.hasUnsetIngredient)
-    .map((s) => s.monthlyProfitImpact)
-    .filter((v): v is number => v != null);
-  if (impacts.length === 0) return null;
-  return impacts.reduce((a, b) => a + b, 0);
+  return sumOverTargetMonthlyProfitImpact(summaries);
 });
 
 /**

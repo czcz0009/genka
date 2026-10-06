@@ -180,7 +180,15 @@ export function RankingView({
                       </td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono">
                         {s.monthlyProfitImpact == null ? (
-                          <span className="text-xs" style={{ color: "var(--muted-foreground)" }} title="販売数量を「売上管理」で登録すると表示されます">
+                          <span
+                            className="text-xs"
+                            style={{ color: "var(--muted-foreground)" }}
+                            title={
+                              s.previousPriceUnknown
+                                ? "単価が未設定だった食材があり、変化前の単価が分からないため計算できません"
+                                : "販売数量を「売上管理」で登録すると表示されます"
+                            }
+                          >
                             -
                           </span>
                         ) : (

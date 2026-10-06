@@ -92,6 +92,11 @@ export interface MenuCostSummary {
    */
   monthlyProfitImpact: number | null;
   /**
+   * 1つ前の単価が分からない食材(履歴の1つ前か今が未設定)を使っているため、
+   * monthlyProfitImpactをnullにしたか。画面で「販売数量が未登録」と区別して案内するため。
+   */
+  previousPriceUnknown?: boolean;
+  /**
    * 単価が未設定の食材(仕込み品の材料も含む)を1つでも使っているか。
    * trueの場合、costRate等の数値は参考値に過ぎないため、画面では原価率を
    * 表示せず「計算できていません」+ unsetIngredientsを表示する。

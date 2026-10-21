@@ -4,6 +4,9 @@ import { SERVICE_NAME } from "@/lib/serviceName.ts";
 
 export const metadata: Metadata = {
   title: "特定商取引法に基づく表示",
+  // アプリ内で例外的に検索結果に出してよいページ(既定の noindex を上書き)
+  robots: { index: true, follow: true },
+  alternates: { canonical: "/legal" },
 };
 
 const CONTACT_URL =

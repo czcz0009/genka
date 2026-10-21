@@ -14,6 +14,7 @@ import {
 } from "@/lib/dashboardSummary";
 import { FL_BENCHMARK_PERCENT } from "@/lib/flRatio";
 import { buildDashboardFlDigestRow, buildDashboardFlKpi, type DashboardFlTone } from "@/lib/dashboardFlDisplay";
+import { buildAlertDigestRow } from "@/lib/dashboardAlertDigest";
 import { StatusBadge } from "@/components/StatusBadge.tsx";
 import { formatTimeSaved, TIME_SAVED_DISPLAY_THRESHOLD_MINUTES } from "@/lib/timeSavedEstimate";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
@@ -50,8 +51,15 @@ const STATUS_DOT_STYLE: Record<Status, string> = {
 /** 今月のFL比率カードの数字の色(未計算のメニューを含む間は灰色=muted)。 */
 const FL_TONE_STYLE: Record<DashboardFlTone, string> = { ...STATUS_DOT_STYLE, muted: "var(--muted-foreground)" };
 
-function StatusDot({ status }: { status: Status }) {
-  return <span className="mt-1.5 inline-block size-2 shrink-0 rounded-full" style={{ background: STATUS_DOT_STYLE[status] }} />;
+/**
+ * 「前回から変わったこと」の行頭の点の色。"down"(仕入れ値の値下がり)は、
+ * 仕入れ値アラートの画面と同じ青(--accent)。
+ */
+type DotStatus = Status | "down";
+const DOT_STYLE: Record<DotStatus, string> = { ...STATUS_DOT_STYLE, down: "var(--accent)" };
+
+function StatusDot({ status }: { status: DotStatus }) {
+  return <span className="mt-1.5 inline-block size-2 shrink-0 rounded-full" style={{ background: DOT_STYLE[status] }} />;
 }
 
 export default async function Home() {
@@ -297,7 +305,7 @@ function ChangesDigestSkeleton() {
 }
 
 interface DigestRow {
-  status: Status;
+  status: DotStatus;
   title: string;
   description: string;
   href: string;
@@ -341,17 +349,13 @@ async function ChangesDigest({
     });
   }
 
+  // 見出し・説明・点の色はdashboardAlertDigest.ts(値上がりは赤、値下がりは青。アラート画面と同じ)
   for (const alert of alertSummary.topAlerts) {
-    const severity: Status = Math.abs(alert.changePercent) >= 30 ? "danger" : "warn";
-    const verb = alert.direction === "up" ? "値上がり" : "値下がり";
-    const sign = alert.direction === "up" ? "+" : "";
+    const row = buildAlertDigestRow(alert);
     rows.push({
-      status: severity,
-      title: `${alert.ingredientName}が${verb}しています`,
-      description:
-        alert.affectedMenuNames.length > 0
-          ? `変動率 ${sign}${alert.changePercent.toFixed(1)}%　影響メニュー: ${alert.affectedMenuNames.join("、")}`
-          : `変動率 ${sign}${alert.changePercent.toFixed(1)}%`,
+      status: row.tone === "up" ? "danger" : "down",
+      title: row.title,
+      description: row.description,
       href: "/alerts",
     });
   }

@@ -21,6 +21,7 @@ import { computeStoreAlerts } from "./marketPrices/computeStoreAlerts.ts";
 import { getStoreData, getIngredientPriceHistory } from "./store.ts";
 import { withResolvedPrepItemPrices, resolveUnsetLeaves } from "./prepItemCost.ts";
 import { estimateTimeSavedMinutes } from "./timeSavedEstimate.ts";
+import { selectTopAlerts } from "./dashboardAlertDigest.ts";
 
 /**
  * ホーム画面(ダッシュボード)の経営状況サマリー。
@@ -229,10 +230,8 @@ export const getAlertSummary = cache(async function getAlertSummary(
     rankingMenuIngredients,
     unsetLeavesByIngredientId,
   );
-  const allAlerts = [...produceAlerts, ...livestockAlerts].sort(
-    (a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent),
-  );
-  const topAlerts: AlertDigestItem[] = allAlerts.slice(0, 2).map((a) => ({
+  const allAlerts = [...produceAlerts, ...livestockAlerts];
+  const topAlerts: AlertDigestItem[] = selectTopAlerts(allAlerts).map((a) => ({
     ingredientName: a.ingredientName,
     changePercent: a.changePercent,
     direction: a.direction,

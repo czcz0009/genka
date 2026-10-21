@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import Link from "next/link";
 import type { CategoryChip } from "@/lib/categories";
 
 /**
@@ -21,6 +22,7 @@ export function CategoryTabs({
   onSelect,
   ariaLabel,
   countUnit,
+  editHref,
 }: {
   chips: CategoryChip[];
   activeParam: string | null;
@@ -28,6 +30,8 @@ export function CategoryTabs({
   ariaLabel: string;
   /** 件数の単位(メニューは「品」、食材は「件」。各一覧画面の表記に合わせる) */
   countUnit: string;
+  /** 「カテゴリを編集」の遷移先(カテゴリの編集画面。一覧と同じ種類を開く) */
+  editHref: string;
 }) {
   const activeChip = chips.find((chip) => chip.param === activeParam);
   const listRef = useRef<HTMLDivElement>(null);
@@ -75,14 +79,27 @@ export function CategoryTabs({
           );
         })}
       </div>
-      {activeChip?.tab.type === "category" && (
-        <p
-          className="mt-1 mb-2 text-sm font-semibold [overflow-wrap:anywhere]"
-          style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
+      {/* 選択中のカテゴリの全文(左)と、カテゴリの編集画面への入口(右)。タブ行は横スクロールするため、入口はその外に置く */}
+      <div className="mt-1 mb-2 flex items-start justify-between gap-3">
+        {activeChip?.tab.type === "category" ? (
+          <p
+            className="min-w-0 text-sm font-semibold [overflow-wrap:anywhere]"
+            style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
+          >
+            {`${activeChip.label}(${activeChip.count}${countUnit})`}
+          </p>
+        ) : (
+          <span />
+        )}
+        <Link
+          href={editHref}
+          prefetch={false}
+          className="shrink-0 whitespace-nowrap text-xs underline underline-offset-2"
+          style={{ color: "var(--accent)" }}
         >
-          {`${activeChip.label}(${activeChip.count}${countUnit})`}
-        </p>
-      )}
+          カテゴリを編集
+        </Link>
+      </div>
     </div>
   );
 }

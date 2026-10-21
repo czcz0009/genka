@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -71,6 +72,24 @@ export default async function SettingsPage() {
         currentRent={currentRent}
         initialIngredientPriceTaxMode={store.ingredientPriceTaxMode}
       />
+
+      {/* カテゴリの編集画面への入口(もう1つの入口は、メニュー一覧・食材一覧のタブ行の「カテゴリを編集」) */}
+      <section className="space-y-2 rounded border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+        <h2 className="text-sm font-semibold" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+          カテゴリ
+        </h2>
+        <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+          メニュー一覧・食材一覧のタブに使うカテゴリを、追加・名前の変更・並び替え・削除できます。
+        </p>
+        <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+          <Link href="/categories?kind=menu" prefetch={false} className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
+            メニューのカテゴリを編集 →
+          </Link>
+          <Link href="/categories?kind=ingredient" prefetch={false} className="underline underline-offset-2" style={{ color: "var(--accent)" }}>
+            食材のカテゴリを編集 →
+          </Link>
+        </div>
+      </section>
 
       <AccountDeletionSection hasPendingDeletion={pendingDeletion != null} />
     </div>

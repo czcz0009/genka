@@ -144,7 +144,7 @@ export function MenusList({
   return (
     <div className="flex flex-col gap-3">
       {categories.length > 0 && (
-        <CategoryTabs chips={chips} activeParam={effectiveParam} onSelect={(chip) => selectTab(chip.tab)} countUnit="品" ariaLabel="メニューのカテゴリ" />
+        <CategoryTabs chips={chips} activeParam={effectiveParam} onSelect={(chip) => selectTab(chip.tab)} editHref="/categories?kind=menu" countUnit="品" ariaLabel="メニューのカテゴリ" />
       )}
       {visibleItems.length === 0 ? (
         <p

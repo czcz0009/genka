@@ -11,6 +11,9 @@
  *    大きい順。販売数量がまだ登録されていない等で効果が0円同士になる場合は、
  *    原価率の超過幅が大きい順で並べる)
  * 2. 目標内のメニューは、従来通り利益貢献度の高い順(売価未設定は末尾)
+ * 3. 単価未設定の食材を含むメニュー(未計算)は、いちばん最後に登録順で並べる(2026-10-21)。
+ *    原価を0円扱いした原価率・利益で超過判定や並び替えをすると、本当の値と食い違うため
+ *    (以前は0円扱いの値で「目標超過」グループに入ったり、利益が過大なまま上位に来たりしていた)。
  *
  * また、食材の「1つ前の仕入単価」が分かる場合(RankingIngredient.previousPurchasePrice)、
  * 「(従来の原価-現在の原価)×月間販売数量」で月間の利益への影響額(monthlyProfitImpact)も
@@ -97,6 +100,10 @@ function overageWidth(s: Pick<MenuCostSummary, "costRate" | "targetCostRate">): 
  * 「対応の優先度」順の比較関数。詳細はファイル冒頭のコメントを参照。
  */
 function compareByReviewPriority(a: MenuCostSummary, b: MenuCostSummary): number {
+  // 未計算のメニューは末尾。末尾の中は元の順(登録順)のまま(Array.prototype.sortは安定ソート)。
+  if (a.hasUnsetIngredient !== b.hasUnsetIngredient) return a.hasUnsetIngredient ? 1 : -1;
+  if (a.hasUnsetIngredient) return 0;
+
   if (a.overTarget !== b.overTarget) return a.overTarget ? -1 : 1;
 
   if (a.overTarget) {
@@ -199,7 +206,9 @@ export function buildMenuRanking(input: BuildMenuRankingInput): MenuCostSummary[
 
     const costRate = calcCostRate(totalCost, menu.sellingPrice);
     const targetCostRate = menu.targetCostRate ?? defaultTargetCostRate;
-    const overTarget = costRate != null && costRate > targetCostRate;
+    // 未計算のメニュー(単価未設定の食材を含む)は、原価が分からないので超過判定をしない
+    // (=値上げ目安も出さない)。メニュー編集画面・仕入れ値アラートと同じ扱い。
+    const overTarget = !hasUnsetIngredient && costRate != null && costRate > targetCostRate;
     const quantitySold = salesByMenuId.get(menu.id) ?? 0;
     const profitContribution =
       menu.sellingPrice != null ? quantitySold * (menu.sellingPrice - totalCost) : null;

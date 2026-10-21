@@ -138,7 +138,7 @@ export function RankingView({
                   <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs" style={{ color: idx === 0 ? "var(--accent)" : "var(--muted-foreground)" }}>
                     {idx + 1}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 font-medium" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+                  <td className="min-w-[10rem] [overflow-wrap:anywhere] px-3 py-2.5 font-medium" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
                     {s.menuName}
                   </td>
                   {s.hasUnsetIngredient ? (
@@ -255,7 +255,7 @@ export function RankingView({
                 <tbody>
                   {headroomMenus.map((s) => (
                     <tr key={s.menuId} className="border-t" style={{ borderColor: "var(--border)" }}>
-                      <td className="whitespace-nowrap px-3 py-2.5 font-medium" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+                      <td className="min-w-[10rem] [overflow-wrap:anywhere] px-3 py-2.5 font-medium" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
                         {s.menuName}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-right">

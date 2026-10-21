@@ -74,6 +74,20 @@
 
 ## 4. 次にやること(優先順)
 
+### 【期日あり】2026-10-30以降: 野菜価格のcronが動いたかの確認
+- **背景**: 2026-10-21に旧URL(genka-one.vercel.app)→`app.genka-lens.com` の301転送を本番に入れた。**原因候補のコミットは `9c25038`**(「アプリ: 旧URL(genka-one.vercel.app)を独自ドメインへ301転送する(cronが呼ぶ/api/は転送しない)」、変更は `next.config.ts` の `redirects` のみ)。Vercelのcronは旧URL側(`*.vercel.app`)を呼び、転送には従わないため、`/api/` は対象から外してある(公開後に本番で `/api/cron/*` が転送されず401=処理本体に届くことは確認済み)。ただし実際のcron実行での確認はまだ。
+- **いつ**: 野菜価格の取得(`/api/cron/collect-produce-prices`)は **10月28日 18:00 UTC = 10月29日 午前3時(日本時間)** に動く。**10月30日以降**に確認する(無料プランのためVercelのログは1時間で消える。DBで判断する)。
+- **やり方**: Supabase の SQL Editor で次を実行し、`fetched_at` が **2026-10-28 18:00 UTC 以降**の行があるかを見る。
+  ```sql
+  select period_year, period_month, period_third, count(*) as 件数, max(fetched_at) as 最終取得
+  from market_price_observations
+  group by 1, 2, 3
+  order by max(fetched_at) desc
+  limit 5;
+  ```
+- **判定の注意**: このcronは「DBにまだ無い旬」だけを取りに行き、既にある旬は飛ばす(`src/app/api/cron/collect-produce-prices/route.ts`)。農水省がまだ新しい旬を公表していなければ、正常でも行は増えない。増えていない場合は、まず農水省の旬別結果のページ(https://www.maff.go.jp/j/tokei/syohi/shunbetu/)で、DBの最新より新しい旬が公表済みかを見る。
+- **公表済みなのに増えていなければ**: 転送のコミット `9c25038` が原因の可能性がある。チェックポイント方式で `git revert 9c25038` →アプリを再デプロイ(`npx vercel --prod`)して転送を外し、Vercelの Settings → Cron Jobs から手動実行して行が増えるかを確かめる。
+
 (済: 旧LPの削除・新LPの公開・LPの誤字チェック(2026-09-26)、サービス名を「原価レンズ」へ変更(2026-09-28、コード上は反映済み・未デプロイ))
 
 0. **改名の反映をデプロイする**: アプリ・LPとも、コード上は「原価レンズ」に変わっているが、本番にはまだ出ていない(2026-09-28時点)。Mahiro確認後、アプリは`npx vercel --prod`、LPは`pnpm ship`で公開する。

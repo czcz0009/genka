@@ -50,6 +50,8 @@ react(),
 type FigmaSiteConfiguration = {
   /** 正規URL(末尾スラッシュなし)。canonical・og:url・sitemap.xml・robots.txt に使う */
   siteUrl?: string
+  /** サービス名。og:site_name と構造化データ(WebSite)に使う */
+  siteName?: string
   title?: string
   description?: string
   language?: string
@@ -99,6 +101,7 @@ function figmaSiteConfiguration(config: FigmaSiteConfiguration): Plugin {
   const bodyStart = config.customScripts?.bodyStart ?? ''
   const bodyEnd = config.customScripts?.bodyEnd ?? ''
   const siteUrl = (config.siteUrl ?? '').replace(/\/+$/, '')
+  const siteName = config.siteName ?? ''
   // robots.index=false の間は全体を巡回禁止。true にすると巡回を許可し、sitemapの場所を伝える
   // (公開手順は docs/HANDOFF.md の「LPを検索に載せる手順」)。
   const robotsTxt =
@@ -164,12 +167,34 @@ function figmaSiteConfiguration(config: FigmaSiteConfiguration): Plugin {
         if (description) {
           tags.push({ tag: 'meta', attrs: { property: 'og:description', content: description }, injectTo: 'head' })
         }
+        if (siteUrl) {
+          tags.push(
+            { tag: 'link', attrs: { rel: 'canonical', href: `${siteUrl}/` }, injectTo: 'head' },
+            { tag: 'meta', attrs: { property: 'og:url', content: `${siteUrl}/` }, injectTo: 'head' },
+            { tag: 'meta', attrs: { property: 'og:type', content: 'website' }, injectTo: 'head' },
+          )
+        }
+        if (siteName) {
+          tags.push({ tag: 'meta', attrs: { property: 'og:site_name', content: siteName }, injectTo: 'head' })
+        }
         if (socialImage) {
           tags.push(
             { tag: 'meta', attrs: { property: 'og:image', content: socialImage }, injectTo: 'head' },
             { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' }, injectTo: 'head' },
             { tag: 'meta', attrs: { name: 'twitter:image', content: socialImage }, injectTo: 'head' },
           )
+        } else {
+          // 共有用画像が無い間は、画像なしのカード表示にする
+          tags.push({ tag: 'meta', attrs: { name: 'twitter:card', content: 'summary' }, injectTo: 'head' })
+        }
+        if (siteUrl && siteName) {
+          // 構造化データ(WebSite)。検索結果にサイト名を正しく出すための最小限のもの
+          tags.push({
+            tag: 'script',
+            attrs: { type: 'application/ld+json' },
+            children: JSON.stringify({ '@context': 'https://schema.org', '@type': 'WebSite', name: siteName, url: `${siteUrl}/` }),
+            injectTo: 'head',
+          })
         }
 
         if (googleAnalyticsId) {

@@ -11,6 +11,14 @@ const APP_URL = 'https://app.genka-lens.com/login'
 const CONTACT_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfKevfXMlqDf8deogpss-HfgUCqTz5-fKUyNO4eUrGu7-f7Lw/viewform'
 
 const SHOT = `${import.meta.env.BASE_URL}screenshots/`
+/** スクリーンショットの原寸(px)。img に width/height を指定して、読み込み中の画面のガタつきを防ぐ。画像を差し替えたら合わせる */
+const SHOT_SIZE: Record<string, [number, number]> = {
+  'fl-ratio.png': [1822, 1120],
+  'invoice.png': [900, 650],
+  'menus.png': [1776, 1150],
+  'ranking.png': [2128, 1380],
+  'scan-result.png': [1248, 1480],
+}
 
 /* ─── 共通パーツ ─── */
 function Logo({ small = false }: { small?: boolean }) {
@@ -34,13 +42,17 @@ function BrowserShot({
   alt,
   className = '',
   aspect,
+  priority = false,
 }: {
   src: string
   alt: string
   className?: string
   /** 指定すると、この縦横比で上側を残して切り取る(カードの高さをそろえるため) */
   aspect?: string
+  /** ページを開いてすぐ見える画像(ヒーロー)は、後回しにせず最優先で読み込む */
+  priority?: boolean
 }) {
+  const [width, height] = SHOT_SIZE[src.split('/').pop() ?? ''] ?? []
   return (
     <a
       href={src}
@@ -58,7 +70,10 @@ function BrowserShot({
         <img
           src={src}
           alt={alt}
-          loading="lazy"
+          width={width}
+          height={height}
+          loading={priority ? 'eager' : 'lazy'}
+          fetchPriority={priority ? 'high' : undefined}
           className={aspect ? 'w-full h-full object-cover object-top block' : 'w-full h-auto block'}
         />
       </div>
@@ -132,7 +147,7 @@ function Hero() {
           </p>
         </div>
 
-        <BrowserShot src={`${SHOT}ranking.png`} alt="値上げを検討すべきメニューが優先度順に並ぶ「今見直すべきメニュー」画面" />
+        <BrowserShot src={`${SHOT}ranking.png`} alt="値上げを検討すべきメニューが優先度順に並ぶ「今見直すべきメニュー」画面" priority />
       </div>
     </section>
   )
@@ -188,7 +203,7 @@ function Scan() {
               納品書を撮る(サンプル)
             </figcaption>
             <div className="rounded-lg border border-navy-100 bg-white shadow-md overflow-hidden rotate-[-1.2deg]">
-              <img src={`${SHOT}invoice.png`} alt="読み取り対象の納品書のサンプル(品目・数量・単価・金額が印刷されている)" loading="lazy" className="w-full h-auto block" />
+              <img src={`${SHOT}invoice.png`} alt="読み取り対象の納品書のサンプル(品目・数量・単価・金額が印刷されている)" width={900} height={650} loading="lazy" className="w-full h-auto block" />
             </div>
           </figure>
 

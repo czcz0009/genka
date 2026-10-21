@@ -23,7 +23,7 @@
 | もの | URL・場所 | 状態 |
 |---|---|---|
 | アプリ本体 | **独自ドメイン移行完了(2026-10-02)**: `https://app.genka-lens.com`。旧URL `https://genka-one.vercel.app` は**2026-10-21から新ドメインへ301転送**(パス・クエリは保持。ただし `/api/` は転送しない=cron用。`next.config.ts`) | コミット `7f8907a` の時点で再デプロイ済み(2026-10-21。デプロイ記録は下の表)。全画面noindex、`/terms`・`/privacy`・`/legal` だけ検索に出す設定。`robots.txt`・`sitemap.xml` あり |
-| DB(Supabase) | ap-southeast-2(Sydney) | マイグレーション **0025まで適用済みと推定**(2026-10-21、本番を読み取りで確認: 0020・0023・0024・0025のテーブル/列があり、0025のデフォルトカテゴリが全8店舗に作成済み。関数・制約(0021・0022・0025の関数)はMahiroが確認SQLを実行して最終確認する。以前の「0019まで実行済み」は古い記述だった) |
+| DB(Supabase) | ap-southeast-2(Sydney) | マイグレーション **0025まで適用済み(2026-10-21に確認)**(Mahiroが確認SQLをSQL Editorで実行し、0018〜0025がすべてtrue。以前の「0019まで実行済み」は古い記述だった) |
 | LP | **独自ドメイン移行完了(2026-10-02)**: `https://genka-lens.com`(→`https://www.genka-lens.com`へ308リダイレクト。正規URLは www)。旧URL `https://genkaru-lp.vercel.app` は**2026-10-21から新ドメインへ301転送**(`landing/vercel.json`) | **コミット `7f8907a` の内容を公開済み**(2026-10-21。本番の取得結果で確認)。**noindexのまま**(検索に載せない設定。外す手順は 5-4) |
 
 ### アプリのデプロイ記録(Vercel `genka`。すべて手元からのCLIデプロイ。Git連携なし=pushでは本番に出ない)

@@ -93,6 +93,9 @@
   3. 実行の直後に、同じ行の「**View Logs**」で結果を見る(無料プランではログが1時間しか残らないので、すぐに見る)。応答の `targetCount`(対象件数)・`deletedCount`(削除件数)・`failedCount` を確認する。
   4. 判断: 手動実行で削除されたなら、毎日の自動起動(スケジュール)側の問題。手動実行でも削除されないなら、処理本体(合言葉の認証・DB)側の問題。旧URLの301転送(コミット `9c25038`)は `/api/` を対象外にしているため原因になりにくいが、疑わしければ下の「野菜価格のcron」の項と同じ手順で切り分ける。
   5. 確認が終わったら、確認SQLをもう一度実行して全テーブル0件を確かめる。
+- **比較の基準値(2026-10-21、申請前に確認SQLで取得した「他の利用者」の列)**: 削除の後、この値と同じか増えていればよい(減っていたら問題として調べる)。
+  auth.users 13 / stores 8 / menus 42 / ingredients 39 / categories 120 / store_fixed_costs 5 / import_jobs 7 / ocr_usage 0 / user_consents 3 / account_deletion_requests 0 / menu_ingredients 63 / menu_sales 10 / menu_price_history 3 / ingredient_price_history 39 / ingredient_market_links 4 / prep_item_components 2
+  (同じ時点で、使い捨ての列は期待値どおり、「親を失った行」は全テーブル0件だった。確認SQLは、このステップ6の会話で提示したもの。使い捨てアカウントのユーザーID・店舗IDを埋め込んだ読み取り専用のSQL)
 
 ### 【期日あり】2026-10-30以降: 野菜価格のcronが動いたかの確認
 - **背景**: 2026-10-21に旧URL(genka-one.vercel.app)→`app.genka-lens.com` の301転送を本番に入れた。**原因候補のコミットは `9c25038`**(「アプリ: 旧URL(genka-one.vercel.app)を独自ドメインへ301転送する(cronが呼ぶ/api/は転送しない)」、変更は `next.config.ts` の `redirects` のみ)。Vercelのcronは旧URL側(`*.vercel.app`)を呼び、転送には従わないため、`/api/` は対象から外してある(公開後に本番で `/api/cron/*` が転送されず401=処理本体に届くことは確認済み)。ただし実際のcron実行での確認はまだ。

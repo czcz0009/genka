@@ -9,6 +9,7 @@ import {
   parseCategoryTab,
   validateCategoryName,
   countItemsByCategory,
+  categoryDeleteConfirmMessage,
   isDuplicateCategoryError,
   CATEGORY_DUPLICATE_NOTE,
   type Category,
@@ -251,4 +252,21 @@ test("名前の重複エラー: 1行目は重なった既存のカテゴリ名�
   }
   const withLatin: Category[] = [{ id: "c-bbq", kind: "menu", name: "BBQ", sortOrder: 1 }];
   assert.ok(isDuplicateCategoryError(validateCategoryName("ｂｂｑ", withLatin) ?? ""));
+});
+
+test("削除の確認文言: 件数があれば「未分類」に戻る旨、0件なら「中のメニュー(食材)はありません」", () => {
+  // M-1(前菜・一品 3品)
+  assert.equal(
+    categoryDeleteConfirmMessage("前菜・一品", 3, "menu"),
+    "「前菜・一品」を削除します。このカテゴリのメニュー3品は「未分類」に戻ります(メニュー自体は削除されません)",
+  );
+  // M-3(ドリンク 0品)
+  assert.equal(categoryDeleteConfirmMessage("ドリンク", 0, "menu"), "「ドリンク」を削除します。中のメニューはありません");
+  // I-1(野菜 4件。仕込み品は数えない)
+  assert.equal(
+    categoryDeleteConfirmMessage("野菜", 4, "ingredient"),
+    "「野菜」を削除します。このカテゴリの食材4件は「未分類」に戻ります(食材自体は削除されません)",
+  );
+  // I-3(調味料 0件)
+  assert.equal(categoryDeleteConfirmMessage("調味料", 0, "ingredient"), "「調味料」を削除します。中の食材はありません");
 });

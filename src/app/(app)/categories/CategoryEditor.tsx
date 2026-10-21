@@ -4,13 +4,15 @@ import { useState } from "react";
 import {
   CATEGORY_DUPLICATE_NOTE,
   MAX_CATEGORY_NAME_LENGTH,
+  categoryDeleteConfirmMessage,
   isDuplicateCategoryError,
   validateCategoryName,
   type Category,
   type CategoryKind,
 } from "@/lib/categories";
 import { ActionErrorMessage } from "@/components/ActionErrorMessage.tsx";
-import { createCategory, renameCategory } from "./actions.ts";
+import { Modal } from "@/components/Modal.tsx";
+import { createCategory, deleteCategory, moveCategory, renameCategory } from "./actions.ts";
 
 const inputStyle: React.CSSProperties = {
   background: "var(--background)",
@@ -77,6 +79,10 @@ export function CategoryEditor({
   const [editName, setEditName] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  /** 並び替え・削除の処理中のカテゴリ(二重押し防止) */
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<Category | null>(null);
 
   const newNameError = liveNameError(newName, categories);
   const editNameError = editingId ? liveNameError(editName, categories, editingId) : null;
@@ -126,15 +132,45 @@ export function CategoryEditor({
     setEditingId(null);
   }
 
+  // 並び替えは「1つ上へ」「1つ下へ」のボタンで行う(スマホでの誤操作を避けるため、ドラッグは使わない)
+  async function handleMove(category: Category, direction: "up" | "down") {
+    setBusyId(category.id);
+    setListError(null);
+    const result = await moveCategory({ storeId, kind, categoryId: category.id, direction });
+    setBusyId(null);
+    if (!result.success) {
+      setListError(result.error);
+      return;
+    }
+    setCategories(result.categories);
+  }
+
+  async function handleDelete() {
+    if (!deleting) return;
+    const target = deleting;
+    setBusyId(target.id);
+    setListError(null);
+    const result = await deleteCategory({ storeId, kind, categoryId: target.id });
+    setBusyId(null);
+    setDeleting(null);
+    if (!result.success) {
+      setListError(result.error);
+      return;
+    }
+    setCategories(result.categories);
+    if (editingId === target.id) setEditingId(null);
+  }
+
   return (
     <div className="space-y-4">
+      {listError && <ActionErrorMessage error={listError} />}
       <ul className="divide-y rounded border" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
         {categories.length === 0 && (
           <li className="px-4 py-4 text-sm" style={{ color: "var(--muted-foreground)" }}>
             カテゴリはまだありません。下から追加できます。
           </li>
         )}
-        {categories.map((category) => (
+        {categories.map((category, index) => (
           <li key={category.id} className="px-4 py-3" style={{ borderColor: "var(--border)" }}>
             {editingId === category.id ? (
               <form onSubmit={handleRename} className="space-y-2">
@@ -176,9 +212,39 @@ export function CategoryEditor({
                   {initialCounts[category.id] ?? 0}
                   {unit}
                 </span>
-                <div className="flex shrink-0 flex-wrap gap-2">
+                {/* max-w-full: 320pxでは4つのボタンが1行に収まらないため、行の幅の中で折り返す */}
+                <div className="flex min-w-0 max-w-full flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleMove(category, "up")}
+                    disabled={index === 0 || busyId != null}
+                    aria-label={`「${category.name}」を1つ上へ`}
+                    className={SUB_BUTTON_CLASS}
+                    style={subButtonStyle}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleMove(category, "down")}
+                    disabled={index === categories.length - 1 || busyId != null}
+                    aria-label={`「${category.name}」を1つ下へ`}
+                    className={SUB_BUTTON_CLASS}
+                    style={subButtonStyle}
+                  >
+                    ↓
+                  </button>
                   <button type="button" onClick={() => startEdit(category)} className={SUB_BUTTON_CLASS} style={subButtonStyle}>
                     名前を変える
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleting(category)}
+                    disabled={busyId != null}
+                    className={SUB_BUTTON_CLASS}
+                    style={{ ...subButtonStyle, color: "var(--status-danger)" }}
+                  >
+                    削除
                   </button>
                 </div>
               </div>
@@ -215,6 +281,28 @@ export function CategoryEditor({
           {adding ? "追加中…" : "追加する"}
         </button>
       </form>
+
+      {deleting && (
+        <Modal title="カテゴリの削除" onClose={() => setDeleting(null)}>
+          <p className="text-sm [overflow-wrap:anywhere]" style={{ color: "var(--foreground)" }}>
+            {categoryDeleteConfirmMessage(deleting.name, initialCounts[deleting.id] ?? 0, kind)}
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={busyId != null}
+              className="rounded px-4 py-2 text-sm font-semibold disabled:opacity-50"
+              style={{ background: "var(--status-danger)", color: "white" }}
+            >
+              {busyId === deleting.id ? "削除中…" : "削除する"}
+            </button>
+            <button type="button" onClick={() => setDeleting(null)} className={SUB_BUTTON_CLASS} style={subButtonStyle}>
+              やめる
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

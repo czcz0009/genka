@@ -204,3 +204,15 @@ export function computeMovedSortOrders(
 export function nextSortOrder(sameKindCategories: Pick<Category, "sortOrder">[]): number {
   return sameKindCategories.reduce((max, c) => Math.max(max, c.sortOrder), 0) + 1;
 }
+
+/**
+ * カテゴリを削除する前の確認文言。中のメニュー・食材は削除されず「未分類」に戻る(DBの on delete set null)。
+ * 件数が0のときは「中のメニューはありません」(食材なら「中の食材はありません」)。
+ * 件数は編集画面と同じ数え方(countItemsByCategory。食材の仕込み品は含めない)。
+ */
+export function categoryDeleteConfirmMessage(name: string, count: number, kind: CategoryKind): string {
+  const item = kind === "menu" ? "メニュー" : "食材";
+  if (count === 0) return `「${name}」を削除します。中の${item}はありません`;
+  const unit = kind === "menu" ? "品" : "件";
+  return `「${name}」を削除します。このカテゴリの${item}${count}${unit}は「未分類」に戻ります(${item}自体は削除されません)`;
+}

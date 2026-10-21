@@ -240,3 +240,29 @@ test("K: 下限(全売上ベース)が目安を超える場合は、exceedsBench
 test("exceedsBenchmark: nullはfalse", () => {
   assert.equal(exceedsBenchmark(null, 60), false);
 });
+
+test("aggregateSalesAndFoodCost: 販売数量0の未計算メニューは「以上」の対象にしない(FL比率の画面・ダッシュボード共通の判断)", () => {
+  // FL比率の画面(fl-ratio/page.tsx)は、このhasUnsetMenuをそのまま「◯%以上」の判定に使う。
+  // ダッシュボード側の同じケースは dashboardFlDisplay.test.ts の #10。
+  const summaries = [
+    summary({ menuId: "computed", sellingPrice: 100000, totalCost: 30000, quantitySold: 1 }),
+    summary({ menuId: "unset", sellingPrice: 1280, totalCost: 0, quantitySold: 0, hasUnsetIngredient: true }),
+  ];
+  const result = aggregateSalesAndFoodCost(summaries);
+  assert.equal(result.hasUnsetMenu, false);
+  assert.equal(result.excludedMenuCount, 0);
+  assert.equal(result.excludedSalesAmount, 0);
+  assert.equal(result.totalSales, 100000);
+  assert.equal(result.totalFoodCost, 30000);
+});
+
+test("aggregateSalesAndFoodCost: 販売数量が1以上の未計算メニューがあれば「以上」の対象にする", () => {
+  const summaries = [
+    summary({ menuId: "computed", sellingPrice: 90000, totalCost: 32000, quantitySold: 1 }),
+    summary({ menuId: "unset", sellingPrice: 10000, totalCost: 0, quantitySold: 1, hasUnsetIngredient: true }),
+  ];
+  const result = aggregateSalesAndFoodCost(summaries);
+  assert.equal(result.hasUnsetMenu, true);
+  assert.equal(result.totalSales, 100000);
+  assert.equal(result.totalFoodCost, 32000);
+});

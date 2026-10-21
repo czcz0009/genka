@@ -145,7 +145,9 @@ export async function buildFastDashboardSummary(
 }
 
 /**
- * 今月のFL比率(食材原価+人件費)。人件費未設定 or 今月の販売実績が無ければnull。
+ * 今月のFL比率(食材原価+人件費)。人件費未設定 or 今月の販売実績が無ければflRateはnull。
+ * hasUnsetMenuは、単価未設定の食材を含むメニューに今月の販売実績があるか(あればflRateは
+ * 下限値=「◯%以上」。FL比率の画面と同じ判定: aggregateSalesAndFoodCost)。
  *
  * react の cache() で1リクエスト内の呼び出しをメモ化している。ダッシュボードの
  * KPIカードと「変わったこと」ダイジェストの両方から同じ値が必要になるが、
@@ -154,10 +156,10 @@ export async function buildFastDashboardSummary(
 export const getCurrentFlRate = cache(async function getCurrentFlRate(
   supabase: SupabaseClient,
   store: { id: string; defaultTargetCostRate: number },
-): Promise<number | null> {
+): Promise<{ flRate: number | null; hasUnsetMenu: boolean }> {
   const { rankingMenus, rankingMenuIngredients, rankingIngredients, unsetLeavesByIngredientId, sales, fixedCosts } =
     await fetchRankingInputs(supabase);
-  if (rankingMenus.length === 0) return null;
+  if (rankingMenus.length === 0) return { flRate: null, hasUnsetMenu: false };
 
   const currentMonth = currentMonthString();
   const period = monthToPeriod(currentMonth);
@@ -185,12 +187,12 @@ export const getCurrentFlRate = cache(async function getCurrentFlRate(
     periodStart: f.periodStart,
     periodEnd: f.periodEnd,
   }));
-  const { totalSales, totalFoodCost } = aggregateSalesAndFoodCost(summaries);
+  const { totalSales, totalFoodCost, hasUnsetMenu } = aggregateSalesAndFoodCost(summaries);
   const laborCost = selectApplicableFixedCost(fixedCostRows, "labor", period);
   const rentCost = selectApplicableFixedCost(fixedCostRows, "rent", period);
   // ホーム画面のFL比率サマリーでは実質原価率は使わないため、ロス・値引き額は渡さない。
   const { flRate } = calcFlRatios({ totalSales, totalFoodCost, laborCost, rentCost, lossAmount: null });
-  return flRate;
+  return { flRate, hasUnsetMenu };
 });
 
 export interface AlertDigestItem {

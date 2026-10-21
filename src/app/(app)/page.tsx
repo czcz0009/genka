@@ -13,6 +13,8 @@ import {
   type FastDashboardSummary,
 } from "@/lib/dashboardSummary";
 import { FL_BENCHMARK_PERCENT } from "@/lib/flRatio";
+import { buildDashboardFlDigestRow, buildDashboardFlKpi, type DashboardFlTone } from "@/lib/dashboardFlDisplay";
+import { StatusBadge } from "@/components/StatusBadge.tsx";
 import { formatTimeSaved, TIME_SAVED_DISPLAY_THRESHOLD_MINUTES } from "@/lib/timeSavedEstimate";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
@@ -39,17 +41,14 @@ function formatMonthlyImpactYen(n: number): string {
   return `約¥${rounded.toLocaleString()}`;
 }
 
-function statusColor(rate: number, target: number): Status {
-  if (rate <= target) return "ok";
-  if (rate <= target + 5) return "warn";
-  return "danger";
-}
-
 const STATUS_DOT_STYLE: Record<Status, string> = {
   ok: "var(--status-ok)",
   warn: "var(--status-warn)",
   danger: "var(--status-danger)",
 };
+
+/** 今月のFL比率カードの数字の色(未計算のメニューを含む間は灰色=muted)。 */
+const FL_TONE_STYLE: Record<DashboardFlTone, string> = { ...STATUS_DOT_STYLE, muted: "var(--muted-foreground)" };
 
 function StatusDot({ status }: { status: Status }) {
   return <span className="mt-1.5 inline-block size-2 shrink-0 rounded-full" style={{ background: STATUS_DOT_STYLE[status] }} />;
@@ -315,7 +314,7 @@ async function ChangesDigest({
 }) {
   // getAlertSummary/getCurrentFlRateはreactのcache()でメモ化されているため、
   // 下のKPIカード側からも同じ引数で呼ばれるが実際の計算・再取得は1回で済む。
-  const [alertSummary, flRate, overTargetImpact] = await Promise.all([
+  const [alertSummary, { flRate, hasUnsetMenu }, overTargetImpact] = await Promise.all([
     getAlertSummary(supabase, store),
     getCurrentFlRate(supabase, store),
     getOverTargetMonthlyImpact(supabase, store),
@@ -357,11 +356,13 @@ async function ChangesDigest({
     });
   }
 
-  if (flRate != null && Number.isFinite(flRate) && flRate > FL_BENCHMARK_PERCENT) {
+  // 判定・文言はdashboardFlDisplay.ts(FL比率の画面と同じ基準。テストはdashboardFlDisplay.test.ts)
+  const flDigestRow = buildDashboardFlDigestRow(flRate, hasUnsetMenu);
+  if (flDigestRow) {
     rows.push({
-      status: flRate > FL_BENCHMARK_PERCENT + 10 ? "danger" : "warn",
+      status: flDigestRow.status,
       title: `FL比率が目安(${FL_BENCHMARK_PERCENT}%)を超えています`,
-      description: `今月のFL比率 ${flRate.toFixed(1)}%。人件費・食材原価の見直しを検討してください。`,
+      description: flDigestRow.description,
       href: "/fl-ratio",
     });
   }
@@ -438,8 +439,9 @@ async function FlRatioKpiCard({
   supabase: SupabaseClient;
   store: { id: string; defaultTargetCostRate: number };
 }) {
-  const flRate = await getCurrentFlRate(supabase, store);
-  const status: Status | null = flRate != null && Number.isFinite(flRate) ? statusColor(flRate, FL_BENCHMARK_PERCENT) : null;
+  const { flRate, hasUnsetMenu } = await getCurrentFlRate(supabase, store);
+  // 表示の決め方はdashboardFlDisplay.ts(FL比率の画面と同じ扱い)
+  const kpi = buildDashboardFlKpi(flRate, hasUnsetMenu);
   return (
     <div className="rounded border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
       <div className="mb-2 text-xs font-medium" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
@@ -447,10 +449,15 @@ async function FlRatioKpiCard({
       </div>
       <div
         className="font-mono text-2xl font-bold leading-none"
-        style={{ color: status ? STATUS_DOT_STYLE[status] : "var(--foreground)" }}
+        style={{ color: kpi.tone ? FL_TONE_STYLE[kpi.tone] : "var(--foreground)" }}
       >
-        {formatPercent(flRate)}
+        {kpi.text}
       </div>
+      {kpi.showCaution && (
+        <div className="mt-2">
+          <StatusBadge status="warn" label="注意" />
+        </div>
+      )}
     </div>
   );
 }

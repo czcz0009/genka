@@ -98,7 +98,7 @@ const CAUTION_MARGIN_POINTS = 10;
 
 export type Severity = "normal" | "caution" | "danger";
 
-function classifySeverity(ratio: number | null, benchmark: number): Severity | null {
+export function classifySeverity(ratio: number | null, benchmark: number): Severity | null {
   if (ratio == null) return null;
   if (ratio <= benchmark) return "normal";
   if (ratio <= benchmark + CAUTION_MARGIN_POINTS) return "caution";

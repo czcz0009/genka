@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "genkaru-lp.vercel.app" }],
+      "destination": "https://www.genka-lens.com/$1",
+      "statusCode": 301
+    }
+  ]
+}

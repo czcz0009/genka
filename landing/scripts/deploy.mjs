@@ -16,6 +16,8 @@ run("pnpm build");
 const tmp = mkdtempSync(join(tmpdir(), "genkaru-lp-"));
 try {
   cpSync("dist", tmp, { recursive: true });
+  // 旧URL(genkaru-lp.vercel.app)→独自ドメインの301転送などの設定。dist/ には含まれないため個別にコピーする
+  cpSync("vercel.json", join(tmp, "vercel.json"));
   run("npx vercel link --project genkaru-lp --yes", tmp);
   const envFile = join(tmp, ".env.local");
   if (existsSync(envFile)) rmSync(envFile);

@@ -1,6 +1,6 @@
 /**
  * サービスの表示名。今後改名する場合はここだけ書き換える。
- * ただしHTMLの<title>・OGP(`.figma/make/site.json`のtitle/description)は
+ * ただしHTMLの<title>・OGP・構造化データ(`.figma/make/site.json`のtitle/description/siteName)は
  * ビルド前のJSONで、この定数をimportできないため別途手動で合わせる必要がある。
  * アプリ側(Next.js)の対応する定数は src/lib/serviceName.ts。
  */

@@ -155,7 +155,7 @@ function RatioCard({
           {label}
         </p>
         {severity && <StatusBadge status={SEVERITY_STATUS[severity]} label={SEVERITY_LABEL[severity]} />}
-        {isLowerBound && <StatusBadge status="muted" label="参考値(未計算のメニューを含む)" />}
+        {isLowerBound && <StatusBadge status="muted" label="参考値(未計算のメニューを含む)" wrap />}
         {exceedsWarning && <StatusBadge status="warn" label="注意" />}
       </div>
       {footnote && (

@@ -6,6 +6,20 @@ const nextConfig: NextConfig = {
   // (畜産物PDF取り込みのRoute Handlerで再現)。バンドル対象から外し、素のNode.js requireで
   // 解決させることで、単体のNodeスクリプトで動いていたときと同じ挙動にする。
   serverExternalPackages: ["pdfjs-dist"],
+
+  // 旧URL(genka-one.vercel.app)から独自ドメインへの恒久的な転送(301)。
+  // /api/ は転送しない: Vercelのcronは本番の *.vercel.app のURLを呼び、転送には従わない
+  // (Vercel公式ドキュメント「Cron jobs and redirects」)。転送するとcronが止まるため。
+  async redirects() {
+    return [
+      {
+        source: "/:path((?!api/).*)",
+        has: [{ type: "host", value: "genka-one.vercel.app" }],
+        destination: "https://app.genka-lens.com/:path",
+        statusCode: 301,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

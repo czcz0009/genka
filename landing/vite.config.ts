@@ -48,6 +48,8 @@ react(),
 })
 
 type FigmaSiteConfiguration = {
+  /** 正規URL(末尾スラッシュなし)。canonical・og:url・sitemap.xml・robots.txt に使う */
+  siteUrl?: string
   title?: string
   description?: string
   language?: string
@@ -96,7 +98,18 @@ function figmaSiteConfiguration(config: FigmaSiteConfiguration): Plugin {
   const headEnd = config.customScripts?.headEnd ?? ''
   const bodyStart = config.customScripts?.bodyStart ?? ''
   const bodyEnd = config.customScripts?.bodyEnd ?? ''
-  const robotsTxt = config.robots?.index === false ? 'User-agent: *\nDisallow: /\n' : ''
+  const siteUrl = (config.siteUrl ?? '').replace(/\/+$/, '')
+  // robots.index=false の間は全体を巡回禁止。true にすると巡回を許可し、sitemapの場所を伝える
+  // (公開手順は docs/HANDOFF.md の「LPを検索に載せる手順」)。
+  const robotsTxt =
+    config.robots?.index === false
+      ? 'User-agent: *\nDisallow: /\n'
+      : siteUrl
+        ? `User-agent: *\nAllow: /\n\nSitemap: ${siteUrl}/sitemap.xml\n`
+        : ''
+  const sitemapXml = siteUrl
+    ? `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${siteUrl}/</loc></url>\n</urlset>\n`
+    : ''
 
   return {
     name: 'figma-site-configuration',
@@ -109,13 +122,20 @@ function figmaSiteConfiguration(config: FigmaSiteConfiguration): Plugin {
       })
     },
     generateBundle() {
-      if (!robotsTxt) return
-
-      this.emitFile({
-        type: 'asset',
-        fileName: 'robots.txt',
-        source: robotsTxt,
-      })
+      if (robotsTxt) {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'robots.txt',
+          source: robotsTxt,
+        })
+      }
+      if (sitemapXml) {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'sitemap.xml',
+          source: sitemapXml,
+        })
+      }
     },
     transformIndexHtml: {
       order: 'pre',

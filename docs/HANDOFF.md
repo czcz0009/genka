@@ -132,6 +132,16 @@ node scripts/deploy.mjs --dry     # リンクの確認だけ(公開しない)
 5. **撮影後、デモアカウントを必ず削除**し、「サンプル食堂」の店舗が0件・`tmp-`で始まるユーザーが0件であることを確認する。
 - Playwrightはこのリポジトリの依存には入れていない(`npm i --no-save playwright` で一時的に入れ、スクリプトはプロジェクトフォルダの中に置いて実行し、終わったら消す。scratchなどプロジェクト外だとモジュールが見つからない)。
 
+### 5-4. LPを検索に載せる手順(noindexを外す)
+今はLPを**意図的に検索に載せていない**(2026-10-21時点)。外すのはSMTP設定が済み、モニターを受け入れられる状態になってから(Mahiroの指示で行う)。
+1. `landing/.figma/make/site.json` の `"robots": { "index": false }` を `true` にする(変えるのはこの1か所だけ)。
+   - これで次の2つが同時に切り替わる: ①HTMLの `<meta name="robots" content="noindex, nofollow">` が消える、②`robots.txt` が「`Disallow: /`(全体巡回禁止)」→「`Allow: /` + `Sitemap: https://www.genka-lens.com/sitemap.xml`」になる(どちらも `landing/vite.config.ts` が `site.json` から生成する)。
+   - `sitemap.xml` は `index` の値に関係なく常に出力している(`site.json` の `siteUrl` から生成)。
+2. `cd landing && pnpm build` のあと、`dist/robots.txt` に `Allow: /` があること、`dist/index.html` に `noindex` が無いことを確認する。
+3. `pnpm ship` で公開し、本番で `curl https://www.genka-lens.com/robots.txt` と、トップページのHTMLに `noindex` が無いことを確認する。
+4. Search Consoleで `https://www.genka-lens.com/sitemap.xml` を送信し、URL検査で `https://www.genka-lens.com/` の「インデックス登録をリクエスト」を押す。
+- 正規URLは `https://www.genka-lens.com`(`genka-lens.com` は www へ転送)。変えるときは `site.json` の `siteUrl` を直す(canonical・og:url・sitemapが連動する)。
+
 ---
 
 ## 6. ハマりどころ・運用メモ

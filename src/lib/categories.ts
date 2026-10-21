@@ -150,9 +150,32 @@ export function validateCategoryName(
   if (name.length > MAX_CATEGORY_NAME_LENGTH) return `カテゴリ名は${MAX_CATEGORY_NAME_LENGTH}文字以内で入力してください`;
   const normalized = normalizeForDedupe(name);
   if (!normalized) return "カテゴリ名を入力してください";
-  const duplicate = sameKindCategories.some((c) => c.id !== excludeId && normalizeForDedupe(c.name) === normalized);
-  if (duplicate) return "同じ名前のカテゴリがすでにあります";
+  const duplicate = sameKindCategories.find((c) => c.id !== excludeId && normalizeForDedupe(c.name) === normalized);
+  if (duplicate) return `${CATEGORY_DUPLICATE_PREFIX}(「${duplicate.name}」)。`;
   return null;
+}
+
+/** 名前の重複エラーの1行目の書き出し(DBの一意制約で弾かれた場合も、この書き出しで返す)。 */
+export const CATEGORY_DUPLICATE_PREFIX = "同じ名前のカテゴリがすでにあります";
+/**
+ * 名前の重複エラーの2行目(小さい文字)。同じ名前とみなす範囲(normalizeForDedupe)を説明する。
+ * 実際には全角・半角、大文字・小文字、スペース、「・」「、」「。」「,」「.」、括弧の違いを同じとみなしている。
+ */
+export const CATEGORY_DUPLICATE_NOTE = "全角・半角、大文字・小文字、スペース、「・」などの記号や括弧の違いは、同じ名前とみなします。";
+
+export function isDuplicateCategoryError(message: string): boolean {
+  return message.includes(CATEGORY_DUPLICATE_PREFIX);
+}
+
+/**
+ * カテゴリごとの件数(カテゴリの編集画面に出す「◯品」「◯件」)。
+ * メニュー一覧・食材一覧のタブの数字と必ず一致させるため、タブと同じ絞り込み(filterByCategoryTab)で数える。
+ * 仕込み品はカテゴリのタブに出ないため、どのカテゴリの件数にも含まれない。
+ */
+export function countItemsByCategory(items: CategorizableItem[], categories: Category[]): Map<string, number> {
+  return new Map(
+    categories.map((c) => [c.id, filterByCategoryTab(items, { type: "category", categoryId: c.id }, categories).length]),
+  );
 }
 
 /**

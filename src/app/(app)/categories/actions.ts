@@ -4,6 +4,7 @@ import { normalizeDisplayName, normalizeForDedupe } from "@/lib/normalize";
 import { requireAuthedClient } from "@/lib/supabase/requireAuthedClient";
 import { friendlyDbError, dbErrorMessage } from "@/lib/supabase/friendlyDbError";
 import {
+  CATEGORY_DUPLICATE_PREFIX,
   computeMovedSortOrders,
   nextSortOrder,
   validateCategoryName,
@@ -21,7 +22,8 @@ import {
  * 念のため各クエリでもstore_idで絞り込む。
  */
 
-const DUPLICATE_MESSAGE = "同じ名前のカテゴリがすでにあります";
+// 画面側(isDuplicateCategoryError)で重複エラーと判定し、同じとみなす範囲の注記を添えて表示する
+const DUPLICATE_MESSAGE = `${CATEGORY_DUPLICATE_PREFIX}。`;
 
 export type CategoryActionResult = { success: true; categories: Category[] } | { success: false; error: string };
 

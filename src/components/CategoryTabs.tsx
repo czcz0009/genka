@@ -9,18 +9,27 @@ import type { CategoryChip } from "@/lib/categories";
  * スマホでも崩れないよう、折り返さずに横スクロールさせる(チップが増えても
  * 一覧の表示位置が下にずれない)。選択中のチップは、既存のタブボタンと同じ
  * primary色の塗りつぶしにする。
+ *
+ * 長いカテゴリ名(上限20文字)は、チップの中では10文字分程度で「…」と省略する
+ * (375pxで1つのチップが画面幅を超えないように。件数は省略しない)。
+ * スマホにはマウスを乗せて全文を見る手段がないため、カテゴリのタブを選んでいる間は、
+ * タブ行の下に全文を見出しとして出す(長い場合は折り返す)。
  */
 export function CategoryTabs({
   chips,
   activeParam,
   onSelect,
   ariaLabel,
+  countUnit,
 }: {
   chips: CategoryChip[];
   activeParam: string | null;
   onSelect: (chip: CategoryChip) => void;
   ariaLabel: string;
+  /** 件数の単位(メニューは「品」、食材は「件」。各一覧画面の表記に合わせる) */
+  countUnit: string;
 }) {
+  const activeChip = chips.find((chip) => chip.param === activeParam);
   const listRef = useRef<HTMLDivElement>(null);
   // URLで指定されたタブ(例: 詳細画面から戻った時)が右側の見えない位置にあっても
   // 分かるよう、最初の表示時だけ選択中のタブまで横スクロールする(縦方向には動かさない)。
@@ -34,34 +43,46 @@ export function CategoryTabs({
   }, []);
 
   return (
-    <div ref={listRef} role="tablist" aria-label={ariaLabel} className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
-      {chips.map((chip) => {
-        const active = chip.param === activeParam;
-        return (
-          <button
-            key={chip.param ?? "__all__"}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            onClick={() => onSelect(chip)}
-            className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-4 py-2 text-sm transition-colors"
-            style={{
-              fontFamily: "var(--font-noto-sans-jp)",
-              ...(active
-                ? { background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "var(--primary)" }
-                : { background: "var(--card)", color: "var(--foreground)", borderColor: "var(--border)" }),
-            }}
-          >
-            <span>{chip.label}</span>
-            <span
-              className="font-mono text-xs"
-              style={{ color: active ? "var(--primary-foreground)" : "var(--muted-foreground)", opacity: active ? 0.85 : 1 }}
+    <div>
+      <div ref={listRef} role="tablist" aria-label={ariaLabel} className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
+        {chips.map((chip) => {
+          const active = chip.param === activeParam;
+          return (
+            <button
+              key={chip.param ?? "__all__"}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              aria-label={`${chip.label} ${chip.count}${countUnit}`}
+              title={chip.label}
+              onClick={() => onSelect(chip)}
+              className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-4 py-2 text-sm transition-colors"
+              style={{
+                fontFamily: "var(--font-noto-sans-jp)",
+                ...(active
+                  ? { background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "var(--primary)" }
+                  : { background: "var(--card)", color: "var(--foreground)", borderColor: "var(--border)" }),
+              }}
             >
-              {chip.count}
-            </span>
-          </button>
-        );
-      })}
+              <span className="max-w-[10em] truncate">{chip.label}</span>
+              <span
+                className="font-mono text-xs"
+                style={{ color: active ? "var(--primary-foreground)" : "var(--muted-foreground)", opacity: active ? 0.85 : 1 }}
+              >
+                {chip.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {activeChip?.tab.type === "category" && (
+        <p
+          className="mt-1 mb-2 text-sm font-semibold [overflow-wrap:anywhere]"
+          style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
+        >
+          {`${activeChip.label}(${activeChip.count}${countUnit})`}
+        </p>
+      )}
     </div>
   );
 }

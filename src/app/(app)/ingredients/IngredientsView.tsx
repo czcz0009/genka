@@ -604,7 +604,7 @@ export function IngredientsView({
         </div>
 
         {ingredients.length > 0 && categories.length > 0 && (
-          <CategoryTabs chips={chips} activeParam={effectiveParam} onSelect={(chip) => selectTab(chip.tab)} ariaLabel="食材のカテゴリ" />
+          <CategoryTabs chips={chips} activeParam={effectiveParam} onSelect={(chip) => selectTab(chip.tab)} countUnit="件" ariaLabel="食材のカテゴリ" />
         )}
 
         {ingredients.length > 0 && (

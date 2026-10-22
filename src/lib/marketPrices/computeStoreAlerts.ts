@@ -10,6 +10,7 @@ import { suggestChikusanItems } from "./livestock/suggestChikusanItem.ts";
 import { previousPeriod, type Period } from "./period.ts";
 import type { SyuyoItem } from "./parseSyuyoCsv.ts";
 import { buildIngredientOverview, type IngredientOverviewRow } from "./buildIngredientOverview.ts";
+import { applyUserLinksToProduceMatches, countIngredientsNeedingReview, type UserMarketLink } from "./userMarketLinks.ts";
 
 /**
  * 仕入れ値変動アラートの算出(/alerts画面と、ホームのダッシュボード要約の両方から使う)。
@@ -33,6 +34,8 @@ export interface StoreAlertsResult {
   linkedIngredients: { id: string; name: string; itemCode: ChikusanItemCode; itemLabel: string }[];
   /** 登録済み食材1件ごとの追跡状況一覧(「まず一覧で全体を把握する」画面用) */
   ingredientOverview: IngredientOverviewRow[];
+  /** 「市場価格と比べるか、確認が必要な食材」の数(推定の食材だけ。アラート画面上部・ダッシュボード用) */
+  needsReviewCount: number;
 }
 
 function toSyuyoItem(r: { item_code: string; item_name: string; price_per_kg: number | null }): SyuyoItem {
@@ -122,15 +125,26 @@ export async function computeStoreAlerts(
   const [produce, livestock, { data: links }] = await Promise.all([
     fetchRecentProduceObservations(supabase),
     fetchRecentLivestockObservations(supabase),
-    supabase.from("ingredient_market_links").select("ingredient_id, item_code").eq("source", "chikusan"),
+    // 利用者が確定した紐づけ(食肉・野菜果物・比べない)をすべて読む(0026マイグレーション)
+    supabase.from("ingredient_market_links").select("ingredient_id, source, item_code"),
   ]);
 
   // --- 青果物: 食材名⇔市場品目の対応づけ自体は、前期比較ができるかどうかに
   // 関わらず常に行う(一覧画面で「今この食材は追跡対象になっているか」を
   // 出すには、変動が無くても・比較データがまだ無くても対応関係が要るため)。
-  const produceMatches = matchIngredientsToItems(
-    alertIngredients.map((i) => ({ id: i.id, name: i.name })),
-    produce.current,
+  const userLinks: UserMarketLink[] = (links ?? []).map((l) => ({
+    ingredientId: l.ingredient_id,
+    source: l.source as UserMarketLink["source"],
+    itemCode: l.item_code,
+  }));
+  // 自動の対応づけ(辞書・推定)に、利用者が確定した紐づけを上書きする(利用者の確定が常に優先)
+  const produceMatches = applyUserLinksToProduceMatches(
+    matchIngredientsToItems(
+      alertIngredients.map((i) => ({ id: i.id, name: i.name })),
+      produce.current,
+    ),
+    userLinks,
+    [...produce.current, ...produce.previous],
   );
 
   // --- 青果物のアラート(閾値を超える変動の通知)は、直近2期分の比較ができる時だけ ---
@@ -152,7 +166,11 @@ export async function computeStoreAlerts(
   }
 
   // --- 畜産物: 直近2ヶ月分の観測データから前月比較する。マッチングは確定リンクのみ ---
-  const linkByIngredientId = new Map((links ?? []).map((l) => [l.ingredient_id, l.item_code as ChikusanItemCode]));
+  const linkByIngredientId = new Map(
+    userLinks.filter((l) => l.source === "chikusan" && l.itemCode).map((l) => [l.ingredientId, l.itemCode as ChikusanItemCode]),
+  );
+  // 野菜・果物に確定した食材と「比べない」にした食材は、畜産物の規格設定の欄に出さない
+  const otherUserLinkIds = new Set(userLinks.filter((l) => l.source !== "chikusan").map((l) => l.ingredientId));
   const confirmedLinks = alertIngredients
     .filter((i) => linkByIngredientId.has(i.id))
     .map((i) => ({ ingredientId: i.id, ingredientName: i.name, itemCode: linkByIngredientId.get(i.id)! }));
@@ -180,7 +198,7 @@ export async function computeStoreAlerts(
   // (例: 牛は最大5規格)ため、ここでさらに件数を絞る(.slice)ことはしない
   // — 以前は上位3件に切り詰めており、牛肉の食材で選べる規格が一部隠れていた。
   const unlinkedIngredients = alertIngredients
-    .filter((i) => !linkByIngredientId.has(i.id))
+    .filter((i) => !linkByIngredientId.has(i.id) && !otherUserLinkIds.has(i.id))
     .map((i) => ({ id: i.id, name: i.name, suggestions: suggestChikusanItems(i.name) }))
     .filter((i) => i.suggestions.length > 0);
   const linkedIngredients = alertIngredients
@@ -201,6 +219,7 @@ export async function computeStoreAlerts(
     livestockCandidateIds: unlinkedIngredients.map((i) => i.id),
     livestockCurrent: livestock.current,
     livestockPrevious: livestock.previous,
+    userLinks,
   });
 
   return {
@@ -212,5 +231,6 @@ export async function computeStoreAlerts(
     unlinkedIngredients,
     linkedIngredients,
     ingredientOverview,
+    needsReviewCount: countIngredientsNeedingReview(ingredientOverview),
   };
 }

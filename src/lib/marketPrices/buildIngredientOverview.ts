@@ -15,11 +15,12 @@
  *            比較すべきかまだ店主が確定していない(/alerts画面下部の設定が必要)
  * - untracked: 青果物・畜産物のいずれの相場データにも対応が見つからなかった
  *            (国のデータ自体に無い食材、または表記が大きく異なる)
+ * - excluded: 利用者が「市場価格と比べない」にした(産直・契約農家など。2026-10-22に追加)
  */
 import type { SyuyoItem } from "./parseSyuyoCsv.ts";
 import type { IngredientItemMatch } from "./matchIngredientToItem.ts";
 
-export type IngredientTrackingStatus = "tracked" | "needsReview" | "needsSetup" | "untracked";
+export type IngredientTrackingStatus = "tracked" | "needsReview" | "needsSetup" | "untracked" | "excluded";
 export type IngredientTrackingCategory = "produce" | "livestock";
 
 export interface IngredientOverviewRow {
@@ -34,6 +35,13 @@ export interface IngredientOverviewRow {
   /** 前回(前旬・前月)比の変動率(%)。比較できるデータが無ければ null */
   changePercent: number | null;
   direction: "up" | "down" | "flat" | null;
+  /** 野菜・果物の品目コード(「合っている」と確定させるボタン用)。それ以外は null */
+  produceItemCode: string | null;
+  /**
+   * 利用者の設定。confirmed=野菜・果物を「合っている」と確定した / excluded=「比べない」にした /
+   * null=自動の判定(辞書・推定)か、食肉の紐づけ(食肉の紐づけは下の設定欄で解除する)
+   */
+  userSetting: "confirmed" | "excluded" | null;
 }
 
 export interface LinkedLivestockIngredient {
@@ -54,6 +62,8 @@ export interface BuildIngredientOverviewInput {
   livestockCandidateIds: string[];
   livestockCurrent: SyuyoItem[];
   livestockPrevious: SyuyoItem[];
+  /** 利用者が確定した紐づけ(userMarketLinks.ts)。「比べない」と、野菜・果物の確定の表示に使う */
+  userLinks?: { ingredientId: string; source: string; itemCode: string | null }[];
 }
 
 function priceByItemCode(items: SyuyoItem[]): Map<string, number> {
@@ -91,6 +101,7 @@ export function buildIngredientOverview(input: BuildIngredientOverviewInput): In
     livestockCandidateIds,
     livestockCurrent,
     livestockPrevious,
+    userLinks = [],
   } = input;
 
   const produceMatchByIngredientId = new Map(produceMatches.map((m) => [m.ingredientId, m]));
@@ -101,63 +112,53 @@ export function buildIngredientOverview(input: BuildIngredientOverviewInput): In
   const livestockCandidateIdSet = new Set(livestockCandidateIds);
   const livestockCurrentByCode = priceByItemCode(livestockCurrent);
   const livestockPreviousByCode = priceByItemCode(livestockPrevious);
+  const userLinkByIngredientId = new Map(userLinks.map((l) => [l.ingredientId, l]));
 
   return ingredients.map((ingredient): IngredientOverviewRow => {
-    // 1. 利用者が確定した紐づけ(畜産物の規格)を、辞書との一致や自動の推定より常に優先する(2026-10-22)。
+    const base = { ingredientId: ingredient.id, ingredientName: ingredient.name };
+    const noPrice = { currentPricePerKg: null, changePercent: null, direction: null };
+    const userLink = userLinkByIngredientId.get(ingredient.id);
+
+    // 1. 利用者が確定した紐づけを、辞書との一致や自動の推定より常に優先する(2026-10-22)。
     //    以前は青果物の推定を先に見ていたため、「鶏もも肉」を鶏肉ももに紐づけても、桃の価格が出ていた。
+    if (userLink?.source === "excluded") {
+      return { ...base, status: "excluded", category: null, itemName: null, ...noPrice, produceItemCode: null, userSetting: "excluded" };
+    }
     const linked = linkedByIngredientId.get(ingredient.id);
     if (linked) {
       return {
-        ingredientId: ingredient.id,
-        ingredientName: ingredient.name,
+        ...base,
         status: "tracked",
         category: "livestock",
         itemName: linked.itemLabel,
         ...computePriceInfo(linked.itemCode, livestockCurrentByCode, livestockPreviousByCode),
+        produceItemCode: null,
+        userSetting: null,
       };
     }
 
-    // 2. 青果物として一致。確信度highなら価格・前回比を出す。
+    // 2. 青果物として一致(利用者の確定、辞書との一致、推定)。確信度highなら価格・前回比を出す。
     //    推定(確信度low)は、別の品目の値動きを誤って見せないよう、候補の名前だけを出す(価格・前回比は出さない)。
     const produceMatch = produceMatchByIngredientId.get(ingredient.id);
     if (produceMatch) {
       const confirmed = produceMatch.confidence === "high";
       return {
-        ingredientId: ingredient.id,
-        ingredientName: ingredient.name,
+        ...base,
         status: confirmed ? "tracked" : "needsReview",
         category: "produce",
         itemName: produceMatch.itemName,
-        ...(confirmed
-          ? computePriceInfo(produceMatch.itemCode, produceCurrentByCode, producePreviousByCode)
-          : { currentPricePerKg: null, changePercent: null, direction: null }),
+        ...(confirmed ? computePriceInfo(produceMatch.itemCode, produceCurrentByCode, producePreviousByCode) : noPrice),
+        produceItemCode: produceMatch.itemCode,
+        userSetting: userLink?.source === "syuyo" ? "confirmed" : null,
       };
     }
 
     // 3. 畜産物らしいが規格未確定
     if (livestockCandidateIdSet.has(ingredient.id)) {
-      return {
-        ingredientId: ingredient.id,
-        ingredientName: ingredient.name,
-        status: "needsSetup",
-        category: "livestock",
-        itemName: null,
-        currentPricePerKg: null,
-        changePercent: null,
-        direction: null,
-      };
+      return { ...base, status: "needsSetup", category: "livestock", itemName: null, ...noPrice, produceItemCode: null, userSetting: null };
     }
 
     // 4. どちらにも該当なし
-    return {
-      ingredientId: ingredient.id,
-      ingredientName: ingredient.name,
-      status: "untracked",
-      category: null,
-      itemName: null,
-      currentPricePerKg: null,
-      changePercent: null,
-      direction: null,
-    };
+    return { ...base, status: "untracked", category: null, itemName: null, ...noPrice, produceItemCode: null, userSetting: null };
   });
 }

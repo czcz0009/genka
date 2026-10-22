@@ -14,7 +14,7 @@ import {
 } from "@/lib/dashboardSummary";
 import { FL_BENCHMARK_PERCENT } from "@/lib/flRatio";
 import { buildDashboardFlDigestRow, buildDashboardFlKpi, type DashboardFlTone } from "@/lib/dashboardFlDisplay";
-import { buildAlertDigestRow } from "@/lib/dashboardAlertDigest";
+import { buildAlertDigestRow, buildNeedsReviewDigestRow } from "@/lib/dashboardAlertDigest";
 import { StatusBadge } from "@/components/StatusBadge.tsx";
 import { formatTimeSaved, TIME_SAVED_DISPLAY_THRESHOLD_MINUTES } from "@/lib/timeSavedEstimate";
 import { StartHerePrompt } from "@/components/StartHerePrompt.tsx";
@@ -358,6 +358,12 @@ async function ChangesDigest({
       description: row.description,
       href: "/alerts",
     });
+  }
+
+  // 市場価格と比べるか確認が必要な食材(推定)。0件なら出さない(dashboardAlertDigest.ts、案A)
+  const needsReviewRow = buildNeedsReviewDigestRow(alertSummary.needsReviewCount);
+  if (needsReviewRow) {
+    rows.push({ status: "warn", ...needsReviewRow });
   }
 
   // 判定・文言はdashboardFlDisplay.ts(FL比率の画面と同じ基準。テストはdashboardFlDisplay.test.ts)

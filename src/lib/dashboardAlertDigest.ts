@@ -40,3 +40,17 @@ export const ALERT_DIGEST_LIMIT = 2;
 export function selectTopAlerts<T extends { changePercent: number }>(alerts: T[], limit = ALERT_DIGEST_LIMIT): T[] {
   return [...alerts].sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent)).slice(0, limit);
 }
+
+/**
+ * 「前回から変わったこと」の、市場価格と比べるか確認が必要な食材の行(2026-10-22、案A)。
+ * 推定(確認が必要)の食材は、利用者が確定するまでアラートを出さないため、件数で確認を促す。
+ * 0件なら行を出さない(null)。点の色は黄(warn)。
+ */
+export function buildNeedsReviewDigestRow(needsReviewCount: number): { title: string; description: string; href: string } | null {
+  if (needsReviewCount <= 0) return null;
+  return {
+    title: `市場価格と比べるか、確認が必要な食材が${needsReviewCount}件あります`,
+    description: "「仕入れ値アラート」の「登録食材の追跡状況」で、対応する品目が合っているか確かめてください。確かめるまで、これらの食材のアラートは出ません。",
+    href: "/alerts#ingredient-overview",
+  };
+}

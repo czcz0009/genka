@@ -207,6 +207,8 @@ export interface AlertSummary {
   count: number;
   /** ダッシュボードの「変わったこと」ダイジェスト用。変動幅が大きい順の上位数件。 */
   topAlerts: AlertDigestItem[];
+  /** 市場価格と比べるか、確認が必要な食材(推定)の数。count(アラート件数)には含まない */
+  needsReviewCount: number;
 }
 
 /**
@@ -220,9 +222,9 @@ export const getAlertSummary = cache(async function getAlertSummary(
 ): Promise<AlertSummary> {
   const { rankingMenus, rankingMenuIngredients, alertIngredients, unsetLeavesByIngredientId } =
     await fetchRankingInputs(supabase);
-  if (rankingMenus.length === 0) return { count: 0, topAlerts: [] };
+  if (rankingMenus.length === 0) return { count: 0, topAlerts: [], needsReviewCount: 0 };
 
-  const { produceAlerts, livestockAlerts } = await computeStoreAlerts(
+  const { produceAlerts, livestockAlerts, needsReviewCount } = await computeStoreAlerts(
     supabase,
     store,
     alertIngredients,
@@ -238,7 +240,7 @@ export const getAlertSummary = cache(async function getAlertSummary(
     affectedMenuNames: a.affectedMenus.map((m) => m.menuName),
   }));
 
-  return { count: allAlerts.length, topAlerts };
+  return { count: allAlerts.length, topAlerts, needsReviewCount };
 });
 
 /**

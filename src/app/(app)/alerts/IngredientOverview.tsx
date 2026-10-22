@@ -1,6 +1,7 @@
 import { DEFAULT_CHANGE_THRESHOLD_PERCENT } from "@/lib/marketPrices/detectPriceChanges.ts";
 import type { IngredientOverviewRow } from "@/lib/marketPrices/buildIngredientOverview.ts";
 import { StatusBadge } from "@/components/StatusBadge.tsx";
+import { ProduceLinkActions } from "./ProduceLinkActions.tsx";
 
 function formatPricePerKg(n: number): string {
   return `¥${Math.round(n).toLocaleString()}/kg`;
@@ -44,6 +45,16 @@ function OverviewRow({ row }: { row: IngredientOverviewRow }) {
             から規格を選ぶと追跡できます
           </span>
         )}
+        {row.status === "excluded" && (
+          <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+            市場価格と比べない設定です(産直・契約での仕入れなど)
+          </span>
+        )}
+        {row.userSetting === "confirmed" && (
+          <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+            確認済み(この品目の市場価格と比べます)
+          </span>
+        )}
         {row.status === "untracked" && (
           <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
             この食材は追跡対象外です(国の統計データに一致する品目が見つかりません)
@@ -69,10 +80,13 @@ function OverviewRow({ row }: { row: IngredientOverviewRow }) {
           <StatusBadge status="muted" label="比較データなし" />
         ) : row.status === "needsSetup" ? (
           <StatusBadge status="warn" label="設定が必要です" />
+        ) : row.status === "excluded" ? (
+          <StatusBadge status="muted" label="比べない" />
         ) : (
           <StatusBadge status="muted" label="追跡対象外" />
         )}
       </div>
+      <ProduceLinkActions row={row} />
     </li>
   );
 }
@@ -86,7 +100,7 @@ export function IngredientOverview({ rows }: { rows: IngredientOverviewRow[] }) 
   if (rows.length === 0) return null;
 
   return (
-    <section>
+    <section id="ingredient-overview" className="scroll-mt-4">
       <h2 className="mb-2 text-sm font-semibold" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
         登録食材の追跡状況({rows.length}件)
       </h2>

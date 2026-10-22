@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildAlertDigestRow, selectTopAlerts } from "./dashboardAlertDigest.ts";
+import { buildAlertDigestRow, buildNeedsReviewDigestRow, selectTopAlerts } from "./dashboardAlertDigest.ts";
 
 // ダッシュボード「前回から変わったこと」の仕入れ値の行(2026-10-21、期待値はMahiroが検算済み)。
 // 点の色: 値上がり=赤(up)、値下がり=青(down)。アラート画面と同じ。30%の区切りは廃止。
@@ -60,4 +60,11 @@ test("見出しには、どの変動率・向きでも「値上がり」か「�
     const row = buildAlertDigestRow({ ingredientName: "食材", changePercent, direction, affectedMenuNames: [] });
     assert.ok(row.title.includes(direction === "up" ? "値上がり" : "値下がり"), row.title);
   }
+});
+
+test("確認が必要な食材の行(案A): 0件なら出さない、1件以上なら件数つきで出し、アラート画面の追跡状況へ案内する", () => {
+  assert.equal(buildNeedsReviewDigestRow(0), null);
+  const row = buildNeedsReviewDigestRow(3)!;
+  assert.equal(row.title, "市場価格と比べるか、確認が必要な食材が3件あります");
+  assert.equal(row.href, "/alerts#ingredient-overview");
 });

@@ -26,8 +26,8 @@ export interface IngredientItemMatch {
   itemCode: string;
   itemName: string;
   confidence: MatchConfidence;
-  /** exact: 品目名または同義語辞書と完全一致。fuzzy: bigram類似度によるフォールバック(要確認) */
-  method: "exact" | "fuzzy";
+  /** exact: 品目名または同義語辞書と完全一致。fuzzy: bigram類似度によるフォールバック(要確認)。user: 利用者が確定した */
+  method: "exact" | "fuzzy" | "user";
   score: number;
 }
 

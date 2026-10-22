@@ -85,20 +85,22 @@
 
 ## 4. 次にやること(優先順)
 
-### 【期日あり】2026-10-22の朝: ステップ6(退会時の削除)の確認
-- **何をしているか**: カテゴリ機能のステップ6。使い捨てアカウント(`tmp-qa-step6-20261021-8027@example.com`、user_id `d9443d53-df67-44a2-9e08-d05f3fb2c52c`、店舗 `c10a38f5-b8a9-46d2-a3d9-925d3c994b58`)の、ユーザー・店舗に紐づく15テーブルすべてにデータを入れ、アプリの退会画面から申請したうえで、その申請の予定日(`account_deletion_requests.scheduled_for`)だけをSQLで過去に書き換える。2026-10-22 午前3時(日本時間、18:00 UTC)の本物のcron(`/api/cron/delete-scheduled-accounts`)に削除させ、翌朝に確認SQL(全テーブル0件・auth.usersの行なし・他の利用者のデータ件数が削除前と同じ・親を失った行が0件)で確かめる。
-- **削除されていなかった場合の切り分け**:
-  1. 先に確認SQLで、予定日を過ぎた退会申請が、この使い捨てアカウントの1件だけであることを確かめる(手動実行は「予定日を過ぎた申請をすべて」処理するため)。
-  2. Vercelのダッシュボード → プロジェクト `genka` → Settings → **Cron Jobs** → `/api/cron/delete-scheduled-accounts` の行の「**Run**」で手動実行する。
-  3. 実行の直後に、同じ行の「**View Logs**」で結果を見る(無料プランではログが1時間しか残らないので、すぐに見る)。応答の `targetCount`(対象件数)・`deletedCount`(削除件数)・`failedCount` を確認する。
-  4. 判断: 手動実行で削除されたなら、毎日の自動起動(スケジュール)側の問題。手動実行でも削除されないなら、処理本体(合言葉の認証・DB)側の問題。旧URLの301転送(コミット `9c25038`)は `/api/` を対象外にしているため原因になりにくいが、疑わしければ下の「野菜価格のcron」の項と同じ手順で切り分ける。
-  5. 確認が終わったら、確認SQLをもう一度実行して全テーブル0件を確かめる。
-- **比較の基準値(2026-10-21、申請前に確認SQLで取得した「他の利用者」の列)**: 削除の後、この値と同じか増えていればよい(減っていたら問題として調べる)。
-  auth.users 13 / stores 8 / menus 42 / ingredients 39 / categories 120 / store_fixed_costs 5 / import_jobs 7 / ocr_usage 0 / user_consents 3 / account_deletion_requests 0 / menu_ingredients 63 / menu_sales 10 / menu_price_history 3 / ingredient_price_history 39 / ingredient_market_links 4 / prep_item_components 2
-  (同じ時点で、使い捨ての列は期待値どおり、「親を失った行」は全テーブル0件だった。確認SQLは、このステップ6の会話で提示したもの。使い捨てアカウントのユーザーID・店舗IDを埋め込んだ読み取り専用のSQL)
+### 【重要・2026-10-22に解決】本番の管理者用の鍵が無効で、定期処理(cron)が9月から一度も成功していなかった
+- **何が起きていたか**: Vercelの本番の環境変数 `SUPABASE_SERVICE_ROLE_KEY`(2026-09-10登録)が無効な値で、これを使う3つの定期処理(`/api/cron/delete-scheduled-accounts`・`collect-produce-prices`・`collect-livestock-prices`)が、すべて `{"status":"error","step":"fetch","detail":"Invalid API key"}`(HTTP 500)で失敗していた。cronの起動自体と合言葉(`CRON_SECRET`)の確認は正常だった。
+- **影響**: 退会申請が30日後に削除されない状態だった(実際の申請は0件だったので実害なし)。**野菜・食肉の市場価格が2026-09-04の手動取り込み以降、一度も増えていない**(野菜の最新は8月下旬の旬)。仕入れ値アラートは古いデータのまま動いていた。
+- **どう分かったか**: ステップ6(下記)で、予定日を過去にした退会申請が翌朝も削除されておらず、`vercel logs requests` で cron の応答が500だったこと、合言葉を付けて同じURLを呼ぶと上の応答が返ったことから特定した。旧URLの301転送(`9c25038`)は無関係(cronの呼び先はデプロイ専用URL `genka-xxxx-ms-projects-c2005791.vercel.app` で、転送の対象外)。
+- **直し方(実施済み)**: Mahiroが Vercel → `genka` → Settings → Environment Variables の `SUPABASE_SERVICE_ROLE_KEY` を、`.env.local` で正常に動いている値(新形式の `sb_secret_…`)に差し替え、今の本番と同じコード(`b8f1b6b`)のまま Redeploy(2026-10-22 10:06)。直後の手動実行で HTTP 200 を確認。
+- **Supabaseの鍵の見分け方**: 従来形式(Legacy)の anon と service_role は、どちらも `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.` という共通の約36文字で始まるため、先頭だけ見ると同じ鍵に見える(違いは後ろの部分)。このプロジェクトの管理者用の鍵は新形式の `sb_secret_…`(Project Settings → API Keys の「Publishable and secret API keys」タブ)。
+- **残っていること**: 抜けている9月・10月の野菜・食肉の市場価格を、手動実行で埋めるかどうか(どこまでさかのぼれるかを先に調べてから判断する)。
+
+### 済(2026-10-22): ステップ6(退会時の削除)の確認
+- 使い捨てアカウント(user_id `d9443d53-df67-44a2-9e08-d05f3fb2c52c`、店舗 `c10a38f5-b8a9-46d2-a3d9-925d3c994b58`)の、ユーザー・店舗に紐づく15テーブルすべてにデータを入れ、アプリの退会画面から申請し、予定日だけをSQLで過去に書き換えた。
+- 10/22 午前3時の自動実行は、上の鍵の問題で失敗。鍵を直した後の手動実行(`vercel crons run /api/cron/delete-scheduled-accounts`、画面の「Run」と同じ)で削除された。
+- 確認SQL(使い捨てアカウントのID入り、読み取り専用)の結果: 使い捨ての列は15テーブルすべて0(auth.users・退会申請の行も0)、他の利用者の列は基準値と同じ(auth.users 13 / stores 8 / menus 42 / ingredients 39 / categories 120 / store_fixed_costs 5 / import_jobs 7 / ocr_usage 0 / user_consents 3 / account_deletion_requests 0 / menu_ingredients 63 / menu_sales 10 / menu_price_history 3 / ingredient_price_history 39 / ingredient_market_links 4 / prep_item_components 2)、親を失った行は全テーブル0件。
+- **cronが動いたかの切り分け手順**(今後も使う): ①対象が想定どおりかをDBで確かめる → ②Vercel → `genka` → Settings → Cron Jobs の「Run」(またはCLIの `vercel crons run <path>`)で手動実行 → ③**すぐに** `vercel logs requests --since 1h --query 'requestPath:<path>'` で応答のHTTPステータスを見る(実行ログは1時間で消える。応答コードは12時間見られる)。500なら処理本体のエラーなので、`.env.local` の `CRON_SECRET` を付けて同じURLを呼び、応答の中身(どの段階のどんなエラーか)を見る。
 
 ### 【期日あり】2026-10-30以降: 野菜価格のcronが動いたかの確認
-- **背景**: 2026-10-21に旧URL(genka-one.vercel.app)→`app.genka-lens.com` の301転送を本番に入れた。**原因候補のコミットは `9c25038`**(「アプリ: 旧URL(genka-one.vercel.app)を独自ドメインへ301転送する(cronが呼ぶ/api/は転送しない)」、変更は `next.config.ts` の `redirects` のみ)。Vercelのcronは旧URL側(`*.vercel.app`)を呼び、転送には従わないため、`/api/` は対象から外してある(公開後に本番で `/api/cron/*` が転送されず401=処理本体に届くことは確認済み)。ただし実際のcron実行での確認はまだ。
+- **背景**: 2026-10-22に、本番の管理者用の鍵が無効で野菜価格の取得が9月から一度も成功していなかったことが分かり、鍵を差し替えた(上記)。鍵を直した後の、最初の自動実行での確認。
 - **いつ**: 野菜価格の取得(`/api/cron/collect-produce-prices`)は **10月28日 18:00 UTC = 10月29日 午前3時(日本時間)** に動く。**10月30日以降**に確認する(無料プランのためVercelのログは1時間で消える。DBで判断する)。
 - **やり方**: Supabase の SQL Editor で次を実行し、`fetched_at` が **2026-10-28 18:00 UTC 以降**の行があるかを見る。
   ```sql
@@ -109,7 +111,7 @@
   limit 5;
   ```
 - **判定の注意**: このcronは「DBにまだ無い旬」だけを取りに行き、既にある旬は飛ばす(`src/app/api/cron/collect-produce-prices/route.ts`)。農水省がまだ新しい旬を公表していなければ、正常でも行は増えない。増えていない場合は、まず農水省の旬別結果のページ(https://www.maff.go.jp/j/tokei/syohi/shunbetu/)で、DBの最新より新しい旬が公表済みかを見る。
-- **公表済みなのに増えていなければ**: 転送のコミット `9c25038` が原因の可能性がある。チェックポイント方式で `git revert 9c25038` →アプリを再デプロイ(`npx vercel --prod`)して転送を外し、Vercelの Settings → Cron Jobs から手動実行して行が増えるかを確かめる。
+- **公表済みなのに増えていなければ**: 上の「cronが動いたかの切り分け手順」で応答の中身を見る。旧URLの転送(`9c25038`)は、cronの呼び先がデプロイ専用URLのため原因にならないことを確認済み。
 
 ### 【期日あり】2026-10-30以降: ダッシュボードの仕入れ値の行の色を本番で確認
 - **背景**: 2026-10-21に、ダッシュボード「前回から変わったこと」の仕入れ値の行の点の色を、仕入れ値アラートの画面に合わせた(値上がりは赤、値下がりは青。以前の「変動幅30%以上で赤、未満で黄」は廃止。コミット `a722acd`)。テスト(`src/lib/dashboardAlertDigest.test.ts`)では確認済みだが、行が出るのは市場価格に変動があるときだけで、共有の市場価格データに偽のデータは入れられないため、実画面では未確認。

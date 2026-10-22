@@ -33,7 +33,7 @@ function OverviewRow({ row }: { row: IngredientOverviewRow }) {
         </span>
         {row.itemName && (
           <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-            市場「{row.itemName}」{row.status === "needsReview" && "(推定・未確認)"}
+            {row.status === "needsReview" ? `市場「${row.itemName}」の可能性があります(確認が必要)` : `市場「${row.itemName}」`}
           </span>
         )}
         {row.status === "needsSetup" && (
@@ -62,7 +62,10 @@ function OverviewRow({ row }: { row: IngredientOverviewRow }) {
             status={notable ? (row.direction === "up" ? "danger" : "ok") : "muted"}
             label={`前回比 ${formatChangePercent(row.changePercent)}`}
           />
-        ) : row.status === "tracked" || row.status === "needsReview" ? (
+        ) : row.status === "needsReview" ? (
+          // 推定の結びつきは、別の品目の値動きを誤って見せないよう、価格・前回比を出さない
+          <StatusBadge status="warn" label="確認が必要" />
+        ) : row.status === "tracked" ? (
           <StatusBadge status="muted" label="比較データなし" />
         ) : row.status === "needsSetup" ? (
           <StatusBadge status="warn" label="設定が必要です" />

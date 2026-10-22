@@ -76,7 +76,7 @@ test("青果物: 値下がり(100円→80円)は direction が down、変動率�
   assert.ok(Math.abs(row.changePercent! - -20) < 0.0001, `expected -20, got ${row.changePercent}`);
 });
 
-test("青果物: 確信度lowの推測一致 → needsReview(価格は参考値として計算する)", () => {
+test("青果物: 確信度lowの推測一致 → needsReview。別の品目の値動きを誤って見せないよう、価格・前回比は出さない(2026-10-22に仕様変更。以前は参考値として出していた)", () => {
   const rows = buildIngredientOverview({
     ingredients: [{ id: "ing-x", name: "ばれいしょっぽい何か" }],
     produceMatches: [
@@ -101,8 +101,9 @@ test("青果物: 確信度lowの推測一致 → needsReview(価格は参考値�
   const row = rows[0];
   assert.equal(row.status, "needsReview");
   assert.equal(row.itemName, "ばれいしょ");
-  assert.equal(row.currentPricePerKg, 150);
-  assert.equal(row.direction, "flat");
+  assert.equal(row.currentPricePerKg, null);
+  assert.equal(row.changePercent, null);
+  assert.equal(row.direction, null);
 });
 
 test("畜産物: 規格確定済み → tracked、規格コードで前回比を計算する", () => {

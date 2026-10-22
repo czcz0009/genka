@@ -39,6 +39,28 @@ interface Candidate {
   names: string[]; // 品目名 + 既知の同義語
 }
 
+/**
+ * 辞書と一致しても「推定(確認が必要)」に下げる名前(2026-10-22、Mahiro確認済み)。
+ * 飲食店では別の食材を指すことが多い短い読み(もも=鶏もも、かき=牡蠣)や、加工品を指すことが多い名前
+ * (ポテト=冷凍のフライドポテト、コーン=缶詰など)、食材以外の意味もある名前(なし=無し)。
+ * 漢字の「桃」「白桃」「柿」「梨」や「いんげん」は、今までどおり確定。
+ * 推定の結びつきはアラートを出さず、利用者が「合っている」と確定させたときだけ追跡する。
+ */
+const AMBIGUOUS_NAMES = new Set(
+  ["もも", "モモ", "かき", "カキ", "ポテト", "コーン", "パイン", "ガーリック", "チェリー", "うめ", "梅", "ウメ", "グリーンピース", "なし"].map(
+    normalizeForDedupe,
+  ),
+);
+
+/** 似た名前の推定でまちがえる名前(いか→すいか、みりん→りんご、みょうが→しょうが)。推定の対象外にする */
+const NO_FUZZY_NAMES = new Set(["いか", "イカ", "烏賊", "みりん", "味醂", "みょうが", "茗荷"].map(normalizeForDedupe));
+
+/**
+ * 肉を表す語を含む名前は、野菜・果物に推定で結びつけない(鶏もも肉→もも(桃)を防ぐ)。
+ * 辞書との完全一致は先に見るので、「牛蒡」→ごぼう は今までどおり確定で結びつく。
+ */
+const MEAT_WORDS = /[肉鶏豚牛]/;
+
 function buildCandidates(items: SyuyoItem[]): Candidate[] {
   return items
     .filter((item) => !item.isBreakdownRow)
@@ -72,12 +94,15 @@ export function matchIngredientsToItems(
         ingredientName: ingredient.name,
         itemCode: exactCandidate.item.itemCode,
         itemName: exactCandidate.item.itemName,
-        confidence: "high",
+        // 紛らわしい名前は、辞書と一致しても推定(確認が必要)にする
+        confidence: AMBIGUOUS_NAMES.has(normalizedIngredient) ? "low" : "high",
         method: "exact",
         score: 1,
       });
       continue;
     }
+
+    if (NO_FUZZY_NAMES.has(normalizedIngredient) || MEAT_WORDS.test(ingredient.name)) continue;
 
     // 2. フォールバック: bigram類似度(①と同じロジック)の最高スコア
     let best: { candidate: Candidate; score: number } | null = null;

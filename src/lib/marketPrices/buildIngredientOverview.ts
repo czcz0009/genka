@@ -9,8 +9,8 @@
  * - tracked: 青果物として確信度highで一致 / 畜産物として規格を確定済み
  *            → 直近の市場価格・前回比の変動率を表示する
  * - needsReview: 青果物として一致した候補はあるが、確信度lowの推測一致
- *            (bigram類似度によるフォールバック)。誤対応のリスクがあるため
- *            「推測・未確認」と明示した上で価格を参考表示する
+ *            (bigram類似度によるフォールバック、または紛らわしい名前)。誤対応のリスクがあるため
+ *            候補の名前だけを出し、価格・前回比は出さない(2026-10-22に変更。以前は参考表示していた)
  * - needsSetup: 畜産物(豚/牛/鶏)らしいと判定できたが、どの規格の価格と
  *            比較すべきかまだ店主が確定していない(/alerts画面下部の設定が必要)
  * - untracked: 青果物・畜産物のいずれの相場データにも対応が見つからなかった
@@ -103,20 +103,8 @@ export function buildIngredientOverview(input: BuildIngredientOverviewInput): In
   const livestockPreviousByCode = priceByItemCode(livestockPrevious);
 
   return ingredients.map((ingredient): IngredientOverviewRow => {
-    // 1. 青果物として一致(確信度high/lowどちらも)していれば優先してそちらを採用する
-    const produceMatch = produceMatchByIngredientId.get(ingredient.id);
-    if (produceMatch) {
-      return {
-        ingredientId: ingredient.id,
-        ingredientName: ingredient.name,
-        status: produceMatch.confidence === "high" ? "tracked" : "needsReview",
-        category: "produce",
-        itemName: produceMatch.itemName,
-        ...computePriceInfo(produceMatch.itemCode, produceCurrentByCode, producePreviousByCode),
-      };
-    }
-
-    // 2. 畜産物として規格確定済みか
+    // 1. 利用者が確定した紐づけ(畜産物の規格)を、辞書との一致や自動の推定より常に優先する(2026-10-22)。
+    //    以前は青果物の推定を先に見ていたため、「鶏もも肉」を鶏肉ももに紐づけても、桃の価格が出ていた。
     const linked = linkedByIngredientId.get(ingredient.id);
     if (linked) {
       return {
@@ -126,6 +114,23 @@ export function buildIngredientOverview(input: BuildIngredientOverviewInput): In
         category: "livestock",
         itemName: linked.itemLabel,
         ...computePriceInfo(linked.itemCode, livestockCurrentByCode, livestockPreviousByCode),
+      };
+    }
+
+    // 2. 青果物として一致。確信度highなら価格・前回比を出す。
+    //    推定(確信度low)は、別の品目の値動きを誤って見せないよう、候補の名前だけを出す(価格・前回比は出さない)。
+    const produceMatch = produceMatchByIngredientId.get(ingredient.id);
+    if (produceMatch) {
+      const confirmed = produceMatch.confidence === "high";
+      return {
+        ingredientId: ingredient.id,
+        ingredientName: ingredient.name,
+        status: confirmed ? "tracked" : "needsReview",
+        category: "produce",
+        itemName: produceMatch.itemName,
+        ...(confirmed
+          ? computePriceInfo(produceMatch.itemCode, produceCurrentByCode, producePreviousByCode)
+          : { currentPricePerKg: null, changePercent: null, direction: null }),
       };
     }
 

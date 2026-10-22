@@ -1,18 +1,22 @@
 import { NextResponse } from "next/server";
 import { isAuthorizedCronRequest } from "@/lib/cronAuth";
 import { createServiceClient } from "@/lib/supabase/serviceClient";
-import { periodForDate, previousPeriod, formatPeriodLabel, type Period } from "@/lib/marketPrices/period";
+import type { Period } from "@/lib/marketPrices/period";
 import { fetchSyuyoCsv } from "@/lib/marketPrices/fetchSyuyoCsv";
 import { parseSyuyoCsv } from "@/lib/marketPrices/parseSyuyoCsv";
+import { collectProducePrices } from "@/lib/marketPrices/produceCollection";
+
+/** 1回の実行で最大4旬・アクセスの間12秒。80秒を過ぎたら新しいアクセスを始めない(produceCollection.ts) */
+export const maxDuration = 120;
 
 /**
  * 農水省「青果物卸売市場調査(旬別結果)」の定期取得ジョブ。
- * 月3回(上旬・中旬・下旬それぞれの公表後)、Vercel Cronから呼ばれる想定。
+ * 月3回(日本時間 9・19・29日の3時)、Vercel Cronから呼ばれる。
  *
- * 「今日がどの旬に属すか」から、直近2つの候補(1つ前の旬・今の旬)だけを試す。
- * 旬が終わってすぐは未公表(403)のことが多いので、次回のcron実行時に
- * 再度同じ候補を試すことで自然にリトライされる(状態を持たない設計)。
- * 既に保存済みの旬は再取得しない(サーバーへの不要なアクセスを避ける)。
+ * 「DBにある最新の旬の次」から「終わっている直近の旬」までを古い順に試す(1回4旬まで。
+ * 未公表ならその回はやめ、次の実行で続きから試す)。どの旬を試すか・どこでやめるか・
+ * 応答コードの決め方は src/lib/marketPrices/produceCollection.ts(テストあり)。
+ * 応答: DBの読み書きの失敗(鍵・権限・接続)は500。未公表・農水省との通信エラーは200(中身に結果)。
  */
 export async function GET(request: Request) {
   if (!isAuthorizedCronRequest(request)) {
@@ -24,62 +28,67 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "service role が未設定です" }, { status: 500 });
   }
 
-  const todayThird = periodForDate(new Date());
-  const candidates: Period[] = [previousPeriod(todayThird), todayThird];
+  const startedAt = Date.now();
+  const result = await collectProducePrices(
+    {
+      readLatestStored: async () => {
+        const { data, error } = await supabase
+          .from("market_price_observations")
+          .select("period_year, period_month, period_third")
+          .order("period_year", { ascending: false })
+          .order("period_month", { ascending: false })
+          .order("period_third", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (error) return { ok: false, detail: error.message };
+        return {
+          ok: true,
+          latest: data ? { year: data.period_year, month: data.period_month, third: data.period_third as Period["third"] } : null,
+        };
+      },
+      fetchCsv: (period) => fetchSyuyoCsv(period),
+      saveCsv: async (period, bytes) => {
+        let rows;
+        try {
+          rows = parseSyuyoCsv(bytes)
+            .items.filter((i) => !i.isBreakdownRow)
+            .map((i) => ({
+              item_code: i.itemCode,
+              item_name: i.itemName,
+              period_year: period.year,
+              period_month: period.month,
+              period_third: period.third,
+              wholesale_quantity_ton: i.wholesaleQuantityTon,
+              wholesale_value_thousand_yen: i.wholesaleValueThousandYen,
+              price_per_kg: i.pricePerKg,
+              yoy_quantity_percent: i.yoyQuantityPercent,
+              yoy_price_percent: i.yoyPricePercent,
+              prev_third_quantity_percent: i.prevThirdQuantityPercent,
+              prev_third_price_percent: i.prevThirdPricePercent,
+            }));
+        } catch (e) {
+          return { ok: false, kind: "parse", detail: e instanceof Error ? e.message : String(e) };
+        }
+        const { error } = await supabase
+          .from("market_price_observations")
+          .upsert(rows, { onConflict: "item_code,period_year,period_month,period_third" });
+        if (error) return { ok: false, kind: "db", detail: error.message };
+        return { ok: true, itemCount: rows.length };
+      },
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      elapsedMs: () => Date.now() - startedAt,
+    },
+    new Date(),
+  );
 
-  const results = [];
-  for (const period of candidates) {
-    const { count, error: countError } = await supabase
-      .from("market_price_observations")
-      .select("id", { count: "exact", head: true })
-      .eq("period_year", period.year)
-      .eq("period_month", period.month)
-      .eq("period_third", period.third);
-
-    if (countError) {
-      results.push({ period: formatPeriodLabel(period), status: "error", detail: countError.message });
-      continue;
-    }
-    if ((count ?? 0) > 0) {
-      results.push({ period: formatPeriodLabel(period), status: "already_stored" });
-      continue;
-    }
-
-    const fetchResult = await fetchSyuyoCsv(period);
-    if (fetchResult.status !== "ok") {
-      results.push({ period: formatPeriodLabel(period), status: fetchResult.status });
-      continue;
-    }
-
-    const parsed = parseSyuyoCsv(fetchResult.bytes);
-    const rows = parsed.items
-      .filter((i) => !i.isBreakdownRow)
-      .map((i) => ({
-        item_code: i.itemCode,
-        item_name: i.itemName,
-        period_year: period.year,
-        period_month: period.month,
-        period_third: period.third,
-        wholesale_quantity_ton: i.wholesaleQuantityTon,
-        wholesale_value_thousand_yen: i.wholesaleValueThousandYen,
-        price_per_kg: i.pricePerKg,
-        yoy_quantity_percent: i.yoyQuantityPercent,
-        yoy_price_percent: i.yoyPricePercent,
-        prev_third_quantity_percent: i.prevThirdQuantityPercent,
-        prev_third_price_percent: i.prevThirdPricePercent,
-      }));
-
-    const { error: upsertError } = await supabase
-      .from("market_price_observations")
-      .upsert(rows, { onConflict: "item_code,period_year,period_month,period_third" });
-
-    results.push({
-      period: formatPeriodLabel(period),
-      status: upsertError ? "error" : "saved",
-      detail: upsertError?.message,
-      itemCount: rows.length,
-    });
-  }
-
-  return NextResponse.json({ results });
+  return NextResponse.json(
+    {
+      status: result.httpStatus === 200 ? "done" : "error",
+      error: result.error,
+      results: result.results,
+      nextFrom: result.nextFrom,
+      stoppedBecause: result.stoppedBecause,
+    },
+    { status: result.httpStatus },
+  );
 }

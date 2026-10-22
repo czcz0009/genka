@@ -44,6 +44,24 @@ export function periodForDate(date: Date): Period {
 }
 
 /**
+ * 指定した時刻が、日本時間(Asia/Tokyo)で属する旬を返す。
+ * Vercelのサーバーは世界標準時(UTC)で動くため、periodForDate(サーバーの時刻帯で判定)だと、
+ * 日本時間の深夜〜朝9時の間は1日ずれる。定期取得と「取得が遅れているか」の判定は、こちらにそろえる。
+ * 日本には夏時間が無いので、UTCに9時間足して判定すればよい。
+ */
+export function periodForDateInTokyo(date: Date): Period {
+  const tokyo = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  const day = tokyo.getUTCDate();
+  const third: 1 | 2 | 3 = day <= 10 ? 1 : day <= 20 ? 2 : 3;
+  return { year: tokyo.getUTCFullYear(), month: tokyo.getUTCMonth() + 1, third };
+}
+
+/** 旬を通し番号にする(差を数えるため)。 */
+export function periodIndex(p: Period): number {
+  return p.year * 36 + (p.month - 1) * 3 + (p.third - 1);
+}
+
+/**
  * 「主要卸売市場計(_syuyo)」CSVのURLを組み立てる。
  * 都市別(_tosi)・市場別(_sijyo)は今回のスコープ外のため対応しない。
  */

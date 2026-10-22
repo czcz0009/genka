@@ -3,8 +3,7 @@ import { isAuthorizedCronRequest } from "@/lib/cronAuth";
 import { createServiceClient } from "@/lib/supabase/serviceClient";
 import { fetchChikusanListing, fetchChikusanPdf } from "@/lib/marketPrices/livestock/fetchChikusanReport";
 import { parseChikusanPdf } from "@/lib/marketPrices/livestock/parseChikusanPdf";
-import { CHIKUSAN_COLUMNS } from "@/lib/marketPrices/livestock/chikusanColumns";
-import { parseMonthlyRowLabel } from "@/lib/marketPrices/livestock/monthlyComparison";
+import { buildLivestockObservationRows } from "@/lib/marketPrices/observationRows";
 
 /**
  * 農水省「畜産物卸売価格の推移(月報告)」の定期取得ジョブ。月1回、Vercel Cronから呼ばれる想定。
@@ -40,19 +39,8 @@ export async function GET(request: Request) {
   }
 
   const monthlyRows = parsed.rows.filter((r) => r.kind === "monthly");
-  const priceCodes = CHIKUSAN_COLUMNS.filter((c) => c.itemCode);
-
-  const observationRows = monthlyRows.flatMap((row) => {
-    const period = parseMonthlyRowLabel(row.rowLabel);
-    if (!period) return [];
-    return priceCodes.map((c) => ({
-      item_code: c.itemCode as string,
-      item_name: c.label,
-      period_year: period.year,
-      period_month: period.month,
-      price_per_kg: row.prices[c.itemCode!] ?? null,
-    }));
-  });
+  // 取得日には、今回農水省から取得して保存した日時を入れる(すでにある月を上書きするときも更新する)
+  const observationRows = buildLivestockObservationRows(parsed.rows, new Date().toISOString());
 
   const { error: upsertError } = await supabase
     .from("livestock_price_observations")

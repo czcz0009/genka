@@ -12,8 +12,8 @@
  * - 取得先は www.maff.go.jp の公開ファイルだけ。1ファイルにつき1回だけアクセスし、失敗しても繰り返さない。
  *   アクセスの間隔は12秒。名乗り(User-Agent)は定期取得と同じもの(fetchSyuyoCsv / fetchChikusanReport を使う)。
  * - すでに保存先にあるファイルは取得しない(fetchをやり直しても再アクセスしない)。DBにすでにある旬も取得しない。
- * - 書き込みは定期取得(src/app/api/cron/collect-*-prices/route.ts)と同じ行の形・同じ一意キーでupsertする
- *   (何度実行しても二重にならない)。読み取りも定期取得と同じ部品を使う(偽のデータは作らない)。
+ * - 書き込みは定期取得(src/app/api/cron/collect-*-prices/route.ts)と同じ行の形(observationRows.ts)・同じ一意キーで
+ *   upsertする(何度実行しても二重にならない)。取得日(fetched_at)には、書き込みを実行した日時を入れる(2026-10-22に追加)。読み取りも定期取得と同じ部品を使う(偽のデータは作らない)。
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -23,8 +23,7 @@ import { fetchSyuyoCsv } from "../../src/lib/marketPrices/fetchSyuyoCsv.ts";
 import { parseSyuyoCsv } from "../../src/lib/marketPrices/parseSyuyoCsv.ts";
 import { fetchChikusanListing, fetchChikusanPdf } from "../../src/lib/marketPrices/livestock/fetchChikusanReport.ts";
 import { parseChikusanPdf } from "../../src/lib/marketPrices/livestock/parseChikusanPdf.ts";
-import { CHIKUSAN_COLUMNS } from "../../src/lib/marketPrices/livestock/chikusanColumns.ts";
-import { parseMonthlyRowLabel } from "../../src/lib/marketPrices/livestock/monthlyComparison.ts";
+import { buildLivestockObservationRows, buildProduceObservationRows } from "../../src/lib/marketPrices/observationRows.ts";
 
 /** 取る旬(アラートに直結する9月下旬・10月上旬を先に取る) */
 const PRODUCE_PERIODS: Period[] = [
@@ -53,46 +52,19 @@ const key = (p: Period) => `${p.year}-${p.month}-${p.third}`;
 const produceFile = (p: Period) => join(cacheDir, buildSyuyoCsvUrl(p).split("/").pop()!);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// 書き込む行の形は定期取得と同じ部品(observationRows.ts)。取得日には、書き込みを実行した日時を入れる
+const FETCHED_AT = new Date().toISOString();
+
 function produceRows(p: Period, bytes: ArrayBuffer) {
-  // 定期取得(collect-produce-prices/route.ts)と同じ行の形
   const parsed = parseSyuyoCsv(bytes);
-  const rows = parsed.items
-    .filter((i) => !i.isBreakdownRow)
-    .map((i) => ({
-      item_code: i.itemCode,
-      item_name: i.itemName,
-      period_year: p.year,
-      period_month: p.month,
-      period_third: p.third,
-      wholesale_quantity_ton: i.wholesaleQuantityTon,
-      wholesale_value_thousand_yen: i.wholesaleValueThousandYen,
-      price_per_kg: i.pricePerKg,
-      yoy_quantity_percent: i.yoyQuantityPercent,
-      yoy_price_percent: i.yoyPricePercent,
-      prev_third_quantity_percent: i.prevThirdQuantityPercent,
-      prev_third_price_percent: i.prevThirdPricePercent,
-    }));
+  const rows = buildProduceObservationRows(p, parsed.items, FETCHED_AT);
   return { rows, breakdownCount: parsed.items.length - rows.length };
 }
 
 async function livestockRows(bytes: Uint8Array) {
-  // 定期取得(collect-livestock-prices/route.ts)と同じ行の形
   const parsed = await parseChikusanPdf(bytes);
   if (parsed.status !== "ok") throw new Error(`PDFの読み取りに失敗: ${parsed.status} ${"detail" in parsed ? parsed.detail : ""}`);
-  const priceCodes = CHIKUSAN_COLUMNS.filter((c) => c.itemCode);
-  return parsed.rows
-    .filter((r) => r.kind === "monthly")
-    .flatMap((row) => {
-      const period = parseMonthlyRowLabel(row.rowLabel);
-      if (!period) return [];
-      return priceCodes.map((c) => ({
-        item_code: c.itemCode as string,
-        item_name: c.label,
-        period_year: period.year,
-        period_month: period.month,
-        price_per_kg: row.prices[c.itemCode!] ?? null,
-      }));
-    });
+  return buildLivestockObservationRows(parsed.rows, FETCHED_AT);
 }
 
 async function existingProduceCount(p: Period): Promise<number> {

@@ -5,6 +5,7 @@ import type { Period } from "@/lib/marketPrices/period";
 import { fetchSyuyoCsv } from "@/lib/marketPrices/fetchSyuyoCsv";
 import { parseSyuyoCsv } from "@/lib/marketPrices/parseSyuyoCsv";
 import { collectProducePrices } from "@/lib/marketPrices/produceCollection";
+import { buildProduceObservationRows } from "@/lib/marketPrices/observationRows";
 
 /** 1回の実行で最大4旬・アクセスの間12秒。80秒を過ぎたら新しいアクセスを始めない(produceCollection.ts) */
 export const maxDuration = 120;
@@ -50,22 +51,8 @@ export async function GET(request: Request) {
       saveCsv: async (period, bytes) => {
         let rows;
         try {
-          rows = parseSyuyoCsv(bytes)
-            .items.filter((i) => !i.isBreakdownRow)
-            .map((i) => ({
-              item_code: i.itemCode,
-              item_name: i.itemName,
-              period_year: period.year,
-              period_month: period.month,
-              period_third: period.third,
-              wholesale_quantity_ton: i.wholesaleQuantityTon,
-              wholesale_value_thousand_yen: i.wholesaleValueThousandYen,
-              price_per_kg: i.pricePerKg,
-              yoy_quantity_percent: i.yoyQuantityPercent,
-              yoy_price_percent: i.yoyPricePercent,
-              prev_third_quantity_percent: i.prevThirdQuantityPercent,
-              prev_third_price_percent: i.prevThirdPricePercent,
-            }));
+          // 取得日には、今回農水省から取得して保存した日時を入れる(上書きのときも更新する)
+          rows = buildProduceObservationRows(period, parseSyuyoCsv(bytes).items, new Date().toISOString());
         } catch (e) {
           return { ok: false, kind: "parse", detail: e instanceof Error ? e.message : String(e) };
         }

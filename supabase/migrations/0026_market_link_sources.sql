@@ -10,7 +10,14 @@
 --   'syuyo'    = 野菜・果物の品目に紐づけ(item_code = 農水省の品目コード。必須)
 --   'excluded' = 市場価格と比べない(item_code は空。辞書との一致や推定より優先される)
 --
--- 1つの食材に保存できる紐づけは1つだけ(食材ごとに1行。unique)。
+-- 1つの食材に保存できる紐づけは1つだけ(食材ごとに1行。unique (ingredient_id) を追加)。
+--
+-- 古い決まり unique (ingredient_id, source) は、このマイグレーションでは**消さずに残す**。
+-- このマイグレーションを先に適用し、新しいアプリのデプロイは後になるため、その間も今の本番のアプリ
+-- (食肉の紐づけを onConflict: "ingredient_id,source" で上書き保存している)が動くようにするため。
+-- 古い決まりは、新しいアプリ(onConflict: "ingredient_id" で保存する)をデプロイした後に、
+-- 別のマイグレーションで消す。
+--
 -- 元に戻すSQLは rollback_0026_market_link_sources.sql。
 
 begin;
@@ -39,8 +46,7 @@ alter table public.ingredient_market_links
     or (source = 'excluded' and item_code is null)
   );
 
--- 1つの食材に紐づけは1つだけ(以前は「食材×種類」ごとに1行だった)
-alter table public.ingredient_market_links drop constraint ingredient_market_links_ingredient_id_source_key;
+-- 1つの食材に紐づけは1つだけ(新しい決まりを追加。古い ingredient_id_source_key は残す)
 alter table public.ingredient_market_links
   add constraint ingredient_market_links_ingredient_id_key unique (ingredient_id);
 

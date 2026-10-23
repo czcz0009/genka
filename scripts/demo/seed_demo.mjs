@@ -17,11 +17,31 @@
 //   after_user_request … アカウントを作る要求を送った後(返事が戻らなかったことにする)
 //   after_store        … 店舗を作った後
 //   mid_menu           … メニューの途中(1つ目のメニューを作った後)
+//
+// 作るデータの中身(環境変数 SEED_PRESET。既定は basic):
+//   basic    … これまでと同じ「サンプル食堂」(画面確認・スクリーンショット用)
+//   teishoku … 個人の定食屋「定食処 こはる亭」(PR動画用。今の本番の市場データで仕入れ値アラートが出る)
+//   中身は scripts/demo/presets.mjs。市場価格のテーブルには何も書き込まない。
 import { createClient } from "@supabase/supabase-js";
 import { randomBytes } from "node:crypto";
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PRESETS } from "./presets.mjs";
+
+const PRESET_NAME = process.env.SEED_PRESET || "basic";
+const PRESET = PRESETS[PRESET_NAME];
+// 利用規約の版は、アプリと同じ値を使う(src/lib/legalVersion.ts から読む)
+const TERMS_VERSION = readFileSync(new URL("../../src/lib/legalVersion.ts", import.meta.url), "utf8").match(
+  /TERMS_VERSION = "([^"]+)"/,
+)?.[1];
+
+/** "2026-09" → { period_start: "2026-09-01", period_end: "2026-09-30" } */
+function monthPeriod(month) {
+  const [y, m] = month.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return { period_start: `${month}-01`, period_end: `${month}-${String(last).padStart(2, "0")}` };
+}
 
 const FAIL_POINTS = ["before_user", "after_user_request", "after_store", "mid_menu"];
 const REQUEST_TIMEOUT_MS = 30000;
@@ -102,7 +122,7 @@ async function seed() {
     .from("stores")
     .insert({
       owner_id: created.userId,
-      name: "サンプル食堂",
+      name: PRESET.storeName,
       default_target_cost_rate: 30,
       onboarding_completed_at: new Date().toISOString(),
     })
@@ -113,18 +133,11 @@ async function seed() {
   log("店舗を作成:", created.storeId);
   failIfRequested("after_store");
 
-  // 3. 食材
+  // 3. 食材(今の単価=価格の履歴の最後の値)
   stage = "食材の作成";
-  const ingredientDefs = [
-    { name: "豚こま肉", unit: "g", price: 1.5 },
-    { name: "キャベツ", unit: "個", price: 150 },
-    { name: "米", unit: "g", price: 0.4 },
-    { name: "鶏もも肉", unit: "g", price: 1.0 },
-    { name: "揚げ油", unit: "g", price: 0.1 },
-    { name: "生ビール", unit: "杯", price: 80 },
-  ];
-  const ingredientIds = {};
-  for (const ing of ingredientDefs) {
+  const ingredients = {};
+  for (const ing of PRESET.ingredients) {
+    const current = ing.history[ing.history.length - 1].price;
     const { data, error } = await supabase
       .from("ingredients")
       .insert({
@@ -132,7 +145,7 @@ async function seed() {
         name: ing.name,
         normalized_name: normalize(ing.name),
         unit: ing.unit,
-        current_purchase_price: ing.price,
+        current_purchase_price: current,
         // 単価入力済みの印(0020で追加)。付けないと「単価未設定」扱いになり、全メニューが
         // 「計算できていません」と表示される。
         price_is_set: true,
@@ -140,50 +153,26 @@ async function seed() {
       .select("id")
       .single();
     if (error) throw error;
-    ingredientIds[ing.name] = data.id;
-    // アプリで食材を登録した時と同じく、価格の履歴を1件作る(今見直すべきメニュー等の
-    // 過去月の再現は、この履歴から単価・単価入力済みかどうかを判定するため)。
-    const { error: historyError } = await supabase
-      .from("ingredient_price_history")
-      .insert({ ingredient_id: data.id, price: ing.price, price_is_set: true, recorded_at: "2026-07-01T00:00:00Z" });
+    ingredients[ing.name] = { id: data.id, unit: ing.unit };
+    // アプリで食材を登録・単価を変更した時と同じく、価格の履歴を作る(今見直すべきメニュー等の
+    // 過去月の再現・値上げの影響額は、この履歴から単価・単価入力済みかどうかを判定するため)。
+    const { error: historyError } = await supabase.from("ingredient_price_history").insert(
+      ing.history.map((h) => ({ ingredient_id: data.id, price: h.price, price_is_set: true, recorded_at: `${h.at}T00:00:00Z` })),
+    );
     if (historyError) throw historyError;
+    // 食肉の規格への紐づけ(利用者が確定した紐づけとして保存。市場価格のテーブルには書かない)
+    if (ing.livestockLink) {
+      const { error: linkError } = await supabase
+        .from("ingredient_market_links")
+        .insert({ ingredient_id: data.id, source: "chikusan", item_code: ing.livestockLink });
+      if (linkError) throw linkError;
+    }
   }
-  log("食材を作成:", String(Object.keys(ingredientIds).length), "件");
+  log("食材を作成:", String(PRESET.ingredients.length), "件");
 
-  // 4. メニュー(1つは目標原価率超過、2つは健全)
+  // 4. メニュー(レシピ・月ごとの販売数量)
   stage = "メニューの作成";
-  const menuDefs = [
-    {
-      name: "生姜焼き定食",
-      sellingPrice: 750,
-      lines: [
-        { ingredient: "豚こま肉", quantity: 120, unit: "g" },
-        { ingredient: "キャベツ", quantity: 0.2, unit: "個" },
-        { ingredient: "米", quantity: 180, unit: "g" },
-      ],
-      quantitySold: 90,
-    },
-    {
-      name: "唐揚げ定食",
-      sellingPrice: 780,
-      lines: [
-        { ingredient: "鶏もも肉", quantity: 150, unit: "g" },
-        { ingredient: "米", quantity: 180, unit: "g" },
-        { ingredient: "揚げ油", quantity: 20, unit: "g" },
-      ],
-      quantitySold: 130,
-    },
-    {
-      name: "生ビール",
-      sellingPrice: 480,
-      lines: [{ ingredient: "生ビール", quantity: 1, unit: "杯" }],
-      quantitySold: 200,
-    },
-  ];
-
-  const period = { start: "2026-08-01", end: "2026-08-31" };
-
-  for (const [i, menu] of menuDefs.entries()) {
+  for (const [i, menu] of PRESET.menus.entries()) {
     const { data: menuRow, error: menuErr } = await supabase
       .from("menus")
       .insert({
@@ -197,46 +186,53 @@ async function seed() {
     if (menuErr) throw menuErr;
     const menuId = menuRow.id;
 
-    for (const line of menu.lines) {
+    for (const [ingredientName, quantity] of menu.lines) {
+      const ing = ingredients[ingredientName];
+      if (!ing) throw new Error(`メニュー「${menu.name}」の食材「${ingredientName}」が食材の一覧にありません`);
       const { error } = await supabase.from("menu_ingredients").insert({
         menu_id: menuId,
-        ingredient_id: ingredientIds[line.ingredient],
-        quantity: line.quantity,
-        unit: line.unit,
+        ingredient_id: ing.id,
+        quantity,
+        unit: ing.unit,
       });
       if (error) throw error;
     }
 
-    const { error: salesErr } = await supabase.from("menu_sales").insert({
-      menu_id: menuId,
-      period_start: period.start,
-      period_end: period.end,
-      quantity_sold: menu.quantitySold,
-    });
-    if (salesErr) throw salesErr;
-    log(`メニューを作成(${i + 1}/${menuDefs.length}):`, menu.name);
+    for (const [month, quantitySold] of Object.entries(menu.sales)) {
+      const { error: salesErr } = await supabase.from("menu_sales").insert({
+        menu_id: menuId,
+        ...monthPeriod(month),
+        quantity_sold: quantitySold,
+      });
+      if (salesErr) throw salesErr;
+    }
+    log(`メニューを作成(${i + 1}/${PRESET.menus.length}):`, menu.name);
     if (i === 0) failIfRequested("mid_menu");
   }
 
   // 5. 固定費(FL比率画面用)
   stage = "固定費の作成";
-  const { error: rentErr } = await supabase.from("store_fixed_costs").insert({
-    store_id: created.storeId,
-    cost_type: "rent",
-    amount: 20000,
-    period_start: period.start,
-    period_end: null,
-  });
-  if (rentErr) throw rentErr;
-  const { error: laborErr } = await supabase.from("store_fixed_costs").insert({
-    store_id: created.storeId,
-    cost_type: "labor",
-    amount: 50000,
-    period_start: period.start,
-    period_end: period.end,
-  });
-  if (laborErr) throw laborErr;
+  for (const c of PRESET.fixedCosts) {
+    const { error } = await supabase.from("store_fixed_costs").insert({
+      store_id: created.storeId,
+      cost_type: c.costType,
+      amount: c.amount,
+      period_start: c.periodStart,
+      period_end: c.periodEnd,
+    });
+    if (error) throw error;
+  }
   log("固定費を作成");
+
+  // 6. 利用規約への同意(プリセットで指定したときだけ。ログイン直後に同意画面を出さないため)
+  if (PRESET.consent) {
+    stage = "同意の記録";
+    const { error } = await supabase
+      .from("user_consents")
+      .upsert({ user_id: created.userId, terms_version: TERMS_VERSION, accepted_at: new Date().toISOString() });
+    if (error) throw error;
+    log("利用規約への同意を記録(版 " + TERMS_VERSION + ")");
+  }
 }
 
 /**
@@ -279,7 +275,15 @@ async function cleanup() {
 }
 
 async function main() {
-  log(`実行ID ${runId} / メールアドレス ${DEMO_EMAIL}${FAIL_AT ? ` / わざと失敗させる段階: ${FAIL_AT}` : ""}`);
+  log(`実行ID ${runId} / メールアドレス ${DEMO_EMAIL} / データ ${PRESET_NAME}${FAIL_AT ? ` / わざと失敗させる段階: ${FAIL_AT}` : ""}`);
+  if (!PRESET) {
+    log(`結果: 失敗(SEED_PRESET の値が不明です: ${PRESET_NAME}。使える値: ${Object.keys(PRESETS).join(", ")})`);
+    return 1;
+  }
+  if (PRESET.consent && !TERMS_VERSION) {
+    log("結果: 失敗(src/lib/legalVersion.ts から利用規約の版を読めませんでした)");
+    return 1;
+  }
   if (!DEMO_PASSWORD) {
     log("結果: 失敗(パスワードを指定してください。使い方: node --env-file=.env.local scripts/demo/seed_demo.mjs <パスワード>)");
     return 1;

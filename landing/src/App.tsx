@@ -127,14 +127,16 @@ function Hero() {
             個人飲食店向け ・ 原価計算 &amp; 値付け
           </span>
           <h1 className="text-[1.9rem] sm:text-[2.2rem] lg:text-[2.35rem] leading-[1.25] font-black text-navy-900 tracking-tight mb-4">
-            値上げのタイミングを、
+            知らないうちに
             <br />
-            勝手に教えてくれる。
+            減っている利益に、
+            <br />
+            気づける。
           </h1>
           <p className="text-base text-ink-muted leading-relaxed mb-6">
-            納品書を撮るだけで仕入単価を更新。
+            原価計算も、仕入れ値の更新も、ツールにまかせられます。
             <br className="hidden sm:inline" />
-            原価率が高いメニューを、優先度順に並べてお知らせします。
+            納品書を撮って確認するだけで、原価率を計算し直し、値上げを考えたいメニューと目安の金額が分かります。
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3">
             <CtaButton>無料で使ってみる →</CtaButton>
@@ -155,9 +157,9 @@ function Hero() {
 
 /* ─── 2. 悩み(1行帯) ─── */
 const problems = [
-  { text: '原価率が、どんぶり勘定になっていませんか' },
-  { text: '仕入れ値が上がったのに、気づかず利益が削られていませんか' },
-  { text: '原価計算のExcel入力で、一日が終わっていませんか' },
+  { text: '原価計算、面倒で後回しになっていませんか' },
+  { text: '仕入れ値が変わっても、Excelの更新が追いつかない' },
+  { text: '人件費や家賃まで含めると、本当に利益が出ているか分からない' },
 ]
 
 function Problems() {
@@ -240,10 +242,17 @@ function Features() {
       <div className="max-w-6xl mx-auto">
         <div className="max-w-2xl mb-8">
           <span className="text-xs font-bold tracking-[0.2em] text-navy-500 font-mono">FEATURES</span>
-          <h2 className="text-2xl lg:text-3xl font-black text-navy-900 mt-1">「今どこを直すべきか」が、ひと目で分かる</h2>
+          <h2 className="text-2xl lg:text-3xl font-black text-navy-900 mt-1">計算も更新も、まかせて。お店全体の数字が見える</h2>
         </div>
 
         <div className="grid md:grid-cols-2 gap-5">
+          <FeatureCard
+            title="メニューごとの原価率を自動計算"
+            body="食材とレシピを登録すれば、原価・原価率を自動で計算。仕入れ値を更新すると、原価率も自動で計算し直します。目標より高いメニューは色で分かり、メニューごとに目標原価率も設定できます。"
+          >
+            <BrowserShot src={`${SHOT}menus.png`} alt="メニュー一覧と原価率の画面" aspect="16/9" />
+          </FeatureCard>
+
           <FeatureCard
             title="今見直すべきメニュー"
             body="原価率が目標を超えているメニューを、値上げ効果の大きい順に表示。値上げの目安額もその場で分かります。仕入れ値の変動による月間の影響額も出ます。"
@@ -252,15 +261,8 @@ function Features() {
           </FeatureCard>
 
           <FeatureCard
-            title="メニューごとの原価率を自動計算"
-            body="食材とレシピを登録すれば、原価・原価率が自動で並びます。目標より高いメニューは、色でひと目で分かります。メニューごとに目標原価率も設定できます。"
-          >
-            <BrowserShot src={`${SHOT}menus.png`} alt="メニュー一覧と原価率の画面" aspect="16/9" />
-          </FeatureCard>
-
-          <FeatureCard
-            title="FL比率・FLR比率と、実質原価率"
-            body="食材原価に人件費・家賃を含めた、お店全体の経営状態を月ごとに確認。ロス・値引きを加味した「実質原価率」で、肌感覚とのズレも把握できます。"
+            title="人件費・家賃・ロスまで含めた、お店全体の数字"
+            body="月ごとに入力した人件費・家賃と食材原価から、FL比率・FLR比率を計算。ロス・値引き額を入れると「実質原価率」も分かり、肌感覚とのズレを確かめられます。"
           >
             <BrowserShot src={`${SHOT}fl-ratio.png`} alt="FL比率・FLR比率・理論原価率・実質原価率の画面" aspect="16/9" />
           </FeatureCard>
@@ -272,7 +274,7 @@ function Features() {
                 <path d="M12 9v4M12 17h.01" />
               </svg>
             </div>
-            <h3 className="text-lg font-black text-navy-900">仕入れ値アラート</h3>
+            <h3 className="text-lg font-black text-navy-900">野菜・肉の市場の値上がりも、お知らせ</h3>
             <p className="text-sm text-ink-muted leading-[1.8]">
               野菜(青果物)や肉(畜産物)の市場価格が大きく動いたとき、アプリを開くと画面上でお知らせします。値上がりに気づく前に、原価への影響を確認できます。
             </p>
@@ -391,7 +393,7 @@ function Contact() {
     <section id="contact" className="bg-navy-900 py-14 px-4 scroll-mt-14">
       <div className="max-w-2xl mx-auto text-center">
         <span className="inline-block text-[11px] font-bold tracking-widest text-amber-200 border border-amber-200/40 rounded-full px-3 py-1 mb-4">
-          β版 提供中
+          無料モニター募集中
         </span>
         <h2 className="text-2xl font-black text-white mb-3">まずは、メニューを1品登録するところから</h2>
         <p className="text-sm text-navy-200 leading-relaxed mb-7">
@@ -408,6 +410,10 @@ function Contact() {
             </a>
           )}
         </div>
+        {/* 利用規約 第4条(料金)と同じ内容。規約を変える場合は、ここも合わせる */}
+        <p className="mt-5 text-xs text-navy-200 leading-relaxed">
+          現在は無料モニター期間です。将来、有料にする場合は事前にお知らせします。同意なく料金が発生することはありません。
+        </p>
       </div>
     </section>
   )

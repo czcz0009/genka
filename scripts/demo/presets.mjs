@@ -116,6 +116,8 @@ export const teishoku = {
   fixedCosts: [
     { costType: "rent", amount: 90000, periodStart: "2026-09-01", periodEnd: null },
     { costType: "labor", amount: 260000, periodStart: "2026-09-01", periodEnd: null },
+    // 10月のロス・値引き額(デモ用)。FL比率の画面に「実質原価率(ロス・値引き込み)」を出すため
+    { costType: "loss", amount: 18000, periodStart: "2026-10-01", periodEnd: "2026-10-31" },
   ],
   consent: true,
 };

@@ -10,6 +10,7 @@ import { suggestChikusanItems } from "./livestock/suggestChikusanItem.ts";
 import { previousPeriod, type Period } from "./period.ts";
 import type { SyuyoItem } from "./parseSyuyoCsv.ts";
 import { buildIngredientOverview, type IngredientOverviewRow } from "./buildIngredientOverview.ts";
+import { buildMarketDataStatus, type MarketDataStatus } from "./marketDataFreshness.ts";
 import { applyUserLinksToProduceMatches, countIngredientsNeedingReview, type UserMarketLink } from "./userMarketLinks.ts";
 
 /**
@@ -36,6 +37,8 @@ export interface StoreAlertsResult {
   ingredientOverview: IngredientOverviewRow[];
   /** 「市場価格と比べるか、確認が必要な食材」の数(推定の食材だけ。アラート画面上部・ダッシュボード用) */
   needsReviewCount: number;
+  /** 市場価格を何旬(何月)分まで取得済みか・遅れているか(アラート画面上部用) */
+  marketDataStatus: MarketDataStatus;
 }
 
 function toSyuyoItem(r: { item_code: string; item_name: string; price_per_kg: number | null }): SyuyoItem {
@@ -56,7 +59,7 @@ function toSyuyoItem(r: { item_code: string; item_name: string; price_per_kg: nu
 /** 青果物(旬別)の直近2期分だけをDB側で絞り込んで取得する */
 async function fetchRecentProduceObservations(
   supabase: SupabaseClient,
-): Promise<{ current: SyuyoItem[]; previous: SyuyoItem[]; hasComparison: boolean }> {
+): Promise<{ current: SyuyoItem[]; previous: SyuyoItem[]; hasComparison: boolean; latest: Period | null; lastFetchedAt: string | null }> {
   const { data: latest } = await supabase
     .from("market_price_observations")
     .select("period_year, period_month, period_third")
@@ -65,7 +68,7 @@ async function fetchRecentProduceObservations(
     .order("period_third", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (!latest) return { current: [], previous: [], hasComparison: false };
+  if (!latest) return { current: [], previous: [], hasComparison: false, latest: null, lastFetchedAt: null };
 
   const cur: Period = { year: latest.period_year, month: latest.period_month, third: latest.period_third as 1 | 2 | 3 };
   const prev = previousPeriod(cur);
@@ -83,13 +86,25 @@ async function fetchRecentProduceObservations(
   const previous = (rows ?? [])
     .filter((r) => r.period_year === prev.year && r.period_month === prev.month && r.period_third === prev.third)
     .map(toSyuyoItem);
-  return { current, previous, hasComparison: previous.length > 0 };
+  return { current, previous, hasComparison: previous.length > 0, latest: cur, lastFetchedAt: await latestFetchedAt(supabase, "market_price_observations") };
+}
+
+/** 最後に農水省から取得して保存した日時(取得日の最大値。2026-10-22から上書きのときも更新している) */
+async function latestFetchedAt(supabase: SupabaseClient, table: "market_price_observations" | "livestock_price_observations") {
+  const { data } = await supabase.from(table).select("fetched_at").order("fetched_at", { ascending: false }).limit(1).maybeSingle();
+  return (data?.fetched_at as string | undefined) ?? null;
 }
 
 /** 畜産物(月別)の直近2ヶ月分だけをDB側で絞り込んで取得する */
 async function fetchRecentLivestockObservations(
   supabase: SupabaseClient,
-): Promise<{ current: SyuyoItem[]; previous: SyuyoItem[]; hasComparison: boolean }> {
+): Promise<{
+  current: SyuyoItem[];
+  previous: SyuyoItem[];
+  hasComparison: boolean;
+  latest: { year: number; month: number } | null;
+  lastFetchedAt: string | null;
+}> {
   const { data: latest } = await supabase
     .from("livestock_price_observations")
     .select("period_year, period_month")
@@ -97,7 +112,7 @@ async function fetchRecentLivestockObservations(
     .order("period_month", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (!latest) return { current: [], previous: [], hasComparison: false };
+  if (!latest) return { current: [], previous: [], hasComparison: false, latest: null, lastFetchedAt: null };
 
   const curY = latest.period_year;
   const curM = latest.period_month;
@@ -111,7 +126,13 @@ async function fetchRecentLivestockObservations(
 
   const current = (rows ?? []).filter((r) => r.period_year === curY && r.period_month === curM).map(toSyuyoItem);
   const previous = (rows ?? []).filter((r) => r.period_year === prevY && r.period_month === prevM).map(toSyuyoItem);
-  return { current, previous, hasComparison: previous.length > 0 };
+  return {
+    current,
+    previous,
+    hasComparison: previous.length > 0,
+    latest: { year: curY, month: curM },
+    lastFetchedAt: await latestFetchedAt(supabase, "livestock_price_observations"),
+  };
 }
 
 export async function computeStoreAlerts(
@@ -232,5 +253,10 @@ export async function computeStoreAlerts(
     linkedIngredients,
     ingredientOverview,
     needsReviewCount: countIngredientsNeedingReview(ingredientOverview),
+    marketDataStatus: buildMarketDataStatus({
+      now: new Date(),
+      produce: produce.latest ? { latest: produce.latest, hasPrevious: produce.hasComparison, lastFetchedAt: produce.lastFetchedAt } : null,
+      livestock: livestock.latest ? { latest: livestock.latest, hasPrevious: livestock.hasComparison, lastFetchedAt: livestock.lastFetchedAt } : null,
+    }),
   };
 }

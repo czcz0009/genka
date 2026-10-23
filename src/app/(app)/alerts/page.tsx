@@ -14,6 +14,7 @@ import { AlertsView } from "./AlertsView.tsx";
 import { LivestockLinkSettings } from "./LivestockLinkSettings.tsx";
 import { IngredientOverview } from "./IngredientOverview.tsx";
 import { Notice } from "@/components/Notice.tsx";
+import { MarketDataStatusPanel } from "./MarketDataStatusPanel.tsx";
 
 export const metadata: Metadata = {
   title: "仕入れ値変動アラート",
@@ -98,6 +99,7 @@ export default async function AlertsPage() {
     linkedIngredients,
     ingredientOverview,
     needsReviewCount,
+    marketDataStatus,
   } = await computeStoreAlerts(supabase, store, alertIngredients, alertMenus, alertMenuIngredients, unsetLeavesByIngredientId);
 
   return (
@@ -129,6 +131,9 @@ export default async function AlertsPage() {
         全体把握できるようにし、その中で大きく変動したものを色で強調する。
         変動の詳細(影響メニュー・原価率試算)は下の「価格変動アラート」セクションで見る。
       */}
+      {/* 市場価格を何旬(何月)分まで取得済みか。遅れていれば黄色の注意(取得が止まっていることに早く気づくため) */}
+      <MarketDataStatusPanel status={marketDataStatus} />
+
       {/* 推定(確認が必要)の食材は、利用者が確定するまでアラートを出さないため、件数で確認を促す(0件なら出さない) */}
       {needsReviewCount > 0 && (
         <Notice tone="warn">

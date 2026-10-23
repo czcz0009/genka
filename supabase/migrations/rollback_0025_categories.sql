@@ -8,8 +8,13 @@
 --
 -- 実行すると、get_store_dataを0021時点の内容(category_idを含まない)に戻し、
 -- 0025で追加した関数・トリガー・列・テーブルを削除する。
+--
+-- 全体を1つの do ブロックにしている(1つの文なので、途中でエラーになれば全部が取り消される)。
+-- SQL Editorでは begin〜commit が1つのまとまりとして実行されないことがあり、途中で止まると
+-- 一部だけが消えた中途半端な状態になるため(2026-10-23)。何度実行しても同じ形になる。
 
-begin;
+do $rollback$
+begin
 
 -- 0021時点のget_store_data(category_idを含まない)に戻す。
 create or replace function public.get_store_data(
@@ -128,4 +133,4 @@ alter table public.ingredients drop column if exists category_id;
 
 drop table if exists public.categories;
 
-commit;
+end $rollback$;

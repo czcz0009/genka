@@ -6,8 +6,13 @@
 -- 実行すると、get_store_data・get_ingredient_price_historyの2つの関数を、
 -- price_is_set列を返す前(0016・0013時点)の内容に戻す。0020で追加した
 -- price_is_set列自体(テーブルのデータ)には触れない。
+--
+-- 全体を1つの do ブロックにしている(1つの文なので、途中でエラーになれば全部が取り消される)。
+-- SQL Editorでは begin〜commit が1つのまとまりとして実行されないことがあり、途中で止まると
+-- 関数が消えたままになってアプリがエラーになるため(2026-10-23)。何度実行しても同じ形になる。
 
-begin;
+do $rollback$
+begin
 
 -- 0016時点のget_store_data(price_is_setを含まない)に戻す。
 create or replace function public.get_store_data(
@@ -131,4 +136,4 @@ $$;
 
 grant execute on function public.get_ingredient_price_history() to authenticated;
 
-commit;
+end $rollback$;

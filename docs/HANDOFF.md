@@ -23,7 +23,7 @@
 | もの | URL・場所 | 状態 |
 |---|---|---|
 | アプリ本体 | **独自ドメイン移行完了(2026-10-02)**: `https://app.genka-lens.com`。旧URL `https://genka-one.vercel.app` は**2026-10-21から新ドメインへ301転送**(パス・クエリは保持。ただし `/api/` は転送しない=cron用。`next.config.ts`) | コミット `4f053ac` の時点で再デプロイ済み(2026-10-23。デプロイ記録は下の表)。全画面noindex、`/terms`・`/privacy`・`/legal` だけ検索に出す設定。`robots.txt`・`sitemap.xml` あり |
-| DB(Supabase) | ap-southeast-2(Sydney) | マイグレーション **0027まで適用済み(2026-10-23に確認)**。0026・0027は、Mahiroが実行後の確認SQL(ingredient_market_linksの決まりの一覧)で確認。0025までは2026-10-21に確認(Mahiroが確認SQLをSQL Editorで実行し、0018〜0025がすべてtrue。以前の「0019まで実行済み」は古い記述だった) |
+| DB(Supabase) | ap-southeast-2(Sydney) | マイグレーション **0028まで適用済み(2026-10-23に確認)**。**0028から、適用したマイグレーションをDBの表 `public.migration_log` に記録している。何番まで適用済みかは `supabase/checks/migration_log_status.sql` をSQL Editorで実行して確かめる(この表の記述より正)。** 2026-10-23の実行結果: 記録されている最新0028・28件・抜けなし(0001〜0027は、0028の実行時に作られるものがあることを確かめてから、さかのぼって記録した。実際の適用日は不明)。0026・0027は、Mahiroが実行後の確認SQL(ingredient_market_linksの決まりの一覧)で確認。0025までは2026-10-21に確認(Mahiroが確認SQLをSQL Editorで実行し、0018〜0025がすべてtrue。以前の「0019まで実行済み」は古い記述だった) |
 | LP | **独自ドメイン移行完了(2026-10-02)**: `https://genka-lens.com`(→`https://www.genka-lens.com`へ308リダイレクト。正規URLは www)。旧URL `https://genkaru-lp.vercel.app` は**2026-10-21から新ドメインへ301転送**(`landing/vercel.json`) | **コミット `7f8907a` の内容を公開済み**(2026-10-21。本番の取得結果で確認)。**noindexのまま**(検索に載せない設定。外す手順は 5-4) |
 
 ### アプリのデプロイ記録(Vercel `genka`。すべて手元からのCLIデプロイ。Git連携なし=pushでは本番に出ない)

@@ -78,12 +78,19 @@ test("get_store_data: security invoker・auth.uid()での絞り込み・戻り�
   assert.doesNotMatch(after, /security definer/);
 });
 
-test("マイグレーションと元に戻すSQLは、それぞれ全体が1つのトランザクション(begin〜commit)", () => {
-  for (const sql of [migration, rollback]) {
-    const statements = sql.split("\n").filter((l) => !l.startsWith("--") && l.trim() !== "");
-    assert.equal(statements[0], "begin;");
-    assert.equal(statements[statements.length - 1], "commit;");
-  }
+test("マイグレーションは全体が1つのトランザクション(begin〜commit)", () => {
+  const statements = migration.split("\n").filter((l) => !l.startsWith("--") && l.trim() !== "");
+  assert.equal(statements[0], "begin;");
+  assert.equal(statements[statements.length - 1], "commit;");
+});
+
+test("元に戻すSQLは全体が1つの do ブロック(2026-10-23。SQL Editorでは begin〜commit がまとまりにならないことがあるため)", () => {
+  const statements = rollback.split("\n").filter((l) => !l.startsWith("--") && l.trim() !== "");
+  assert.equal(statements[0], "do $rollback$");
+  assert.equal(statements[1], "begin");
+  assert.equal(statements[statements.length - 1], "end $rollback$;");
+  // do ブロックの外に文が無い(開始と終わりの印が1組だけ)
+  assert.equal(rollback.split("$rollback$").length - 1, 2);
 });
 
 test("元に戻すSQL: get_store_dataが0021版と完全に一致する", () => {

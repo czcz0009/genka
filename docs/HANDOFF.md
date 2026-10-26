@@ -24,7 +24,7 @@
 |---|---|---|
 | アプリ本体 | **独自ドメイン移行完了(2026-10-02)**: `https://app.genka-lens.com`。旧URL `https://genka-one.vercel.app` は**2026-10-21から新ドメインへ301転送**(パス・クエリは保持。ただし `/api/` は転送しない=cron用。`next.config.ts`) | コミット `4f053ac` の時点で再デプロイ済み(2026-10-23。デプロイ記録は下の表)。全画面noindex、`/terms`・`/privacy`・`/legal` だけ検索に出す設定。`robots.txt`・`sitemap.xml` あり |
 | DB(Supabase) | ap-southeast-2(Sydney) | マイグレーション **0028まで適用済み(2026-10-23に確認)**。**0028から、適用したマイグレーションをDBの表 `public.migration_log` に記録している。何番まで適用済みかは `supabase/checks/migration_log_status.sql` をSQL Editorで実行して確かめる(この表の記述より正)。** 2026-10-23の実行結果: 記録されている最新0028・28件・抜けなし(0001〜0027は、0028の実行時に作られるものがあることを確かめてから、さかのぼって記録した。実際の適用日は不明)。0026・0027は、Mahiroが実行後の確認SQL(ingredient_market_linksの決まりの一覧)で確認。0025までは2026-10-21に確認(Mahiroが確認SQLをSQL Editorで実行し、0018〜0025がすべてtrue。以前の「0019まで実行済み」は古い記述だった) |
-| LP | **独自ドメイン移行完了(2026-10-02)**: `https://genka-lens.com`(→`https://www.genka-lens.com`へ308リダイレクト。正規URLは www)。旧URL `https://genkaru-lp.vercel.app` は**2026-10-21から新ドメインへ301転送**(`landing/vercel.json`) | **コミット `b224a6c` の内容を公開済み**(2026-10-26。伝え方の変更「知らないうちに/減っている利益に、/気づける。」。公開後に本番のページを取得し、見出しの下の説明「納品書を撮って確認するだけで、原価率を計算し直し」、最後のCTAの札「無料モニター募集中」と利用規約第4条と同じ一文、タイトルをPC幅・375pxで確認)。**noindexのまま**(検索に載せない設定。外す手順は 5-4) |
+| LP | **独自ドメイン移行完了(2026-10-02)**: `https://genka-lens.com`(→`https://www.genka-lens.com`へ308リダイレクト。正規URLは www)。旧URL `https://genkaru-lp.vercel.app` は**2026-10-21から新ドメインへ301転送**(`landing/vercel.json`) | **コミット `b224a6c` の内容を公開済み**(2026-10-26。伝え方の変更「知らないうちに/減っている利益に、/気づける。」。公開後に本番のページを取得し、見出しの下の説明「納品書を撮って確認するだけで、原価率を計算し直し」、最後のCTAの札「無料モニター募集中」と利用規約第4条と同じ一文、タイトルをPC幅・375pxで確認)。**検索に載せる設定に変更済み(2026-10-26、`e0363d1`。5-4の手順)**。公開後に本番で、robots.txt(200・text/plain・`Allow: /` とサイトマップの場所)、sitemap.xml(200・application/xml)、トップページに noindex が無いこと(検索エンジンの名前でアクセスしても同じ)を確認。Search Consoleの所有権の確認(TXTレコード)とサイトマップの送信は、Mahiroが行う |
 | 認証メールの送信(SMTP) | **独自の送信に切り替え済み(2026-10-26、Mahiroが設定)**。送信サービス: Resend(地域: 東京 ap-northeast-1)。送信用のドメイン: `mail.genka-lens.com`(DNSはお名前.comで設定、Resendで認証済み)。差出人: `原価レンズ <noreply@mail.genka-lens.com>` | Supabaseの確認メールの上限: **1時間30通**(Authentication → Rate Limits)。Resendの開封・クリックの計測は**オフ**(確認メールのリンクを書き換えさせないため。オンにするとリンクが計測用のURLに置き換わる)。Resendの無料枠: **1日100通・月3,000通**(独自ドメイン3つまで。2026-10-26に公式の料金ページ https://resend.com/pricing で確認)。APIキーは**送信だけの権限・`mail.genka-lens.com` に限定**したもの(キーの値はどこにも記録しない)。**チーム外のアドレスに確認メールが届くことを確認済み**。以前は標準の送信のままで、Supabaseの組織のメンバー宛てにしか送られず(2024-09-26からの仕様)、上限も1時間2通だった=一般の利用者は新規登録を終えられない状態だった |
 
 ### アプリのデプロイ記録(Vercel `genka`。すべて手元からのCLIデプロイ。Git連携なし=pushでは本番に出ない)
@@ -225,7 +225,7 @@ node scripts/deploy.mjs --dry     # リンクの確認だけ(公開しない)
 - Playwrightはこのリポジトリの依存には入れていない(`npm i --no-save playwright` で一時的に入れ、スクリプトはプロジェクトフォルダの中に置いて実行し、終わったら消す。scratchなどプロジェクト外だとモジュールが見つからない)。
 
 ### 5-4. LPを検索に載せる手順(noindexを外す)
-今はLPを**意図的に検索に載せていない**(2026-10-21時点)。外すのはSMTP設定が済み、モニターを受け入れられる状態になってから(Mahiroの指示で行う)。
+**2026-10-26に、この手順で検索に載せる設定にした**(独自のメール送信の設定が済んだため)。以下は手順の記録。
 1. `landing/.figma/make/site.json` の `"robots": { "index": false }` を `true` にする(変えるのはこの1か所だけ)。
    - これで次の2つが同時に切り替わる: ①HTMLの `<meta name="robots" content="noindex, nofollow">` が消える、②`robots.txt` が「`Disallow: /`(全体巡回禁止)」→「`Allow: /` + `Sitemap: https://www.genka-lens.com/sitemap.xml`」になる(どちらも `landing/vite.config.ts` が `site.json` から生成する)。
    - `sitemap.xml` は `index` の値に関係なく常に出力している(`site.json` の `siteUrl` から生成)。

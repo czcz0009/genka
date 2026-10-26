@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { selectShunpoItems, buildXDraft, formatChange, formatYoy, xWeightedLength, X_LIMIT, type ShunpoRow } from "./shunpo.ts";
+import { selectShunpoItems, buildXDraft, formatChange, formatYoy, xWeightedLength, tipLine, X_LIMIT, type ShunpoRow, type ShunpoItem } from "./shunpo.ts";
 
 // 旬報の下書き(2026-10-26)。期待値S-1〜S-6はMahiroが確認する。
 // 実データ: 2026年10月上旬と9月下旬(fixtures/shunpo-2026-10-1.json。DBから取り出した農林水産省の旬別結果)。
@@ -114,4 +114,45 @@ test("T-6 該当がないときの下書き", () => {
     buildXDraft(s, { year: 2026, month: 10, third: 2 }, { year: 2026, month: 10, third: 1 }),
     "【野菜の卸売価格 10月中旬】\n前の旬(10月上旬)と比べて\n前の旬から10%以上動いた品目はありませんでした。\n出典:農林水産省「青果物卸売市場調査」をもとに加工(国の保証なし)",
   );
+});
+
+// ── 最後の一言の選び方(2026-10-26。U-1〜U-8はMahiroが確認する) ──
+// 決まり: ①値上がりの品目で前年同旬比130以上 → その中で最大 ②①が無く、値下がりの品目で130以上 → その中で最大
+//         ③値上がりの品目がある → いちばん大きく上がった品目 ④値下がりだけ ⑤どちらも無い。同じ前年同旬比なら選ばれた順で先
+const it = (name: string, changePercent: number, yoyIndex: number | null): ShunpoItem => ({
+  itemCode: "3", itemName: name, previousPrice: 100, currentPrice: 100, changePercent, quantityTon: 500, yoyIndex,
+});
+const tip = (up: ShunpoItem[], down: ShunpoItem[]) => tipLine({ up, down, excluded: [] });
+
+test("U-1 値上がりに130以上が複数 → 前年同旬比の最も大きい品目(変動率の順位ではない)", () => {
+  assert.equal(tip([it("キャベツ", 40, 140), it("はくさい", 20, 160)], []), "はくさいは前年同時期の約1.6倍。はくさいを多く使うメニューは、仕入れ値の確認を。");
+});
+
+test("U-2 値上がりにも値下がりにも130以上 → 値上がりの品目を優先(値下がりの方が前年同旬比が大きくても)", () => {
+  assert.equal(tip([it("キャベツ", 40, 131)], [it("こまつな", -17, 177)]), "キャベツは前年同時期の約1.3倍。キャベツを多く使うメニューは、仕入れ値の確認を。");
+});
+
+test("U-3 値上がりの品目はあるが130未満、値下がりだけが130以上 → 値下がりの品目で、前年よりまだ高いことを伝える", () => {
+  assert.equal(tip([it("ピーマン", 14, 101)], [it("みずな", -12, 218), it("こまつな", -17, 177)]), "みずなは値下がりしましたが、前年同時期の約2.2倍です。");
+});
+
+test("U-4 値上がりの品目が無く、値下がりだけが130以上 → 同じく値下がりの品目", () => {
+  assert.equal(tip([], [it("こまつな", -17, 177)]), "こまつなは値下がりしましたが、前年同時期の約1.8倍です。");
+});
+
+test("U-5 130以上が無く、値上がりの品目がある → いちばん大きく上がった品目", () => {
+  assert.equal(tip([it("きゅうり", 25, 119), it("ピーマン", 14, 101)], [it("みずな", -12, 90)]), "きゅうりを多く使うメニューは、仕入れ値の確認を。");
+});
+
+test("U-6 130以上が無く、値下がりだけ", () => {
+  assert.equal(tip([], [it("みずな", -12, 90)]), "値下がりした品目は、仕入れ値の見直しの参考に。");
+});
+
+test("U-7 前年同旬比が同じなら、選ばれた順(変動率の大きい順)で先の品目。130ちょうどは対象、129は対象外", () => {
+  assert.equal(tip([it("A", 30, 150), it("B", 20, 150)], []), "Aは前年同時期の約1.5倍。Aを多く使うメニューは、仕入れ値の確認を。");
+  assert.equal(tip([it("C", 30, 129), it("D", 20, 130)], []), "Dは前年同時期の約1.3倍。Dを多く使うメニューは、仕入れ値の確認を。");
+});
+
+test("U-8 前年同旬比が無い(CSVで欠測)品目は、取り上げない", () => {
+  assert.equal(tip([it("新顔", 50, null)], []), "新顔を多く使うメニューは、仕入れ値の確認を。");
 });

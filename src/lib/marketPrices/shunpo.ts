@@ -121,12 +121,35 @@ export const SOURCE_SHORT = "出典:農林水産省「青果物卸売市場調�
 export const SOURCE_LONG =
   "出典: 農林水産省「青果物卸売市場調査(旬別結果)」をもとに加工して作成。国(農林水産省)が内容を保証するものではありません。";
 
-/** 最後の一言。決まった型から選ぶ(AIで文章を作らない) */
-export function tipLine(sel: ShunpoSelection): string {
-  const highYoy = sel.up.filter((x) => x.yoyIndex != null && x.yoyIndex >= 130).sort((a, b) => (b.yoyIndex ?? 0) - (a.yoyIndex ?? 0))[0];
-  if (highYoy) {
-    return `${highYoy.itemName}は前年同時期の${formatYoy(highYoy.yoyIndex)}。${highYoy.itemName}を多く使うメニューは、仕入れ値の確認を。`;
+/** 前年同旬比がこれ以上(前年=100)の品目を、最後の一言で取り上げる */
+export const TIP_HIGH_YOY_INDEX = 130;
+
+/** 前年同旬比が130以上の品目のうち、最も大きいもの(同じなら選ばれた順で先のもの)。なければnull */
+function highestYoy(items: ShunpoItem[]): ShunpoItem | null {
+  let best: ShunpoItem | null = null;
+  for (const x of items) {
+    if (x.yoyIndex == null || x.yoyIndex < TIP_HIGH_YOY_INDEX) continue;
+    if (!best || x.yoyIndex > (best.yoyIndex ?? 0)) best = x;
   }
+  return best;
+}
+
+/**
+ * 最後の一言。決まった型から選ぶ(AIで文章を作らない)。上から順に、最初に当てはまったものを使う(Mahiro確認済み):
+ *  1. 値上がりの品目に、前年同旬比130以上がある → その中で前年同旬比が最も大きい品目
+ *     「Xは前年同時期の約N倍。Xを多く使うメニューは、仕入れ値の確認を。」
+ *  2. 1が無く、値下がりの品目に、前年同旬比130以上がある → その中で最も大きい品目
+ *     「Xは値下がりしましたが、前年同時期の約N倍です。」(値下がりでも、前年よりまだ高いことを伝える)
+ *  3. 値上がりの品目がある → いちばん大きく上がった品目「Xを多く使うメニューは、仕入れ値の確認を。」
+ *  4. 値下がりの品目だけがある →「値下がりした品目は、仕入れ値の見直しの参考に。」
+ *  5. どちらも無い →「前の旬から10%以上動いた品目はありませんでした。」
+ * 前年同旬比が同じ品目が並んだときは、選ばれた順(変動率の大きい順)で先のものを選ぶ。
+ */
+export function tipLine(sel: ShunpoSelection): string {
+  const upHigh = highestYoy(sel.up);
+  if (upHigh) return `${upHigh.itemName}は前年同時期の${formatYoy(upHigh.yoyIndex)}。${upHigh.itemName}を多く使うメニューは、仕入れ値の確認を。`;
+  const downHigh = highestYoy(sel.down);
+  if (downHigh) return `${downHigh.itemName}は値下がりしましたが、前年同時期の${formatYoy(downHigh.yoyIndex)}です。`;
   if (sel.up[0]) return `${sel.up[0].itemName}を多く使うメニューは、仕入れ値の確認を。`;
   if (sel.down[0]) return "値下がりした品目は、仕入れ値の見直しの参考に。";
   return "前の旬から10%以上動いた品目はありませんでした。";

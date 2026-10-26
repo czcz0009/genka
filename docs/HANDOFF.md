@@ -91,10 +91,8 @@
 
 ## 4. 次にやること(優先順)
 
-### 【進行中・期日 2026-10-28】PR動画とLPの伝え方(2026-10-23〜)
-- **PR動画**: 絵コンテ・条件・撮影の段取りは [pr-video.md](pr-video.md)。撮影の準備(デモのデータ `SEED_PRESET=teishoku`、デモの納品書 `scripts/demo/make_pr_invoice.mjs`、架空の名前の法人番号公表サイトでの確認)まで済み。**撮影はまだ**。撮影は10/28までが目安(10/29の野菜の取得で、キャベツのアラートが消える可能性があるため)。
-  - **Mahiroの指示待ち**: ffmpegの入れ方(おすすめは `npm i --no-save ffmpeg-static`。パソコンに入れるならwinget)。
-  - 今あるPR用のデモアカウント(userId `76b93e01-99c2-43be-9cca-ae528ae8321b`)は、ロスの追加前のデータ。撮影前に作り直し、古いものはこのIDで削除する。ログイン情報は旧PCの `C:\Users\tarutani.mahiro\genka-demo\pr-demo-login.txt` にだけある(リポジトリには入れない)。
+### 【進行中】PR動画とLPの伝え方(2026-10-23〜)
+- **PR動画**: 絵コンテ・条件・撮影の段取り・撮影の結果は [pr-video.md](pr-video.md)。**2026-10-26に撮影・組み立て済み、Mahiroの確認待ち**(完成版は旧PCの genka-demo フォルダ。ffmpegはwingetの Gyan.FFmpeg を導入済み)。撮り直し用のスクリプトは scripts/demo/pr_video_capture.mjs・pr_video_compose.mjs。PR用のデモアカウント(userId 7ca2c4b4-895a-41a7-91dc-d60c8c6dde09)は、Mahiroの指示で削除する。
 - **LPの伝え方の変更(`b224a6c`、未公開)**: 見出し「知らないうちに/減っている利益に、/気づける。」、痛み→方法→範囲の流れ、機能の並び順、ページのタイトルと説明文、最後のCTAの札「無料モニター募集中」と利用規約第4条と同じ一文。PC幅・375px・320pxで確認済み。本番のLPは `7f8907a` のまま(本番の中身を取得して確認)で、差はこの1コミットだけ。**2026-10-26に公開し、本番で確認済み**。
 - **認証メールの文面の日本語化(2026-10-26)**: 案はClaudeが作り、Mahiroが管理画面(Authentication → Emails → Templates)に貼る。アプリが使うメールは「新規登録の確認」と「パスワードの再設定」の2種類だけ。リンクは `{{ .ConfirmationURL }}` のままにする(このアプリは確認用の受け口(`/auth/confirm` 等)を持たず、ブラウザ側でリンクの `?code=` を自動で受け取る作りのため。`{{ .TokenHash }}` に変えると動かない)。
 

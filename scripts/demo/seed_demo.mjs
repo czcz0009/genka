@@ -81,8 +81,15 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.
   global: { fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }) },
 });
 
+/** アプリの normalizeForDedupe(src/lib/normalize.ts)と同じ正規化(重複の判定に使う名前) */
 function normalize(name) {
-  return name.normalize("NFKC").toLowerCase().replace(/\s+/g, "");
+  return name
+    .normalize("NFKC")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s　]+/g, "")
+    .replace(/[・･,、。.]/g, "")
+    .replace(/[()（）[\]【】]/g, "");
 }
 
 /** 作ったもの(後片付けの対象)。この実行で作ったものだけを入れる */
@@ -133,11 +140,24 @@ async function seed() {
   log("店舗を作成:", created.storeId);
   failIfRequested("after_store");
 
-  // 3. 食材(今の単価=価格の履歴の最後の値)
+  // 2-2. 追加のカテゴリ(プリセットで指定したときだけ。既定のカテゴリは店舗を作ったときに自動で入る)
+  const categoryIds = {};
+  for (const [i, c] of (PRESET.categories ?? []).entries()) {
+    const { data, error } = await supabase
+      .from("categories")
+      .insert({ store_id: created.storeId, kind: c.kind, name: c.name, normalized_name: normalize(c.name), sort_order: 100 + i })
+      .select("id")
+      .single();
+    if (error) throw error;
+    categoryIds[c.name] = data.id;
+  }
+
+  // 3. 食材(今の単価=価格の履歴の最後の値)。unset: true の食材は「単価未設定」にする
   stage = "食材の作成";
   const ingredients = {};
   for (const ing of PRESET.ingredients) {
-    const current = ing.history[ing.history.length - 1].price;
+    const unset = ing.unset === true;
+    const current = unset ? 0 : ing.history[ing.history.length - 1].price;
     const { data, error } = await supabase
       .from("ingredients")
       .insert({
@@ -146,9 +166,10 @@ async function seed() {
         normalized_name: normalize(ing.name),
         unit: ing.unit,
         current_purchase_price: current,
-        // 単価入力済みの印(0020で追加)。付けないと「単価未設定」扱いになり、全メニューが
+        // 単価入力済みの印(0020で追加)。付けないと「単価未設定」扱いになり、その食材を使うメニューが
         // 「計算できていません」と表示される。
-        price_is_set: true,
+        price_is_set: !unset,
+        category_id: ing.category ? categoryIds[ing.category] : null,
       })
       .select("id")
       .single();
@@ -157,7 +178,7 @@ async function seed() {
     // アプリで食材を登録・単価を変更した時と同じく、価格の履歴を作る(今見直すべきメニュー等の
     // 過去月の再現・値上げの影響額は、この履歴から単価・単価入力済みかどうかを判定するため)。
     const { error: historyError } = await supabase.from("ingredient_price_history").insert(
-      ing.history.map((h) => ({ ingredient_id: data.id, price: h.price, price_is_set: true, recorded_at: `${h.at}T00:00:00Z` })),
+      ing.history.map((h) => ({ ingredient_id: data.id, price: unset ? 0 : h.price, price_is_set: !unset, recorded_at: `${h.at}T00:00:00Z` })),
     );
     if (historyError) throw historyError;
     // 食肉の規格への紐づけ(利用者が確定した紐づけとして保存。市場価格のテーブルには書かない)
@@ -180,6 +201,7 @@ async function seed() {
         name: menu.name,
         normalized_name: normalize(menu.name),
         selling_price: menu.sellingPrice,
+        category_id: menu.category ? categoryIds[menu.category] : null,
       })
       .select("id")
       .single();

@@ -122,4 +122,52 @@ export const teishoku = {
   consent: true,
 };
 
-export const PRESETS = { basic, teishoku };
+/**
+ * 表示崩れの確認用(scripts/qa/layout_check.mjs。2026-10-26)。長い店名・メニュー名・食材名・カテゴリ名と、
+ * 単価未設定の食材(「計算できていません(未設定: …)」の長い案内文が出る)を入れる。
+ */
+const LONG_UNSET = "北海道産じゃがいも男爵いもLサイズ十キロ箱泥付き業務用ケース入り";
+export const long = {
+  storeName: "定食とお惣菜の店 こはる亭 駅前本通り商店街二丁目店 デモ用の長い店名",
+  categories: [
+    { kind: "menu", name: "季節限定数量限定の特別メニュー昼の部夜の部共通ランチ営業も含む" },
+    { kind: "ingredient", name: "業務用スーパーでまとめ買いする乾物調味料粉もの類と冷凍食品" },
+  ],
+  ingredients: [
+    { name: "国産若鶏もも肉皮付き骨なし業務用二キロパック冷蔵品をまとめ買い", unit: "g", history: [{ price: 1.1, at: "2026-08-01" }], category: "業務用スーパーでまとめ買いする乾物調味料粉もの類と冷凍食品" },
+    { name: LONG_UNSET, unit: "個", history: [{ price: 0, at: "2026-08-01" }], unset: true },
+    { name: "キャベツ", unit: "個", history: [{ price: 120, at: "2026-08-01" }, { price: 150, at: "2026-10-10" }] },
+    { name: "米", unit: "g", history: [{ price: 0.4, at: "2026-08-01" }] },
+  ],
+  menus: [
+    {
+      name: "特製デミグラスソースのふわとろオムライスと季節野菜のグリル盛り合わせ定食サラダ味噌汁付き",
+      sellingPrice: 1280,
+      lines: [["国産若鶏もも肉皮付き骨なし業務用二キロパック冷蔵品をまとめ買い", 120], [LONG_UNSET, 1], ["米", 250]],
+      sales: { "2026-10": 120 },
+      category: "季節限定数量限定の特別メニュー昼の部夜の部共通ランチ営業も含む",
+    },
+    {
+      name: "若鶏の唐揚げ五個盛りと千切りキャベツたっぷり山盛りご飯大盛り無料定食",
+      sellingPrice: 980,
+      lines: [["国産若鶏もも肉皮付き骨なし業務用二キロパック冷蔵品をまとめ買い", 180], ["キャベツ", 0.1], ["米", 250]],
+      sales: { "2026-09": 300, "2026-10": 280 },
+    },
+  ],
+  fixedCosts: [
+    { costType: "rent", amount: 150000, periodStart: "2026-09-01", periodEnd: null },
+    { costType: "labor", amount: 300000, periodStart: "2026-09-01", periodEnd: null },
+  ],
+  consent: true,
+};
+
+/** 空の状態の確認用(メニュー・食材が0件)。店舗だけを作る */
+export const empty = {
+  storeName: "空の店(デモ)",
+  ingredients: [],
+  menus: [],
+  fixedCosts: [],
+  consent: true,
+};
+
+export const PRESETS = { basic, teishoku, long, empty };

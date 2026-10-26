@@ -1,0 +1,1330 @@
+{
+ "note": "2026-10-26にDBから取り出した、農林水産省「青果物卸売市場調査(旬別結果)」の主要卸売市場計(旬報のテスト用)",
+ "current": {
+  "period": {
+   "year": 2026,
+   "month": 10,
+   "third": 1
+  },
+  "rows": [
+   {
+    "item_code": "30000",
+    "item_name": "野菜総計",
+    "price_per_kg": 310,
+    "wholesale_quantity_ton": 104669,
+    "yoy_price_percent": 106
+   },
+   {
+    "item_code": "30100",
+    "item_name": "だいこん",
+    "price_per_kg": 131,
+    "wholesale_quantity_ton": 9164,
+    "yoy_price_percent": 98
+   },
+   {
+    "item_code": "30200",
+    "item_name": "かぶ",
+    "price_per_kg": 241,
+    "wholesale_quantity_ton": 300,
+    "yoy_price_percent": 131
+   },
+   {
+    "item_code": "30300",
+    "item_name": "にんじん",
+    "price_per_kg": 127,
+    "wholesale_quantity_ton": 7141,
+    "yoy_price_percent": 89
+   },
+   {
+    "item_code": "30400",
+    "item_name": "ごぼう",
+    "price_per_kg": 354,
+    "wholesale_quantity_ton": 691,
+    "yoy_price_percent": 95
+   },
+   {
+    "item_code": "30500",
+    "item_name": "たけのこ",
+    "price_per_kg": 1511,
+    "wholesale_quantity_ton": 0,
+    "yoy_price_percent": 95
+   },
+   {
+    "item_code": "30600",
+    "item_name": "れんこん",
+    "price_per_kg": 441,
+    "wholesale_quantity_ton": 755,
+    "yoy_price_percent": 102
+   },
+   {
+    "item_code": "31100",
+    "item_name": "はくさい",
+    "price_per_kg": 172,
+    "wholesale_quantity_ton": 10323,
+    "yoy_price_percent": 158
+   },
+   {
+    "item_code": "31300",
+    "item_name": "みずな",
+    "price_per_kg": 881,
+    "wholesale_quantity_ton": 234,
+    "yoy_price_percent": 218
+   },
+   {
+    "item_code": "31500",
+    "item_name": "こまつな",
+    "price_per_kg": 580,
+    "wholesale_quantity_ton": 1021,
+    "yoy_price_percent": 177
+   },
+   {
+    "item_code": "31550",
+    "item_name": "その他の菜類",
+    "price_per_kg": 656,
+    "wholesale_quantity_ton": 9,
+    "yoy_price_percent": 117
+   },
+   {
+    "item_code": "31560",
+    "item_name": "ちんげんさい",
+    "price_per_kg": 640,
+    "wholesale_quantity_ton": 267,
+    "yoy_price_percent": 146
+   },
+   {
+    "item_code": "31700",
+    "item_name": "キャベツ",
+    "price_per_kg": 174,
+    "wholesale_quantity_ton": 13474,
+    "yoy_price_percent": 171
+   },
+   {
+    "item_code": "31800",
+    "item_name": "ほうれんそう",
+    "price_per_kg": 998,
+    "wholesale_quantity_ton": 597,
+    "yoy_price_percent": 106
+   },
+   {
+    "item_code": "31900",
+    "item_name": "ねぎ",
+    "price_per_kg": 494,
+    "wholesale_quantity_ton": 3652,
+    "yoy_price_percent": 98
+   },
+   {
+    "item_code": "32300",
+    "item_name": "ふき",
+    "price_per_kg": 1395,
+    "wholesale_quantity_ton": 0,
+    "yoy_price_percent": 233
+   },
+   {
+    "item_code": "32500",
+    "item_name": "みつば",
+    "price_per_kg": 847,
+    "wholesale_quantity_ton": 88,
+    "yoy_price_percent": 82
+   },
+   {
+    "item_code": "32600",
+    "item_name": "しゅんぎく",
+    "price_per_kg": 1462,
+    "wholesale_quantity_ton": 58,
+    "yoy_price_percent": 113
+   },
+   {
+    "item_code": "32800",
+    "item_name": "にら",
+    "price_per_kg": 975,
+    "wholesale_quantity_ton": 442,
+    "yoy_price_percent": 112
+   },
+   {
+    "item_code": "32900",
+    "item_name": "セルリー",
+    "price_per_kg": 272,
+    "wholesale_quantity_ton": 366,
+    "yoy_price_percent": 111
+   },
+   {
+    "item_code": "33100",
+    "item_name": "アスパラガス",
+    "price_per_kg": 1339,
+    "wholesale_quantity_ton": 155,
+    "yoy_price_percent": 107
+   },
+   {
+    "item_code": "33200",
+    "item_name": "カリフラワー",
+    "price_per_kg": 299,
+    "wholesale_quantity_ton": 142,
+    "yoy_price_percent": 96
+   },
+   {
+    "item_code": "33300",
+    "item_name": "ブロッコリー",
+    "price_per_kg": 601,
+    "wholesale_quantity_ton": 1710,
+    "yoy_price_percent": 109
+   },
+   {
+    "item_code": "33400",
+    "item_name": "レタス",
+    "price_per_kg": 441,
+    "wholesale_quantity_ton": 5241,
+    "yoy_price_percent": 203
+   },
+   {
+    "item_code": "34100",
+    "item_name": "きゅうり",
+    "price_per_kg": 528,
+    "wholesale_quantity_ton": 3576,
+    "yoy_price_percent": 119
+   },
+   {
+    "item_code": "34200",
+    "item_name": "かぼちゃ",
+    "price_per_kg": 235,
+    "wholesale_quantity_ton": 3081,
+    "yoy_price_percent": 114
+   },
+   {
+    "item_code": "34300",
+    "item_name": "なす",
+    "price_per_kg": 472,
+    "wholesale_quantity_ton": 1996,
+    "yoy_price_percent": 117
+   },
+   {
+    "item_code": "34400",
+    "item_name": "トマト",
+    "price_per_kg": 555,
+    "wholesale_quantity_ton": 4030,
+    "yoy_price_percent": 78
+   },
+   {
+    "item_code": "34450",
+    "item_name": "ミニトマト",
+    "price_per_kg": 966,
+    "wholesale_quantity_ton": 1586,
+    "yoy_price_percent": 83
+   },
+   {
+    "item_code": "34500",
+    "item_name": "ピーマン",
+    "price_per_kg": 627,
+    "wholesale_quantity_ton": 1613,
+    "yoy_price_percent": 101
+   },
+   {
+    "item_code": "34600",
+    "item_name": "ししとうがらし",
+    "price_per_kg": 1533,
+    "wholesale_quantity_ton": 83,
+    "yoy_price_percent": 112
+   },
+   {
+    "item_code": "34700",
+    "item_name": "スイートコーン",
+    "price_per_kg": 283,
+    "wholesale_quantity_ton": 168,
+    "yoy_price_percent": 79
+   },
+   {
+    "item_code": "35100",
+    "item_name": "さやいんげん",
+    "price_per_kg": 1358,
+    "wholesale_quantity_ton": 83,
+    "yoy_price_percent": 102
+   },
+   {
+    "item_code": "35200",
+    "item_name": "さやえんどう",
+    "price_per_kg": 2270,
+    "wholesale_quantity_ton": 18,
+    "yoy_price_percent": 90
+   },
+   {
+    "item_code": "35500",
+    "item_name": "えだまめ",
+    "price_per_kg": 1052,
+    "wholesale_quantity_ton": 171,
+    "yoy_price_percent": 104
+   },
+   {
+    "item_code": "36100",
+    "item_name": "かんしょ",
+    "price_per_kg": 323,
+    "wholesale_quantity_ton": 3155,
+    "yoy_price_percent": 108
+   },
+   {
+    "item_code": "36200",
+    "item_name": "ばれいしょ",
+    "price_per_kg": 141,
+    "wholesale_quantity_ton": 7803,
+    "yoy_price_percent": 79
+   },
+   {
+    "item_code": "36300",
+    "item_name": "さといも",
+    "price_per_kg": 437,
+    "wholesale_quantity_ton": 517,
+    "yoy_price_percent": 103
+   },
+   {
+    "item_code": "36500",
+    "item_name": "やまのいも",
+    "price_per_kg": 448,
+    "wholesale_quantity_ton": 1110,
+    "yoy_price_percent": 86
+   },
+   {
+    "item_code": "36610",
+    "item_name": "たまねぎ",
+    "price_per_kg": 95,
+    "wholesale_quantity_ton": 14258,
+    "yoy_price_percent": 51
+   },
+   {
+    "item_code": "36700",
+    "item_name": "にんにく",
+    "price_per_kg": 1178,
+    "wholesale_quantity_ton": 133,
+    "yoy_price_percent": 93
+   },
+   {
+    "item_code": "37200",
+    "item_name": "しょうが",
+    "price_per_kg": 832,
+    "wholesale_quantity_ton": 203,
+    "yoy_price_percent": 86
+   },
+   {
+    "item_code": "38100",
+    "item_name": "生しいたけ",
+    "price_per_kg": 1077,
+    "wholesale_quantity_ton": 524,
+    "yoy_price_percent": 104
+   },
+   {
+    "item_code": "38300",
+    "item_name": "なめこ",
+    "price_per_kg": 566,
+    "wholesale_quantity_ton": 205,
+    "yoy_price_percent": 125
+   },
+   {
+    "item_code": "38400",
+    "item_name": "えのきだけ",
+    "price_per_kg": 348,
+    "wholesale_quantity_ton": 1491,
+    "yoy_price_percent": 113
+   },
+   {
+    "item_code": "38500",
+    "item_name": "しめじ",
+    "price_per_kg": 547,
+    "wholesale_quantity_ton": 775,
+    "yoy_price_percent": 120
+   },
+   {
+    "item_code": "39000",
+    "item_name": "その他の野菜",
+    "price_per_kg": 1276,
+    "wholesale_quantity_ton": 2263,
+    "yoy_price_percent": 116
+   },
+   {
+    "item_code": "39100",
+    "item_name": "輸入野菜計",
+    "price_per_kg": 717,
+    "wholesale_quantity_ton": 890,
+    "yoy_price_percent": 117
+   },
+   {
+    "item_code": "39200",
+    "item_name": "他の輸入野菜",
+    "price_per_kg": 1108,
+    "wholesale_quantity_ton": 434,
+    "yoy_price_percent": 107
+   },
+   {
+    "item_code": "40000",
+    "item_name": "果実総計",
+    "price_per_kg": 495,
+    "wholesale_quantity_ton": 31662,
+    "yoy_price_percent": 96
+   },
+   {
+    "item_code": "40001",
+    "item_name": "国産果実計",
+    "price_per_kg": 526,
+    "wholesale_quantity_ton": 26324,
+    "yoy_price_percent": 93
+   },
+   {
+    "item_code": "40100",
+    "item_name": "みかん",
+    "price_per_kg": 330,
+    "wholesale_quantity_ton": 5335,
+    "yoy_price_percent": 102
+   },
+   {
+    "item_code": "41999",
+    "item_name": "その他雑かん",
+    "price_per_kg": 603,
+    "wholesale_quantity_ton": 213,
+    "yoy_price_percent": 81
+   },
+   {
+    "item_code": "42000",
+    "item_name": "りんご計",
+    "price_per_kg": 376,
+    "wholesale_quantity_ton": 5553,
+    "yoy_price_percent": 85
+   },
+   {
+    "item_code": "42204",
+    "item_name": "つがる",
+    "price_per_kg": 302,
+    "wholesale_quantity_ton": 1276,
+    "yoy_price_percent": 85
+   },
+   {
+    "item_code": "42505",
+    "item_name": "ジョナゴールド",
+    "price_per_kg": 424,
+    "wholesale_quantity_ton": 14,
+    "yoy_price_percent": 73
+   },
+   {
+    "item_code": "42804",
+    "item_name": "ふじ",
+    "price_per_kg": 404,
+    "wholesale_quantity_ton": 1385,
+    "yoy_price_percent": 78
+   },
+   {
+    "item_code": "42999",
+    "item_name": "その他りんご",
+    "price_per_kg": 395,
+    "wholesale_quantity_ton": 2878,
+    "yoy_price_percent": 87
+   },
+   {
+    "item_code": "43000",
+    "item_name": "日本なし計",
+    "price_per_kg": 440,
+    "wholesale_quantity_ton": 2962,
+    "yoy_price_percent": 91
+   },
+   {
+    "item_code": "43203",
+    "item_name": "幸水",
+    "price_per_kg": 518,
+    "wholesale_quantity_ton": 0,
+    "yoy_price_percent": 95
+   },
+   {
+    "item_code": "43205",
+    "item_name": "豊水",
+    "price_per_kg": 433,
+    "wholesale_quantity_ton": 126,
+    "yoy_price_percent": 98
+   },
+   {
+    "item_code": "43302",
+    "item_name": "二十世紀",
+    "price_per_kg": 400,
+    "wholesale_quantity_ton": 22,
+    "yoy_price_percent": 108
+   },
+   {
+    "item_code": "43310",
+    "item_name": "新高",
+    "price_per_kg": 389,
+    "wholesale_quantity_ton": 819,
+    "yoy_price_percent": 93
+   },
+   {
+    "item_code": "43401",
+    "item_name": "その他なし",
+    "price_per_kg": 462,
+    "wholesale_quantity_ton": 1995,
+    "yoy_price_percent": 88
+   },
+   {
+    "item_code": "43499",
+    "item_name": "西洋なし",
+    "price_per_kg": 430,
+    "wholesale_quantity_ton": 358,
+    "yoy_price_percent": 88
+   },
+   {
+    "item_code": "43500",
+    "item_name": "かき計",
+    "price_per_kg": 301,
+    "wholesale_quantity_ton": 6607,
+    "yoy_price_percent": 84
+   },
+   {
+    "item_code": "43700",
+    "item_name": "甘がき",
+    "price_per_kg": 394,
+    "wholesale_quantity_ton": 472,
+    "yoy_price_percent": 99
+   },
+   {
+    "item_code": "43751",
+    "item_name": "渋がき",
+    "price_per_kg": 294,
+    "wholesale_quantity_ton": 6135,
+    "yoy_price_percent": 83
+   },
+   {
+    "item_code": "44100",
+    "item_name": "もも",
+    "price_per_kg": 744,
+    "wholesale_quantity_ton": 28,
+    "yoy_price_percent": 96
+   },
+   {
+    "item_code": "44700",
+    "item_name": "すもも",
+    "price_per_kg": 793,
+    "wholesale_quantity_ton": 72,
+    "yoy_price_percent": 85
+   },
+   {
+    "item_code": "45000",
+    "item_name": "ぶどう計",
+    "price_per_kg": 1423,
+    "wholesale_quantity_ton": 3640,
+    "yoy_price_percent": 87
+   },
+   {
+    "item_code": "45202",
+    "item_name": "デラウェア",
+    "price_per_kg": 739,
+    "wholesale_quantity_ton": 10,
+    "yoy_price_percent": 95
+   },
+   {
+    "item_code": "45206",
+    "item_name": "巨峰",
+    "price_per_kg": 1306,
+    "wholesale_quantity_ton": 346,
+    "yoy_price_percent": 85
+   },
+   {
+    "item_code": "45228",
+    "item_name": "シャインマスカット",
+    "price_per_kg": 1471,
+    "wholesale_quantity_ton": 2442,
+    "yoy_price_percent": null
+   },
+   {
+    "item_code": "45299",
+    "item_name": "その他ぶどう",
+    "price_per_kg": 1341,
+    "wholesale_quantity_ton": 843,
+    "yoy_price_percent": 81
+   },
+   {
+    "item_code": "45700",
+    "item_name": "くり",
+    "price_per_kg": 867,
+    "wholesale_quantity_ton": 339,
+    "yoy_price_percent": 100
+   },
+   {
+    "item_code": "46100",
+    "item_name": "いちご",
+    "price_per_kg": 3967,
+    "wholesale_quantity_ton": 12,
+    "yoy_price_percent": 104
+   },
+   {
+    "item_code": "47000",
+    "item_name": "メロン計",
+    "price_per_kg": 653,
+    "wholesale_quantity_ton": 738,
+    "yoy_price_percent": 91
+   },
+   {
+    "item_code": "47200",
+    "item_name": "温室メロン",
+    "price_per_kg": 833,
+    "wholesale_quantity_ton": 216,
+    "yoy_price_percent": 90
+   },
+   {
+    "item_code": "47213",
+    "item_name": "アンデスメロン",
+    "price_per_kg": 527,
+    "wholesale_quantity_ton": 7,
+    "yoy_price_percent": 103
+   },
+   {
+    "item_code": "47299",
+    "item_name": "その他メロン",
+    "price_per_kg": 580,
+    "wholesale_quantity_ton": 514,
+    "yoy_price_percent": 94
+   },
+   {
+    "item_code": "48100",
+    "item_name": "すいか",
+    "price_per_kg": 231,
+    "wholesale_quantity_ton": 246,
+    "yoy_price_percent": 76
+   },
+   {
+    "item_code": "49300",
+    "item_name": "キウイフルーツ",
+    "price_per_kg": 1021,
+    "wholesale_quantity_ton": 36,
+    "yoy_price_percent": 91
+   },
+   {
+    "item_code": "49500",
+    "item_name": "他の国産果実",
+    "price_per_kg": 1320,
+    "wholesale_quantity_ton": 184,
+    "yoy_price_percent": 103
+   },
+   {
+    "item_code": "50000",
+    "item_name": "輸入果実計",
+    "price_per_kg": 345,
+    "wholesale_quantity_ton": 5338,
+    "yoy_price_percent": 106
+   },
+   {
+    "item_code": "50100",
+    "item_name": "バナナ",
+    "price_per_kg": 239,
+    "wholesale_quantity_ton": 3274,
+    "yoy_price_percent": 107
+   },
+   {
+    "item_code": "50300",
+    "item_name": "パイナップル",
+    "price_per_kg": 267,
+    "wholesale_quantity_ton": 552,
+    "yoy_price_percent": 99
+   },
+   {
+    "item_code": "50400",
+    "item_name": "レモン",
+    "price_per_kg": 410,
+    "wholesale_quantity_ton": 230,
+    "yoy_price_percent": 108
+   },
+   {
+    "item_code": "50500",
+    "item_name": "グレープフルーツ",
+    "price_per_kg": 243,
+    "wholesale_quantity_ton": 117,
+    "yoy_price_percent": 105
+   },
+   {
+    "item_code": "50600",
+    "item_name": "オレンジ",
+    "price_per_kg": 370,
+    "wholesale_quantity_ton": 273,
+    "yoy_price_percent": 112
+   },
+   {
+    "item_code": "50750",
+    "item_name": "ぶどう",
+    "price_per_kg": 962,
+    "wholesale_quantity_ton": 29,
+    "yoy_price_percent": null
+   },
+   {
+    "item_code": "50800",
+    "item_name": "キウイフルーツ",
+    "price_per_kg": 712,
+    "wholesale_quantity_ton": 604,
+    "yoy_price_percent": 102
+   },
+   {
+    "item_code": "50850",
+    "item_name": "メロン",
+    "price_per_kg": 492,
+    "wholesale_quantity_ton": 18,
+    "yoy_price_percent": 107
+   },
+   {
+    "item_code": "50900",
+    "item_name": "他の輸入果実",
+    "price_per_kg": 914,
+    "wholesale_quantity_ton": 241,
+    "yoy_price_percent": 129
+   }
+  ]
+ },
+ "previous": {
+  "period": {
+   "year": 2026,
+   "month": 9,
+   "third": 3
+  },
+  "rows": [
+   {
+    "item_code": "30000",
+    "item_name": "野菜総計",
+    "price_per_kg": 311,
+    "wholesale_quantity_ton": 83078,
+    "yoy_price_percent": 106
+   },
+   {
+    "item_code": "30100",
+    "item_name": "だいこん",
+    "price_per_kg": 128,
+    "wholesale_quantity_ton": 6602,
+    "yoy_price_percent": 87
+   },
+   {
+    "item_code": "30200",
+    "item_name": "かぶ",
+    "price_per_kg": 227,
+    "wholesale_quantity_ton": 227,
+    "yoy_price_percent": 121
+   },
+   {
+    "item_code": "30300",
+    "item_name": "にんじん",
+    "price_per_kg": 131,
+    "wholesale_quantity_ton": 5634,
+    "yoy_price_percent": 96
+   },
+   {
+    "item_code": "30400",
+    "item_name": "ごぼう",
+    "price_per_kg": 354,
+    "wholesale_quantity_ton": 416,
+    "yoy_price_percent": 98
+   },
+   {
+    "item_code": "30500",
+    "item_name": "たけのこ",
+    "price_per_kg": 581,
+    "wholesale_quantity_ton": 0,
+    "yoy_price_percent": 84
+   },
+   {
+    "item_code": "30600",
+    "item_name": "れんこん",
+    "price_per_kg": 467,
+    "wholesale_quantity_ton": 519,
+    "yoy_price_percent": 112
+   },
+   {
+    "item_code": "31100",
+    "item_name": "はくさい",
+    "price_per_kg": 151,
+    "wholesale_quantity_ton": 7625,
+    "yoy_price_percent": 142
+   },
+   {
+    "item_code": "31300",
+    "item_name": "みずな",
+    "price_per_kg": 997,
+    "wholesale_quantity_ton": 170,
+    "yoy_price_percent": 201
+   },
+   {
+    "item_code": "31500",
+    "item_name": "こまつな",
+    "price_per_kg": 699,
+    "wholesale_quantity_ton": 711,
+    "yoy_price_percent": 160
+   },
+   {
+    "item_code": "31550",
+    "item_name": "その他の菜類",
+    "price_per_kg": 705,
+    "wholesale_quantity_ton": 6,
+    "yoy_price_percent": 113
+   },
+   {
+    "item_code": "31560",
+    "item_name": "ちんげんさい",
+    "price_per_kg": 688,
+    "wholesale_quantity_ton": 183,
+    "yoy_price_percent": 135
+   },
+   {
+    "item_code": "31700",
+    "item_name": "キャベツ",
+    "price_per_kg": 122,
+    "wholesale_quantity_ton": 10371,
+    "yoy_price_percent": 131
+   },
+   {
+    "item_code": "31800",
+    "item_name": "ほうれんそう",
+    "price_per_kg": 1106,
+    "wholesale_quantity_ton": 412,
+    "yoy_price_percent": 100
+   },
+   {
+    "item_code": "31900",
+    "item_name": "ねぎ",
+    "price_per_kg": 468,
+    "wholesale_quantity_ton": 2753,
+    "yoy_price_percent": 89
+   },
+   {
+    "item_code": "32500",
+    "item_name": "みつば",
+    "price_per_kg": 885,
+    "wholesale_quantity_ton": 60,
+    "yoy_price_percent": 77
+   },
+   {
+    "item_code": "32600",
+    "item_name": "しゅんぎく",
+    "price_per_kg": 1673,
+    "wholesale_quantity_ton": 26,
+    "yoy_price_percent": 98
+   },
+   {
+    "item_code": "32800",
+    "item_name": "にら",
+    "price_per_kg": 1031,
+    "wholesale_quantity_ton": 316,
+    "yoy_price_percent": 113
+   },
+   {
+    "item_code": "32900",
+    "item_name": "セルリー",
+    "price_per_kg": 267,
+    "wholesale_quantity_ton": 310,
+    "yoy_price_percent": 103
+   },
+   {
+    "item_code": "33100",
+    "item_name": "アスパラガス",
+    "price_per_kg": 1238,
+    "wholesale_quantity_ton": 173,
+    "yoy_price_percent": 106
+   },
+   {
+    "item_code": "33200",
+    "item_name": "カリフラワー",
+    "price_per_kg": 297,
+    "wholesale_quantity_ton": 105,
+    "yoy_price_percent": 101
+   },
+   {
+    "item_code": "33300",
+    "item_name": "ブロッコリー",
+    "price_per_kg": 634,
+    "wholesale_quantity_ton": 1270,
+    "yoy_price_percent": 104
+   },
+   {
+    "item_code": "33400",
+    "item_name": "レタス",
+    "price_per_kg": 433,
+    "wholesale_quantity_ton": 5290,
+    "yoy_price_percent": 226
+   },
+   {
+    "item_code": "34100",
+    "item_name": "きゅうり",
+    "price_per_kg": 463,
+    "wholesale_quantity_ton": 3939,
+    "yoy_price_percent": 98
+   },
+   {
+    "item_code": "34200",
+    "item_name": "かぼちゃ",
+    "price_per_kg": 232,
+    "wholesale_quantity_ton": 2295,
+    "yoy_price_percent": 115
+   },
+   {
+    "item_code": "34300",
+    "item_name": "なす",
+    "price_per_kg": 442,
+    "wholesale_quantity_ton": 1950,
+    "yoy_price_percent": 109
+   },
+   {
+    "item_code": "34400",
+    "item_name": "トマト",
+    "price_per_kg": 556,
+    "wholesale_quantity_ton": 4625,
+    "yoy_price_percent": 81
+   },
+   {
+    "item_code": "34450",
+    "item_name": "ミニトマト",
+    "price_per_kg": 996,
+    "wholesale_quantity_ton": 1543,
+    "yoy_price_percent": 89
+   },
+   {
+    "item_code": "34500",
+    "item_name": "ピーマン",
+    "price_per_kg": 548,
+    "wholesale_quantity_ton": 1362,
+    "yoy_price_percent": 100
+   },
+   {
+    "item_code": "34600",
+    "item_name": "ししとうがらし",
+    "price_per_kg": 1441,
+    "wholesale_quantity_ton": 68,
+    "yoy_price_percent": 112
+   },
+   {
+    "item_code": "34700",
+    "item_name": "スイートコーン",
+    "price_per_kg": 255,
+    "wholesale_quantity_ton": 331,
+    "yoy_price_percent": 78
+   },
+   {
+    "item_code": "35100",
+    "item_name": "さやいんげん",
+    "price_per_kg": 1381,
+    "wholesale_quantity_ton": 58,
+    "yoy_price_percent": 88
+   },
+   {
+    "item_code": "35200",
+    "item_name": "さやえんどう",
+    "price_per_kg": 2784,
+    "wholesale_quantity_ton": 13,
+    "yoy_price_percent": 123
+   },
+   {
+    "item_code": "35500",
+    "item_name": "えだまめ",
+    "price_per_kg": 970,
+    "wholesale_quantity_ton": 181,
+    "yoy_price_percent": 101
+   },
+   {
+    "item_code": "36100",
+    "item_name": "かんしょ",
+    "price_per_kg": 303,
+    "wholesale_quantity_ton": 2116,
+    "yoy_price_percent": 104
+   },
+   {
+    "item_code": "36200",
+    "item_name": "ばれいしょ",
+    "price_per_kg": 138,
+    "wholesale_quantity_ton": 5582,
+    "yoy_price_percent": 89
+   },
+   {
+    "item_code": "36300",
+    "item_name": "さといも",
+    "price_per_kg": 458,
+    "wholesale_quantity_ton": 393,
+    "yoy_price_percent": 111
+   },
+   {
+    "item_code": "36500",
+    "item_name": "やまのいも",
+    "price_per_kg": 447,
+    "wholesale_quantity_ton": 886,
+    "yoy_price_percent": 88
+   },
+   {
+    "item_code": "36610",
+    "item_name": "たまねぎ",
+    "price_per_kg": 102,
+    "wholesale_quantity_ton": 10453,
+    "yoy_price_percent": 59
+   },
+   {
+    "item_code": "36700",
+    "item_name": "にんにく",
+    "price_per_kg": 1224,
+    "wholesale_quantity_ton": 79,
+    "yoy_price_percent": 104
+   },
+   {
+    "item_code": "37200",
+    "item_name": "しょうが",
+    "price_per_kg": 841,
+    "wholesale_quantity_ton": 148,
+    "yoy_price_percent": 91
+   },
+   {
+    "item_code": "38100",
+    "item_name": "生しいたけ",
+    "price_per_kg": 1052,
+    "wholesale_quantity_ton": 379,
+    "yoy_price_percent": 104
+   },
+   {
+    "item_code": "38300",
+    "item_name": "なめこ",
+    "price_per_kg": 551,
+    "wholesale_quantity_ton": 143,
+    "yoy_price_percent": 126
+   },
+   {
+    "item_code": "38400",
+    "item_name": "えのきだけ",
+    "price_per_kg": 343,
+    "wholesale_quantity_ton": 962,
+    "yoy_price_percent": 109
+   },
+   {
+    "item_code": "38500",
+    "item_name": "しめじ",
+    "price_per_kg": 516,
+    "wholesale_quantity_ton": 553,
+    "yoy_price_percent": 119
+   },
+   {
+    "item_code": "39000",
+    "item_name": "その他の野菜",
+    "price_per_kg": 1149,
+    "wholesale_quantity_ton": 1842,
+    "yoy_price_percent": 110
+   },
+   {
+    "item_code": "39100",
+    "item_name": "輸入野菜計",
+    "price_per_kg": 647,
+    "wholesale_quantity_ton": 586,
+    "yoy_price_percent": 114
+   },
+   {
+    "item_code": "39200",
+    "item_name": "他の輸入野菜",
+    "price_per_kg": 991,
+    "wholesale_quantity_ton": 283,
+    "yoy_price_percent": 101
+   },
+   {
+    "item_code": "40000",
+    "item_name": "果実総計",
+    "price_per_kg": 521,
+    "wholesale_quantity_ton": 24851,
+    "yoy_price_percent": 91
+   },
+   {
+    "item_code": "40001",
+    "item_name": "国産果実計",
+    "price_per_kg": 570,
+    "wholesale_quantity_ton": 19718,
+    "yoy_price_percent": 89
+   },
+   {
+    "item_code": "40100",
+    "item_name": "みかん",
+    "price_per_kg": 335,
+    "wholesale_quantity_ton": 2785,
+    "yoy_price_percent": 100
+   },
+   {
+    "item_code": "41999",
+    "item_name": "その他雑かん",
+    "price_per_kg": 589,
+    "wholesale_quantity_ton": 124,
+    "yoy_price_percent": 95
+   },
+   {
+    "item_code": "42000",
+    "item_name": "りんご計",
+    "price_per_kg": 338,
+    "wholesale_quantity_ton": 3548,
+    "yoy_price_percent": 82
+   },
+   {
+    "item_code": "42204",
+    "item_name": "つがる",
+    "price_per_kg": 310,
+    "wholesale_quantity_ton": 2361,
+    "yoy_price_percent": 78
+   },
+   {
+    "item_code": "42505",
+    "item_name": "ジョナゴールド",
+    "price_per_kg": 348,
+    "wholesale_quantity_ton": 1,
+    "yoy_price_percent": 45
+   },
+   {
+    "item_code": "42804",
+    "item_name": "ふじ",
+    "price_per_kg": 364,
+    "wholesale_quantity_ton": 78,
+    "yoy_price_percent": 66
+   },
+   {
+    "item_code": "42999",
+    "item_name": "その他りんご",
+    "price_per_kg": 395,
+    "wholesale_quantity_ton": 1109,
+    "yoy_price_percent": 91
+   },
+   {
+    "item_code": "43000",
+    "item_name": "日本なし計",
+    "price_per_kg": 445,
+    "wholesale_quantity_ton": 3313,
+    "yoy_price_percent": 93
+   },
+   {
+    "item_code": "43203",
+    "item_name": "幸水",
+    "price_per_kg": 268,
+    "wholesale_quantity_ton": 6,
+    "yoy_price_percent": 64
+   },
+   {
+    "item_code": "43205",
+    "item_name": "豊水",
+    "price_per_kg": 407,
+    "wholesale_quantity_ton": 783,
+    "yoy_price_percent": 94
+   },
+   {
+    "item_code": "43302",
+    "item_name": "二十世紀",
+    "price_per_kg": 400,
+    "wholesale_quantity_ton": 80,
+    "yoy_price_percent": 89
+   },
+   {
+    "item_code": "43310",
+    "item_name": "新高",
+    "price_per_kg": 391,
+    "wholesale_quantity_ton": 545,
+    "yoy_price_percent": 95
+   },
+   {
+    "item_code": "43401",
+    "item_name": "その他なし",
+    "price_per_kg": 479,
+    "wholesale_quantity_ton": 1899,
+    "yoy_price_percent": 90
+   },
+   {
+    "item_code": "43499",
+    "item_name": "西洋なし",
+    "price_per_kg": 400,
+    "wholesale_quantity_ton": 225,
+    "yoy_price_percent": 93
+   },
+   {
+    "item_code": "43500",
+    "item_name": "かき計",
+    "price_per_kg": 342,
+    "wholesale_quantity_ton": 4715,
+    "yoy_price_percent": 80
+   },
+   {
+    "item_code": "43700",
+    "item_name": "甘がき",
+    "price_per_kg": 399,
+    "wholesale_quantity_ton": 227,
+    "yoy_price_percent": 100
+   },
+   {
+    "item_code": "43751",
+    "item_name": "渋がき",
+    "price_per_kg": 340,
+    "wholesale_quantity_ton": 4488,
+    "yoy_price_percent": 79
+   },
+   {
+    "item_code": "44100",
+    "item_name": "もも",
+    "price_per_kg": 726,
+    "wholesale_quantity_ton": 105,
+    "yoy_price_percent": 92
+   },
+   {
+    "item_code": "44700",
+    "item_name": "すもも",
+    "price_per_kg": 800,
+    "wholesale_quantity_ton": 118,
+    "yoy_price_percent": 93
+   },
+   {
+    "item_code": "45000",
+    "item_name": "ぶどう計",
+    "price_per_kg": 1419,
+    "wholesale_quantity_ton": 3275,
+    "yoy_price_percent": 90
+   },
+   {
+    "item_code": "45202",
+    "item_name": "デラウェア",
+    "price_per_kg": 778,
+    "wholesale_quantity_ton": 15,
+    "yoy_price_percent": 94
+   },
+   {
+    "item_code": "45206",
+    "item_name": "巨峰",
+    "price_per_kg": 1311,
+    "wholesale_quantity_ton": 387,
+    "yoy_price_percent": 91
+   },
+   {
+    "item_code": "45228",
+    "item_name": "シャインマスカット",
+    "price_per_kg": 1479,
+    "wholesale_quantity_ton": 2028,
+    "yoy_price_percent": null
+   },
+   {
+    "item_code": "45299",
+    "item_name": "その他ぶどう",
+    "price_per_kg": 1336,
+    "wholesale_quantity_ton": 844,
+    "yoy_price_percent": 84
+   },
+   {
+    "item_code": "45700",
+    "item_name": "くり",
+    "price_per_kg": 801,
+    "wholesale_quantity_ton": 312,
+    "yoy_price_percent": 79
+   },
+   {
+    "item_code": "46100",
+    "item_name": "いちご",
+    "price_per_kg": 3769,
+    "wholesale_quantity_ton": 12,
+    "yoy_price_percent": 109
+   },
+   {
+    "item_code": "47000",
+    "item_name": "メロン計",
+    "price_per_kg": 699,
+    "wholesale_quantity_ton": 548,
+    "yoy_price_percent": 96
+   },
+   {
+    "item_code": "47200",
+    "item_name": "温室メロン",
+    "price_per_kg": 832,
+    "wholesale_quantity_ton": 170,
+    "yoy_price_percent": 95
+   },
+   {
+    "item_code": "47213",
+    "item_name": "アンデスメロン",
+    "price_per_kg": 509,
+    "wholesale_quantity_ton": 5,
+    "yoy_price_percent": 94
+   },
+   {
+    "item_code": "47299",
+    "item_name": "その他メロン",
+    "price_per_kg": 640,
+    "wholesale_quantity_ton": 372,
+    "yoy_price_percent": 97
+   },
+   {
+    "item_code": "48100",
+    "item_name": "すいか",
+    "price_per_kg": 198,
+    "wholesale_quantity_ton": 420,
+    "yoy_price_percent": 64
+   },
+   {
+    "item_code": "49300",
+    "item_name": "キウイフルーツ",
+    "price_per_kg": 616,
+    "wholesale_quantity_ton": 1,
+    "yoy_price_percent": 81
+   },
+   {
+    "item_code": "49500",
+    "item_name": "他の国産果実",
+    "price_per_kg": 1227,
+    "wholesale_quantity_ton": 218,
+    "yoy_price_percent": 105
+   },
+   {
+    "item_code": "50000",
+    "item_name": "輸入果実計",
+    "price_per_kg": 334,
+    "wholesale_quantity_ton": 5132,
+    "yoy_price_percent": 101
+   },
+   {
+    "item_code": "50100",
+    "item_name": "バナナ",
+    "price_per_kg": 239,
+    "wholesale_quantity_ton": 3311,
+    "yoy_price_percent": 105
+   },
+   {
+    "item_code": "50300",
+    "item_name": "パイナップル",
+    "price_per_kg": 262,
+    "wholesale_quantity_ton": 476,
+    "yoy_price_percent": 94
+   },
+   {
+    "item_code": "50400",
+    "item_name": "レモン",
+    "price_per_kg": 419,
+    "wholesale_quantity_ton": 176,
+    "yoy_price_percent": 105
+   },
+   {
+    "item_code": "50500",
+    "item_name": "グレープフルーツ",
+    "price_per_kg": 219,
+    "wholesale_quantity_ton": 124,
+    "yoy_price_percent": 99
+   },
+   {
+    "item_code": "50600",
+    "item_name": "オレンジ",
+    "price_per_kg": 361,
+    "wholesale_quantity_ton": 237,
+    "yoy_price_percent": 107
+   },
+   {
+    "item_code": "50750",
+    "item_name": "ぶどう",
+    "price_per_kg": 899,
+    "wholesale_quantity_ton": 33,
+    "yoy_price_percent": null
+   },
+   {
+    "item_code": "50800",
+    "item_name": "キウイフルーツ",
+    "price_per_kg": 696,
+    "wholesale_quantity_ton": 546,
+    "yoy_price_percent": 102
+   },
+   {
+    "item_code": "50850",
+    "item_name": "メロン",
+    "price_per_kg": 462,
+    "wholesale_quantity_ton": 13,
+    "yoy_price_percent": 108
+   },
+   {
+    "item_code": "50900",
+    "item_name": "他の輸入果実",
+    "price_per_kg": 895,
+    "wholesale_quantity_ton": 218,
+    "yoy_price_percent": 124
+   }
+  ]
+ }
+}

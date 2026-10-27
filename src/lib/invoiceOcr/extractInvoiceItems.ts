@@ -1,7 +1,9 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import sharp from "sharp";
+import heicDecode from "heic-decode";
 import { parseExtractionResponse } from "./parseExtractionResponse.ts";
+import type { InvoiceImageType } from "./imageType.ts";
 import type { ExtractedInvoiceItem } from "./types.ts";
 
 /**
@@ -48,10 +50,20 @@ export interface ExtractInvoiceItemsResult {
 }
 
 /**
- * アップロードされた画像(任意のフォーマット・サイズ)を、送信用に
+ * アップロードされた画像(JPEG・PNG・WebP・HEIC。種類は imageType.ts で中身から判定済み)を、送信用に
  * リサイズ・JPEG圧縮する。
+ * HEIC(iPhoneの写真の形式)は、sharpの同梱版では読めないため、heic-decode(HEIFの標準の部品 libheif の
+ * WebAssembly版。サーバーの中だけで使う)で画素に戻してから、sharpに渡す(2026-10-26)。
+ * HEICの回転の情報は heic-decode が画素に反映済み。
  */
-async function prepareImage(buffer: Buffer): Promise<Buffer> {
+export async function prepareImage(buffer: Buffer, type: InvoiceImageType): Promise<Buffer> {
+  if (type === "heic") {
+    const { width, height, data } = await heicDecode({ buffer });
+    return sharp(Buffer.from(data.buffer, data.byteOffset, data.byteLength), { raw: { width, height, channels: 4 } })
+      .resize({ width: MAX_LONG_EDGE, height: MAX_LONG_EDGE, fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+  }
   return sharp(buffer)
     .rotate() // Exifの回転情報を反映してから処理する(スマホ写真の横向き問題対策)
     .resize({ width: MAX_LONG_EDGE, height: MAX_LONG_EDGE, fit: "inside", withoutEnlargement: true })
@@ -59,7 +71,7 @@ async function prepareImage(buffer: Buffer): Promise<Buffer> {
     .toBuffer();
 }
 
-export async function extractInvoiceItems(imageBuffer: Buffer): Promise<ExtractInvoiceItemsResult> {
+export async function extractInvoiceItems(imageBuffer: Buffer, type: InvoiceImageType): Promise<ExtractInvoiceItemsResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return { items: [], error: "写真からの読み取り機能が設定されていません(ANTHROPIC_API_KEY未設定)。" };
@@ -67,7 +79,7 @@ export async function extractInvoiceItems(imageBuffer: Buffer): Promise<ExtractI
 
   let prepared: Buffer;
   try {
-    prepared = await prepareImage(imageBuffer);
+    prepared = await prepareImage(imageBuffer, type);
   } catch {
     return { items: [], error: "画像を処理できませんでした。別の写真でお試しください。" };
   }

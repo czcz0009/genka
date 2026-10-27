@@ -5,7 +5,8 @@ const nextConfig: NextConfig = {
   // バンドルされるとそのファイルレイアウトが崩れて解決できなくなることを実際に確認した
   // (畜産物PDF取り込みのRoute Handlerで再現)。バンドル対象から外し、素のNode.js requireで
   // 解決させることで、単体のNodeスクリプトで動いていたときと同じ挙動にする。
-  serverExternalPackages: ["pdfjs-dist"],
+  // heic-decode(libheif-js)も、WebAssemblyを含む大きな部品なのでバンドルしない(納品書のHEICの読み取り。2026-10-26)。
+  serverExternalPackages: ["pdfjs-dist", "heic-decode", "libheif-js"],
 
   // 旧URL(genka-one.vercel.app)から独自ドメインへの恒久的な転送(301)。
   // /api/ は転送しない: Vercelのcronは本番の *.vercel.app のURLを呼び、転送には従わない

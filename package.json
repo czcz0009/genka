@@ -16,15 +16,15 @@
     "@supabase/supabase-js": "^2.115.0",
     "cheerio": "^1.2.0",
     "driver.js": "^1.8.0",
-    "next": "16.3.4",
+    "heic-decode": "^2.1.0",
+    "next": "16.4.3",
     "papaparse": "^5.7.0",
     "pdfjs-dist": "^4.10.38",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "server-only": "^0.0.1",
-    "sharp": "^0.35.4",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
-    "zod": "^4.5.4"
+    "sharp": "^0.35.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -33,7 +33,8 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.3.4",
+    "eslint-config-next": "16.4.3",
+    "playwright": "1.63.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

@@ -1,8 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  OCR_ATTEMPT_LIMIT,
-  OCR_USAGE_LIMIT,
   remainingOcrUses,
   OCR_MONTHLY_USE_LIMIT,
   OCR_MONTHLY_ATTEMPT_LIMIT,
@@ -51,12 +49,6 @@ test("Q-4・Q-6・Q-7・Q-11 断ったときの日本語の案内", () => {
   assert.equal(ocrGateMessage("unavailable"), "ただいま読み取りを使えません。時間をおいて、もう一度お試しください。");
 });
 
-// ── 旧い上限(累計3回・試行10回)。新しい関数に切り替えるまで、今の本番の画面が使う ──
-test("旧: 累計3回・試行10回(切り替え後に消す)", () => {
-  assert.equal(OCR_USAGE_LIMIT, 3);
-  assert.equal(OCR_ATTEMPT_LIMIT, 10);
-  assert.equal(remainingOcrUses(2), 1);
-});
 
 
 test("値が、マイグレーション0029の関数の中の値と同じ(片方だけ直す事故を防ぐ)", async () => {

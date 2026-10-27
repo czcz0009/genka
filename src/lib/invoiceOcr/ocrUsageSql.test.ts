@@ -224,3 +224,15 @@ test("Q-16 成功を数える・取り消す関数も、合言葉なしでは動
   assert.equal((await db.query("select * from ocr_service_incidents")).rows.length, incidentsBefore);
   assert.equal(typeof (await complete(A, r.reservation!)), "number"); // 正しい合言葉なら数える
 });
+
+test("0030 古い数え方の関数と累計の表は無くなり、二度実行してもエラーにならず、新しい数え方は動く", async () => {
+  await db.exec(readFileSync(join(MIG, "0030_drop_old_ocr_usage.sql"), "utf8"));
+  const gone = await db.query<{ f1: boolean; f2: boolean; t: boolean; log: number }>(`
+    select exists(select 1 from pg_proc where pronamespace = 'public'::regnamespace and proname = 'begin_ocr_attempt') as f1,
+           exists(select 1 from pg_proc where pronamespace = 'public'::regnamespace and proname = 'complete_ocr_success') as f2,
+           to_regclass('public.ocr_usage') is not null as t,
+           (select count(*)::int from migration_log where version = '0030') as log`);
+  assert.deepEqual(gone.rows[0], { f1: false, f2: false, t: false, log: 1 });
+  await setClock("2026-12-01 09:00");
+  assert.equal((await begin(A)).result, "ok");
+});

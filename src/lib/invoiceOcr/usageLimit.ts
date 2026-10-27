@@ -14,13 +14,8 @@ export const OCR_MONTHLY_ATTEMPT_LIMIT = 100;
 export const OCR_USER_DAILY_ATTEMPT_LIMIT = 20;
 export const OCR_GLOBAL_DAILY_ATTEMPT_LIMIT = 200;
 
-/** 旧: β期間の累計の上限(累計3回・試行10回)。新しい関数に切り替えるまで、今の本番の画面が使う。切り替え後に消す */
-export const OCR_USAGE_LIMIT = 3;
-/** 旧: 累計の試行の上限(切り替え後に消す) */
-export const OCR_ATTEMPT_LIMIT = 10;
-
 /** 残り回数(0未満にはならない) */
-export function remainingOcrUses(usedCount: number, limit: number = OCR_USAGE_LIMIT): number {
+export function remainingOcrUses(usedCount: number, limit: number = OCR_MONTHLY_USE_LIMIT): number {
   return Math.max(0, limit - usedCount);
 }
 

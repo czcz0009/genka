@@ -10,6 +10,7 @@ import { createIngredient, updateIngredient } from "../actions.ts";
 import type { ExtractedInvoiceItem } from "@/lib/invoiceOcr/types.ts";
 import { convertUnitPrice, isSameUnit } from "@/lib/invoiceOcr/convertUnitPrice.ts";
 import { prepareUpload, resizeInBrowser, runScan } from "@/lib/invoiceOcr/uploadPrep.ts";
+import { unitMismatchNote } from "@/lib/invoiceOcr/unitNote.ts";
 
 export interface ExistingIngredientOption {
   id: string;
@@ -76,7 +77,7 @@ function resolvePriceForExisting(
   }
   return {
     unitPrice: formatPrice(invoicePrice),
-    unitNote: `納品書の単位は「${invoiceUnit}」、登録済みの単位は「${existingUnit}」で、自動では換算できません。単価が登録済みの単位あたりになっているか確認してください。`,
+    unitNote: unitMismatchNote(invoiceUnit, existingUnit),
   };
 }
 
@@ -108,6 +109,9 @@ function buildInitialRow(item: ExtractedInvoiceItem, existingByNormalizedName: M
   };
 }
 
+/** 新しい食材の単位の候補(自由に入力もできる) */
+const UNIT_OPTIONS = ["g", "kg", "ml", "L", "個", "本", "玉", "袋", "パック", "束", "枚", "切れ", "缶", "箱", "株"];
+
 export function ScanView({
   storeId,
   existingIngredients,
@@ -118,7 +122,10 @@ export function ScanView({
   initialRemaining: number;
 }) {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // 入口は2つ(2026-10-27、設計の1段目): カメラを直接開く「写真を撮る」と、ライブラリやファイルから選ぶ「写真・ファイルから選ぶ」
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const pickInputRef = useRef<HTMLInputElement | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -130,6 +137,7 @@ export function ScanView({
   const existingByNormalizedName = new Map(existingIngredients.map((i) => [normalizeForDedupe(i.name), i]));
 
   function handleFileChange(file: File | null) {
+    setSelectedFile(file);
     setScanError(null);
     setRows(null);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -138,7 +146,9 @@ export function ScanView({
 
   /** 写真の選択を消して、もう一度選べる状態に戻す(送れなかった・断られたとき) */
   function resetPhoto() {
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+    if (pickInputRef.current) pickInputRef.current.value = "";
+    setSelectedFile(null);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
   }
@@ -146,7 +156,7 @@ export function ScanView({
   // 写真はブラウザの中で縮小してから送る(スマホの写真が1MBを超えて送れなかった不具合の対策。uploadPrep.ts)。
   // 送れなかった・断られた・時間がかかりすぎたときも、必ず日本語のエラーを出して、選び直せる状態に戻す。
   async function handleScan() {
-    const file = fileInputRef.current?.files?.[0];
+    const file = selectedFile;
     if (!file) {
       setScanError("写真を選択してください");
       return;
@@ -258,18 +268,37 @@ export function ScanView({
   return (
     <div className="mt-6 flex flex-col gap-6">
       <div className="flex flex-col gap-4 rounded border p-5" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-        <label className="flex flex-col gap-2 text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+        <p className="text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
           納品書・請求書の写真
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
-            className={INPUT_CLASS}
-            style={inputStyle}
-          />
-        </label>
+        </p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <label className="cursor-pointer rounded border px-4 py-3 text-center text-base font-semibold" style={{ borderColor: "var(--border)", color: "var(--foreground)" }}>
+            写真を撮る
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
+              className="sr-only"
+            />
+          </label>
+          <label className="cursor-pointer rounded border px-4 py-3 text-center text-base font-semibold" style={{ borderColor: "var(--border)", color: "var(--foreground)" }}>
+            写真・ファイルから選ぶ
+            <input
+              ref={pickInputRef}
+              type="file"
+              accept="image/*"
+              onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
+              className="sr-only"
+            />
+          </label>
+        </div>
+        {selectedFile && (
+          <p className="text-sm break-all" style={{ color: "var(--muted-foreground)" }}>
+            選んだ写真: {selectedFile.name}
+          </p>
+        )}
         {previewUrl && (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={previewUrl} alt="選択した納品書のプレビュー" className="max-h-64 w-auto rounded border object-contain" style={{ borderColor: "var(--border)" }} />
@@ -286,8 +315,8 @@ export function ScanView({
         </button>
         <p className="text-sm" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
           {remaining > 0
-            ? `β版期間中の読み取り回数: あと${remaining}回(読み取りに成功したときに数えます)`
-            : "β版期間中の読み取り回数の上限に達しました。ご要望があればお知らせください。"}
+            ? `今月の読み取り: あと${remaining}回(読み取りに成功したときに数えます。毎月1日に元に戻ります)`
+            : "今月の読み取りの回数の上限に達しました。来月1日に、回数が元に戻ります。"}
         </p>
       </div>
 
@@ -361,6 +390,7 @@ export function ScanView({
                       onChange={(e) => updateRow(row.key, { unit: e.target.value })}
                       disabled={row.target !== "new" || row.saved}
                       placeholder="g"
+                      list="scan-unit-options"
                       className={INPUT_CLASS}
                       style={inputStyle}
                     />
@@ -381,6 +411,17 @@ export function ScanView({
                     />
                   </label>
                 </div>
+
+                {row.target !== "new" && !row.saved && (
+                  <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                    登録済みの食材の名前と単位は、ここでは変えられません(灰色の欄)。単価は変えられます。
+                  </p>
+                )}
+                {row.saved && (
+                  <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                    保存済みのため、この行は変えられません。直すときは、食材一覧から変えてください。
+                  </p>
+                )}
 
                 {row.unitNote && !row.saved && (
                   <p className="text-sm font-medium" style={{ color: "var(--warning, #b45309)", fontFamily: "var(--font-noto-sans-jp)" }}>
@@ -412,6 +453,11 @@ export function ScanView({
               </li>
             ))}
           </ul>
+          <datalist id="scan-unit-options">
+            {UNIT_OPTIONS.map((u) => (
+              <option key={u} value={u} />
+            ))}
+          </datalist>
         </div>
       )}
     </div>

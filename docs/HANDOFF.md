@@ -264,6 +264,16 @@ node scripts/deploy.mjs --dry     # リンクの確認だけ(公開しない)
 
 ---
 
+### 5-5. 合言葉 OCR_DB_TOKEN の作り直し(納品書の読み取りの回数の関数を守る合言葉。2026-10-27)
+- 何に使うか: マイグレーション0029の関数(begin/complete/cancel_ocr_attempt_v2)は、この合言葉が無いと動かない。本体はVercelの本番の環境変数(sensitive。値は後から読めない)と手元の `.env.local` だけ。DBには要約(SHA-256)を `app_server_tokens` の行 `ocr` に置く。
+- 作り直す手順(値は画面・ログ・チャットに出さない):
+  1. リポジトリのフォルダで `node scripts/ops/rotate_ocr_token.mjs` を実行する(新しい値を作り、Vercelの本番(sensitive)と `.env.local` に入れ、DBに入れる要約のSQLだけを画面に出す)。
+  2. DBの要約を差し替える(SQL Editor): `insert into public.app_server_tokens (name, token_sha256, updated_at) values ('ocr', decode('<要約の16進>', 'hex'), now()) on conflict (name) do update set token_sha256 = excluded.token_sha256, updated_at = now();`
+  3. 再デプロイする(`npx vercel --prod`。環境変数は再デプロイで反映される)。
+  4. 本番で、使い捨てアカウントで納品書を1回読み取り、読み取れることを確かめる。
+- 注意: 1〜3のあいだ(DBの要約とアプリの値が食い違うあいだ)は、読み取りが「ただいま読み取りを使えません」になる(安全側)。短時間で続けて行う。
+- `NEXT_PUBLIC_` を付けない。ビルドの成果物(`.next/static`)に値が入っていないことを、作り直したら確かめる。
+
 ## 6. ハマりどころ・運用メモ
 
 ### このPCのClaude Codeのメモリ(別PCには引き継がれないため、ここに転記)

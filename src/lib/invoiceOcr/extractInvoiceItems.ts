@@ -4,6 +4,8 @@ import sharp from "sharp";
 import heicDecode from "heic-decode";
 import { parseExtractionResponse } from "./parseExtractionResponse.ts";
 import type { InvoiceImageType } from "./imageType.ts";
+import { classifyAiError } from "./serviceError.ts";
+import { ocrGateMessage } from "./usageLimit.ts";
 import type { ExtractedInvoiceItem } from "./types.ts";
 
 /**
@@ -47,6 +49,11 @@ const EXTRACTION_PROMPT = `あなたは飲食店向け原価計算ツールの�
 export interface ExtractInvoiceItemsResult {
   items: ExtractedInvoiceItem[];
   error: string | null;
+  /**
+   * AI側の都合(残高不足・鍵・混雑・障害・通信)で読めなかったときの記録の種類。このときは店主の回数を減らさない
+   * (呼び出し側で試行を取り消す)。写真の側の問題のときは null。2026-10-27
+   */
+  unavailable?: "credit" | "auth" | "busy" | null;
 }
 
 /**
@@ -74,7 +81,7 @@ export async function prepareImage(buffer: Buffer, type: InvoiceImageType): Prom
 export async function extractInvoiceItems(imageBuffer: Buffer, type: InvoiceImageType): Promise<ExtractInvoiceItemsResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return { items: [], error: "写真からの読み取り機能が設定されていません(ANTHROPIC_API_KEY未設定)。" };
+    return { items: [], error: ocrGateMessage("unavailable"), unavailable: "auth" };
   }
 
   let prepared: Buffer;
@@ -103,8 +110,10 @@ export async function extractInvoiceItems(imageBuffer: Buffer, type: InvoiceImag
     });
     const textBlock = message.content.find((b) => b.type === "text");
     responseText = textBlock && "text" in textBlock ? textBlock.text : "";
-  } catch {
-    return { items: [], error: "読み取り処理に失敗しました。通信状況を確認して、もう一度お試しください。" };
+  } catch (e) {
+    const c = classifyAiError(e);
+    if (c.kind === "unavailable") return { items: [], error: ocrGateMessage("unavailable"), unavailable: c.incident };
+    return { items: [], error: "写真を読み取れませんでした。別の写真でお試しください。" };
   }
 
   return parseExtractionResponse(responseText);

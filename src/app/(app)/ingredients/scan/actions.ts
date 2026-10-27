@@ -3,7 +3,8 @@
 import { requireAuthedClient } from "@/lib/supabase/requireAuthedClient";
 import { extractInvoiceItems } from "@/lib/invoiceOcr/extractInvoiceItems.ts";
 import type { ExtractedInvoiceItem } from "@/lib/invoiceOcr/types.ts";
-import { OCR_ATTEMPT_LIMIT, OCR_USAGE_LIMIT, remainingOcrUses } from "@/lib/invoiceOcr/usageLimit.ts";
+import { OCR_MONTHLY_USE_LIMIT, ocrGateMessage, remainingOcrUses } from "@/lib/invoiceOcr/usageLimit.ts";
+import { beginOcrAttempt, cancelOcrAttempt, completeOcrSuccess } from "@/lib/invoiceOcr/ocrGate.ts";
 import { checkInvoiceUpload, IMAGE_HEAD_BYTES } from "@/lib/invoiceOcr/imageType.ts";
 
 export type ScanInvoiceResult = { success: true; items: ExtractedInvoiceItem[]; remaining: number } | { success: false; error: string };
@@ -14,6 +15,10 @@ export type ScanInvoiceResult = { success: true; items: ExtractedInvoiceItem[]; 
  * 食材登録・単価更新は、画面で確認・修正した後に既存のcreateIngredient/
  * updateIngredientを呼ぶ(ingredients/actions.ts、①のCSV取り込みと同じ
  * 「必ず人間が確認してから確定する」設計)。
+ *
+ * 回数の数え方(2026-10-27。マイグレーション0029・usageLimit.ts): 月の成功50回・月の試行100回・1日の試行20回・
+ * アプリ全体の1日の試行200回。AIを呼ぶ前に受付票をもらい(試行を1回数える)、成功したら成功を数える。
+ * AI側の都合(残高不足など)で読めなかったときは、試行を取り消し(店主の回数を減らさない)、記録を残す。
  */
 export async function scanInvoicePhoto(formData: FormData): Promise<ScanInvoiceResult> {
   const ctx = await requireAuthedClient();
@@ -29,21 +34,15 @@ export async function scanInvoicePhoto(formData: FormData): Promise<ScanInvoiceR
   const checked = checkInvoiceUpload({ declaredType: file.type, size: file.size, head });
   if (!checked.ok) return { success: false, error: checked.error };
 
-  // β期間中の利用回数の上限チェック。AIを呼ぶ前に、DB側で排他制御しながら
-  // 「成功回数」と「試行回数」の両方を確認し、試行回数を1つ消費する。
-  const { data: gate, error: gateError } = await ctx.supabase.rpc("begin_ocr_attempt", {
-    p_use_limit: OCR_USAGE_LIMIT,
-    p_attempt_limit: OCR_ATTEMPT_LIMIT,
-  });
-  if (gateError) return { success: false, error: "利用回数を確認できませんでした。時間をおいて再度お試しください。" };
-  if (gate === "use_limit") return { success: false, error: "β版期間中の読み取り回数の上限に達しました。" };
-  if (gate === "attempt_limit") {
-    return { success: false, error: "β版期間中の読み取りの試行回数の上限に達しました。" };
-  }
-  if (gate !== "ok") return { success: false, error: "利用回数を確認できませんでした。時間をおいて再度お試しください。" };
+  const gate = await beginOcrAttempt(ctx.supabase);
+  if (!gate.ok) return { success: false, error: ocrGateMessage(gate.reason) };
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const result = await extractInvoiceItems(buffer, checked.type);
+  if (result.unavailable) {
+    await cancelOcrAttempt(ctx.supabase, gate.reservation, result.unavailable);
+    return { success: false, error: ocrGateMessage("unavailable") };
+  }
   if (result.error) return { success: false, error: result.error };
   if (result.items.length === 0) {
     return {
@@ -52,8 +51,7 @@ export async function scanInvoicePhoto(formData: FormData): Promise<ScanInvoiceR
     };
   }
 
-  // 読み取りに成功したときだけ「成功回数」を消費する
-  const { data: newCount } = await ctx.supabase.rpc("complete_ocr_success");
-  const used = typeof newCount === "number" ? newCount : OCR_USAGE_LIMIT;
-  return { success: true, items: result.items, remaining: remainingOcrUses(used) };
+  // 読み取りに成功したときだけ「成功回数」を数える
+  const used = await completeOcrSuccess(ctx.supabase, gate.reservation);
+  return { success: true, items: result.items, remaining: remainingOcrUses(used ?? OCR_MONTHLY_USE_LIMIT, OCR_MONTHLY_USE_LIMIT) };
 }

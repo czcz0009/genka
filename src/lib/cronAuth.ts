@@ -1,13 +1,7 @@
 import "server-only";
+import { matchesCronSecret } from "./cronSecret.ts";
 
-/**
- * 定期実行ルート(src/app/api/cron/**)を、Vercel Cron以外から叩けないようにするガード。
- * Vercel Cronは `Authorization: Bearer <CRON_SECRET>` を付けてリクエストする
- * (https://vercel.com/docs/cron-jobs/manage-cron-jobs#securing-cron-jobs)。
- * CRON_SECRET未設定の場合は常に拒否する(安全側)。
- */
+/** 定期処理の入口の合言葉の確認(比べ方の本体とテストは cronSecret.ts) */
 export function isAuthorizedCronRequest(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  return request.headers.get("authorization") === `Bearer ${secret}`;
+  return matchesCronSecret(request.headers.get("authorization"), process.env.CRON_SECRET);
 }

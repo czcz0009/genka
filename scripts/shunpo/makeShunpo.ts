@@ -1,7 +1,8 @@
 // 旬報(野菜の卸売価格の値動きのまとめ)の下書きを作る(2026-10-26)。自動で投稿はしない。
 //
 // 使い方(リポジトリのフォルダで):
-//   node --experimental-strip-types --env-file=.env.local scripts/shunpo/makeShunpo.ts [--force]
+//   node --experimental-strip-types --env-file=.env.local scripts/shunpo/makeShunpo.ts [--force] [--period=2026-10-1]
+//   --period で、DBにある過去の旬(年-月-上中下の1〜3)を指定して作り直せる(既定は最新の旬)
 // - DBにある最新の旬と1つ前の旬を比べて、下書きを作る(DBは読むだけ)。
 // - 保存先: 環境変数 SHUNPO_OUT_DIR(既定は <ホーム>/genka-demo/旬報)の下の「2026年10月上旬」等のフォルダ。
 //   X投稿.txt(Xの下書き)、画像.png(1080×1350)、選び方.txt(選ばれた品目・外れた品目と理由)。
@@ -25,8 +26,10 @@ import {
   periodLabel,
   type ShunpoRow,
 } from "../../src/lib/marketPrices/shunpo.ts";
+import { displayName } from "../../src/lib/marketPrices/shunpoNames.ts";
 
 const force = process.argv.includes("--force");
+const periodArg = process.argv.find((a) => a.startsWith("--period="))?.slice("--period=".length);
 const outRoot = process.env.SHUNPO_OUT_DIR ?? join(homedir(), "genka-demo", "旬報");
 mkdirSync(outRoot, { recursive: true });
 const logLine = (msg: string) => {
@@ -49,7 +52,12 @@ async function main() {
     .maybeSingle();
   if (latestErr) throw latestErr;
   if (!latest) return logLine("野菜のデータがありません(何もしません)");
-  const cur: Period = { year: latest.period_year, month: latest.period_month, third: latest.period_third as 1 | 2 | 3 };
+  let cur: Period = { year: latest.period_year, month: latest.period_month, third: latest.period_third as 1 | 2 | 3 };
+  if (periodArg) {
+    const [y, m, t] = periodArg.split("-").map(Number);
+    if (!y || !m || ![1, 2, 3].includes(t)) throw new Error(`--period の形が正しくありません: ${periodArg}(例: 2026-10-1)`);
+    cur = { year: y, month: m, third: t as 1 | 2 | 3 };
+  }
   const prev = previousPeriod(cur);
   const folder = join(outRoot, `${cur.year}年${periodLabel(cur)}`);
   if (existsSync(join(folder, "X投稿.txt")) && !force) return logLine(`${cur.year}年${periodLabel(cur)}: 作成済みのため何もしません`);
@@ -73,7 +81,7 @@ async function main() {
   writeFileSync(join(folder, "X投稿.txt"), draft + "\n");
 
   const item = (x: (typeof sel.up)[number]) =>
-    `  ${x.itemName}  ${Math.round(x.previousPrice)}→${Math.round(x.currentPrice)}円/kg  ${formatChange(x.changePercent)}(四捨五入前 ${x.changePercent.toFixed(1)}%)  入荷量 ${x.quantityTon}トン  前年同旬比 ${formatYoy(x.yoyIndex) ?? "なし"}(${x.yoyIndex ?? "-"})`;
+    `  ${displayName(x.itemName)}${displayName(x.itemName) !== x.itemName ? `(統計の名前: ${x.itemName})` : ""}  ${Math.round(x.previousPrice)}→${Math.round(x.currentPrice)}円/kg  ${formatChange(x.changePercent)}(四捨五入前 ${x.changePercent.toFixed(1)}%)  入荷量 ${x.quantityTon}トン  前年同旬比 ${formatYoy(x.yoyIndex) ?? "なし"}(${x.yoyIndex ?? "-"})`;
   writeFileSync(
     join(folder, "選び方.txt"),
     [
@@ -89,6 +97,7 @@ async function main() {
       ...(sel.excluded.length ? sel.excluded.map((x) => `  ${x.itemName}  ${x.changePercent.toFixed(1)}%  入荷量 ${x.quantityTon ?? "-"}トン  理由: ${x.reason}`) : ["  なし"]),
       "",
       "※前年同旬比は、農林水産省のCSVの「対前年同旬比価格(%)」の値(前年=100)。",
+      "※品目の名前は、一般的な呼び方に直して表示している(対応表は src/lib/marketPrices/shunpoNames.ts)。",
     ].join("\n") + "\n",
   );
 

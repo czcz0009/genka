@@ -18,6 +18,7 @@
  * テストは shunpo.test.ts(10月上旬と9月下旬の実データ)。
  */
 import type { Period } from "./period.ts";
+import { displayName } from "./shunpoNames.ts";
 
 export interface ShunpoRow {
   item_code: string;
@@ -147,10 +148,10 @@ function highestYoy(items: ShunpoItem[]): ShunpoItem | null {
  */
 export function tipLine(sel: ShunpoSelection): string {
   const upHigh = highestYoy(sel.up);
-  if (upHigh) return `${upHigh.itemName}は前年同時期の${formatYoy(upHigh.yoyIndex)}。${upHigh.itemName}を多く使うメニューは、仕入れ値の確認を。`;
+  if (upHigh) return `${displayName(upHigh.itemName)}は前年同時期の${formatYoy(upHigh.yoyIndex)}。${displayName(upHigh.itemName)}を多く使うメニューは、仕入れ値の確認を。`;
   const downHigh = highestYoy(sel.down);
-  if (downHigh) return `${downHigh.itemName}は値下がりしましたが、前年同時期の${formatYoy(downHigh.yoyIndex)}です。`;
-  if (sel.up[0]) return `${sel.up[0].itemName}を多く使うメニューは、仕入れ値の確認を。`;
+  if (downHigh) return `${displayName(downHigh.itemName)}は値下がりしましたが、前年同時期の${formatYoy(downHigh.yoyIndex)}です。`;
+  if (sel.up[0]) return `${displayName(sel.up[0].itemName)}を多く使うメニューは、仕入れ値の確認を。`;
   if (sel.down[0]) return "値下がりした品目は、仕入れ値の見直しの参考に。";
   return "前の旬から10%以上動いた品目はありませんでした。";
 }
@@ -163,8 +164,8 @@ export const X_LIMIT = 280;
 
 export function buildXDraft(sel: ShunpoSelection, current: Period, previous: Period): string {
   const lines = [`【野菜の卸売価格 ${periodLabel(current)}】`, `前の旬(${periodLabel(previous)})と比べて`];
-  for (const x of sel.up) lines.push(`↑${x.itemName} ${formatChange(x.changePercent)}`);
-  for (const x of sel.down) lines.push(`↓${x.itemName} ${formatChange(x.changePercent)}`);
+  for (const x of sel.up) lines.push(`↑${displayName(x.itemName)} ${formatChange(x.changePercent)}`);
+  for (const x of sel.down) lines.push(`↓${displayName(x.itemName)} ${formatChange(x.changePercent)}`);
   const tip = tipLine(sel);
   const withTip = [...lines, tip, SOURCE_SHORT].join("\n");
   // 上限を超えるときは、最後の一言を省く(品目と出典は必ず残す)
@@ -177,7 +178,7 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 export function buildImageHtml(sel: ShunpoSelection, current: Period, previous: Period): string {
   const head = `<tr><th>品目</th><th>${periodLabel(previous)}→${periodLabel(current)}</th><th>前旬比</th><th>前年同旬比</th></tr>`;
   const row = (x: ShunpoItem) =>
-    `<tr><td class="n">${esc(x.itemName)}</td><td>${Math.round(x.previousPrice)}<span class="u">→</span><b>${Math.round(x.currentPrice)}</b></td>` +
+    `<tr><td class="n">${esc(displayName(x.itemName))}</td><td>${Math.round(x.previousPrice)}<span class="u">→</span><b>${Math.round(x.currentPrice)}</b></td>` +
     `<td class="${x.changePercent > 0 ? "up" : "dn"}">${formatChange(x.changePercent)}</td><td class="y">${formatYoy(x.yoyIndex) ?? "—"}</td></tr>`;
   const section = (title: string, cls: string, items: ShunpoItem[]) =>
     items.length ? `<div class="sec ${cls}">${title}</div><table>${head}${items.map(row).join("")}</table>` : "";
@@ -196,6 +197,6 @@ td{font-size:38px;padding:20px 24px;text-align:right;border-bottom:1px solid #ee
 </style></head><body>
 <h1>野菜の卸売価格 ${periodLabel(current)}</h1><h2>前の旬(${periodLabel(previous)})との比較 / 全国の主要卸売市場 / 円/kg</h2>
 ${section("値上がり", "up", sel.up)}${section("値下がり", "dn", sel.down)}${none}
-<div class="note">対象: 野菜のうち、${periodLabel(current)}の入荷量が${SHUNPO_MIN_QUANTITY_TON}トン以上で、前の旬から${SHUNPO_MIN_CHANGE_PERCENT}%以上動いた品目(値上がり・値下がり各${SHUNPO_MAX_ITEMS}件まで)。卸売価格であり、小売価格・各店の仕入れ値とは異なります。<br>${SOURCE_LONG}</div>
+<div class="note">対象: 野菜のうち、${periodLabel(current)}の入荷量が${SHUNPO_MIN_QUANTITY_TON}トン以上で、前の旬から${SHUNPO_MIN_CHANGE_PERCENT}%以上動いた品目(値上がり・値下がり各${SHUNPO_MAX_ITEMS}件まで)。卸売価格であり、小売価格・各店の仕入れ値とは異なります。品目の名前は、一般的な呼び方に直しています。<br>${SOURCE_LONG}</div>
 </body></html>`;
 }

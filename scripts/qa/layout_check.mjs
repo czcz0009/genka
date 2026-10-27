@@ -16,7 +16,7 @@
 import { chromium } from "playwright";
 import { createClient } from "@supabase/supabase-js";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -223,10 +223,24 @@ async function login(context, acc) {
 const APP_PAGES = ["/", "/menus", "/menus/new", "/ingredients", "/ingredients/scan", "/ranking", "/sales", "/fl-ratio", "/alerts", "/categories", "/import", "/settings"];
 const PUBLIC_PAGES = ["/login", "/reset-password", "/terms", "/privacy", "/legal"];
 
+// 途中で止められた(後片付けまで進まなかった)ときに備え、作ったアカウントのIDをファイルに残し、
+// 次の実行の最初に、そこに残っているアカウントを消す(名前の形では探さない。2026-10-27、10/26の中断で2件残ったため)
+const PENDING = join(tmpdir(), "genka-layout-check-pending.json");
+const readPending = () => { try { return JSON.parse(readFileSync(PENDING, "utf8")); } catch { return []; } };
+const writePending = (ids) => writeFileSync(PENDING, JSON.stringify(ids));
+for (const userId of readPending()) {
+  await deleteAccount({ userId });
+  console.log(`前回の実行で残ったアカウントを削除: ${userId}`);
+}
+writePending([]);
+
 const accounts = [];
 let browser;
 try {
-  accounts.push(createAccount("long"), createAccount("empty"));
+  for (const preset of ["long", "empty"]) {
+    accounts.push(createAccount(preset));
+    writePending(accounts.map((a) => a.userId));
+  }
   console.log("使い捨てアカウントを2つ作成(long・empty)");
   browser = await chromium.launch({ channel: "chromium", args: ["--lang=ja"] });
 
@@ -286,6 +300,7 @@ try {
 } finally {
   if (browser) await browser.close();
   for (const acc of accounts) await deleteAccount(acc);
+  writePending([]);
   const { data } = await admin.auth.admin.listUsers({ perPage: 1000 });
   const left = data.users.filter((u) => accounts.some((a) => a.userId === u.id)).length;
   console.log(`後片付け: 作ったアカウント${accounts.length}件を削除、残り${left}件`);

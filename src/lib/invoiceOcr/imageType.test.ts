@@ -63,8 +63,8 @@ test("I-13 申告が許可しない種類(SVG等)なら、中身に関係なく�
   assert.equal(fake.ok, false);
   assert.equal(!fake.ok && fake.error, "JPEG・PNG・WebP・HEICの写真を選択してください");
 });
-test("I-14 空のファイル、10MBを超えるファイルは受け付けない(10MBちょうどは受け付ける)", () => {
+test("I-14 空のファイル、3.5MBを超えるファイルは受け付けない(3.5MBちょうどは受け付ける。2026-10-27に10MBから変更。ブラウザで縮小してから送るため)", () => {
   assert.equal(checkInvoiceUpload({ declaredType: "image/jpeg", size: 0, head: JPEG }).ok, false);
-  assert.equal(checkInvoiceUpload({ declaredType: "image/jpeg", size: 10 * 1024 * 1024 + 1, head: JPEG }).ok, false);
-  assert.equal(checkInvoiceUpload({ declaredType: "image/jpeg", size: 10 * 1024 * 1024, head: JPEG }).ok, true);
+  assert.equal(checkInvoiceUpload({ declaredType: "image/jpeg", size: 3.5 * 1024 * 1024 + 1, head: JPEG }).ok, false);
+  assert.equal(checkInvoiceUpload({ declaredType: "image/jpeg", size: 3.5 * 1024 * 1024, head: JPEG }).ok, true);
 });

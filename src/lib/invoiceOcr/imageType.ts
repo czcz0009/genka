@@ -9,7 +9,9 @@
 
 export type InvoiceImageType = "jpeg" | "png" | "webp" | "heic";
 
-export const MAX_INVOICE_UPLOAD_BYTES = 10 * 1024 * 1024; // Claude APIの1画像あたりの上限(10MB)に合わせる
+// 受け付ける写真の大きさの上限。ブラウザで縮小できなかったときに、そのまま送ってよい上限(uploadPrep.tsの
+// UPLOAD_HARD_LIMIT_BYTES)と同じ。サーバーアクションの受け取りの上限(next.config.tsの4MB)より少し小さい(2026-10-27)
+export const MAX_INVOICE_UPLOAD_BYTES = 3.5 * 1024 * 1024;
 /** 判定に使う先頭のバイト数(HEICのftyp箱の互換ブランドの一覧まで読める長さ) */
 export const IMAGE_HEAD_BYTES = 64;
 
@@ -45,7 +47,7 @@ export type InvoiceUploadCheck = { ok: true; type: InvoiceImageType } | { ok: fa
 
 export function checkInvoiceUpload(input: { declaredType: string; size: number; head: Uint8Array }): InvoiceUploadCheck {
   if (input.size === 0) return { ok: false, error: "写真を選択してください" };
-  if (input.size > MAX_INVOICE_UPLOAD_BYTES) return { ok: false, error: "写真のファイルサイズが大きすぎます(10MBまで)" };
+  if (input.size > MAX_INVOICE_UPLOAD_BYTES) return { ok: false, error: "写真のファイルサイズが大きすぎます(3.5MBまで)" };
   const declared = input.declaredType.toLowerCase();
   if (!ALLOWED_DECLARED.has(declared) && !NEUTRAL_DECLARED.has(declared)) return { ok: false, error: UNSUPPORTED_IMAGE_MESSAGE };
   const type = detectImageType(input.head);

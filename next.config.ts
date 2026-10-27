@@ -8,6 +8,12 @@ const nextConfig: NextConfig = {
   // heic-decode(libheif-js)も、WebAssemblyを含む大きな部品なのでバンドルしない(納品書のHEICの読み取り。2026-10-26)。
   serverExternalPackages: ["pdfjs-dist", "heic-decode", "libheif-js"],
 
+  // サーバーアクションが受け取れる大きさの上限(初期設定1MB)。納品書の写真はブラウザで縮小してから送るが、
+  // 縮小できない形式(AndroidのHEIC等)をそのまま送る場合の予備として4MBにする(広げすぎない)。2026-10-27
+  experimental: {
+    serverActions: { bodySizeLimit: "4mb" },
+  },
+
   // 旧URL(genka-one.vercel.app)から独自ドメインへの恒久的な転送(301)。
   // /api/ は転送しない: Vercelのcronは本番の *.vercel.app のURLを呼び、転送には従わない
   // (Vercel公式ドキュメント「Cron jobs and redirects」)。転送するとcronが止まるため。

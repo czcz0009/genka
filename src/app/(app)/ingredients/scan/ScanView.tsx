@@ -9,6 +9,7 @@ import { scanInvoicePhoto } from "./actions.ts";
 import { createIngredient, updateIngredient } from "../actions.ts";
 import type { ExtractedInvoiceItem } from "@/lib/invoiceOcr/types.ts";
 import { convertUnitPrice, isSameUnit } from "@/lib/invoiceOcr/convertUnitPrice.ts";
+import { prepareUpload, resizeInBrowser, runScan } from "@/lib/invoiceOcr/uploadPrep.ts";
 
 export interface ExistingIngredientOption {
   id: string;
@@ -135,6 +136,15 @@ export function ScanView({
     setPreviewUrl(file ? URL.createObjectURL(file) : null);
   }
 
+  /** 写真の選択を消して、もう一度選べる状態に戻す(送れなかった・断られたとき) */
+  function resetPhoto() {
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+  }
+
+  // 写真はブラウザの中で縮小してから送る(スマホの写真が1MBを超えて送れなかった不具合の対策。uploadPrep.ts)。
+  // 送れなかった・断られた・時間がかかりすぎたときも、必ず日本語のエラーを出して、選び直せる状態に戻す。
   async function handleScan() {
     const file = fileInputRef.current?.files?.[0];
     if (!file) {
@@ -144,16 +154,28 @@ export function ScanView({
     setScanning(true);
     setScanError(null);
     setRows(null);
-    const formData = new FormData();
-    formData.append("photo", file);
-    const result = await scanInvoicePhoto(formData);
-    setScanning(false);
-    if (result.success) setRemaining(result.remaining);
-    if (!result.success) {
-      setScanError(result.error);
-      return;
+    try {
+      let resized: Blob | null = null;
+      const prepared = await prepareUpload(file, async () => (resized = await resizeInBrowser(file)));
+      if (!prepared.ok) {
+        setScanError(prepared.error);
+        resetPhoto();
+        return;
+      }
+      const formData = new FormData();
+      if (prepared.kind === "resized" && resized) formData.append("photo", resized, "photo.jpg");
+      else formData.append("photo", file);
+      const result = await runScan(() => scanInvoicePhoto(formData));
+      if (!result.success) {
+        setScanError(result.error);
+        resetPhoto();
+        return;
+      }
+      setRemaining(result.remaining);
+      setRows(result.items.map((item) => buildInitialRow(item, existingByNormalizedName)));
+    } finally {
+      setScanning(false);
     }
-    setRows(result.items.map((item) => buildInitialRow(item, existingByNormalizedName)));
   }
 
   function updateRow(key: string, patch: Partial<LocalRow>) {

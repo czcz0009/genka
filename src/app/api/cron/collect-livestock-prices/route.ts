@@ -35,6 +35,8 @@ export async function GET(request: Request) {
 
   const parsed = await parseChikusanPdf(pdf.bytes);
   if (parsed.status !== "ok") {
+    // 理由をVercelのログにも残す(2026-10-27、PDFが読めなくなった件で、理由が応答にしか残っていなかったため)
+    console.error("[collect-livestock-prices] PDFを読めませんでした", parsed.detail, listing.link.url);
     return NextResponse.json({ step: "parse", status: parsed.status, detail: parsed.detail });
   }
 

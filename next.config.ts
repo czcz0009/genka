@@ -8,6 +8,12 @@ const nextConfig: NextConfig = {
   // heic-decode(libheif-js)も、WebAssemblyを含む大きな部品なのでバンドルしない(納品書のHEICの読み取り。2026-10-26)。
   serverExternalPackages: ["pdfjs-dist", "heic-decode", "libheif-js"],
 
+  // 食肉のPDFを読むときに、pdfjs-dist が実行時にファイルとして読む「文字の対応表(cmaps)」と「標準フォント」を、
+  // 本番の定期処理に必ず含める(自動の取り込み対象の判定では見つけられないため。2026-10-27、食肉のPDFが読めなくなった件)
+  outputFileTracingIncludes: {
+    "/api/cron/collect-livestock-prices": ["./node_modules/pdfjs-dist/cmaps/**/*", "./node_modules/pdfjs-dist/standard_fonts/**/*"],
+  },
+
   // サーバーアクションが受け取れる大きさの上限(初期設定1MB)。納品書の写真はブラウザで縮小してから送るが、
   // 縮小できない形式(AndroidのHEIC等)をそのまま送る場合の予備として4MBにする(広げすぎない)。2026-10-27
   experimental: {

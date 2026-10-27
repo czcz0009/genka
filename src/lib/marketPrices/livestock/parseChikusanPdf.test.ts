@@ -74,3 +74,42 @@ test("列数が想定と異なる(空/壊れた)PDFはエラーを投げず unex
   const result = await parseChikusanPdf(new TextEncoder().encode("not a pdf"));
   assert.equal(result.status, "unexpected_layout");
 });
+
+// ── 令和8年9月分(2026-10-27追加)──
+// 農水省「月報告(令和8年9月)」(https://www.maff.go.jp/j/chikusan/shokuniku/lin/attach/pdf/index-602.pdf)。
+// 2026-10-22に取得して保存したもの(10/27に一覧ページで、同じURL・同じ題名・同じ大きさ(182KB)のままであることを確認)。
+// 10/27に本番の定期処理でこのPDFが読めなくなった(Turbopackが require.resolve を番号に書き換えた)ことの再発防止。
+// 期待値L-1〜L-3はMahiroが確認する(DBに入っている2026年9月の値と同じ)。
+import { pdfAssetDir } from "./parseChikusanPdf.ts";
+import { existsSync } from "node:fs";
+const sep2026 = readFileSync(join(__dirname, "fixtures", "index-602.pdf"));
+
+test("L-1 令和8年9月の月報告が読める(unexpected_layoutにならない)", async () => {
+  const result = await parseChikusanPdf(sep2026);
+  assert.equal(result.status, "ok", result.status === "ok" ? "" : result.detail);
+  if (result.status === "ok") assert.equal(result.rows.filter((r) => r.kind === "daily").length, 30); // 9月は30日
+});
+
+test("L-2 令和8年9月(8年9月の行)の価格が、DBに入っている値と一致する", async () => {
+  const result = await parseChikusanPdf(sep2026);
+  assert.equal(result.status, "ok");
+  if (result.status !== "ok") return;
+  const row = result.rows.find((r) => r.kind === "monthly" && r.rowLabel.replace(/\s+/g, "") === "8年9月");
+  assert.ok(row);
+  assert.equal(row!.prices.pork_tokyo, 593);
+  assert.equal(row!.prices.wagyu_a5, 2709);
+  assert.equal(row!.prices.wagyu_a4, 2494);
+  assert.equal(row!.prices.cross_b3, 1845);
+  assert.equal(row!.prices.dairy_b2, 1241);
+  assert.equal(row!.prices.egg_m_tokyo, 298);
+  assert.equal(row!.prices.chicken_thigh, 834);
+  assert.equal(row!.prices.chicken_breast, 471);
+});
+
+test("L-3 文字の対応表・標準フォントのフォルダは、文字のパスで返り、実際にある", () => {
+  for (const sub of ["cmaps", "standard_fonts"] as const) {
+    const dir = pdfAssetDir(sub);
+    assert.equal(typeof dir, "string");
+    assert.ok(existsSync(dir), dir);
+  }
+});

@@ -25,6 +25,7 @@
  *   を使うことで、動的importを一切経由せずに済むようにしている。
  */
 import { createRequire } from "node:module";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as pdfjsWorker from "pdfjs-dist/legacy/build/pdf.worker.mjs";
 import { CHIKUSAN_COLUMNS, type ChikusanItemCode } from "./chikusanColumns.ts";
@@ -75,9 +76,20 @@ function toPlainUint8Array(bytes: ArrayBuffer | Uint8Array): Uint8Array {
   return new Uint8Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
 }
 
-function pdfAssetDir(sub: string): string {
+/**
+ * pdfjs-dist の文字の対応表(cmaps)・標準フォントのフォルダ。
+ * 2026-10-27: 以前は require.resolve で探していたが、Next.js(Turbopack)のバンドルで require.resolve が
+ * パスではなく内部の番号に書き換えられ、本番の定期処理で「path は文字列でなければならない」エラーになり、
+ * 食肉のPDFが読めなくなった(unexpected_layout)。pdfjs-dist はバンドルしない設定(next.config.ts の
+ * serverExternalPackages)なので、実行時は作業フォルダの node_modules の下にある。本番に含める設定は
+ * next.config.ts の outputFileTracingIncludes。単体のスクリプト・テストでも、リポジトリのフォルダで動かせば同じ場所。
+ */
+export function pdfAssetDir(sub: "cmaps" | "standard_fonts"): string {
+  const fromCwd = join(process.cwd(), "node_modules", "pdfjs-dist", sub);
+  if (existsSync(fromCwd)) return fromCwd + "/";
+  // 念のため、作業フォルダが違うとき(単体のスクリプト等)は、従来の探し方も試す
   const pkgJsonPath = require.resolve("pdfjs-dist/package.json");
-  return join(dirname(pkgJsonPath), sub) + "/";
+  return join(dirname(String(pkgJsonPath)), sub) + "/";
 }
 
 /** 近い値をグループ化する(表のわずかなガタつきを吸収する)。クラスタ平均のソート済み配列を返す。 */

@@ -20,8 +20,13 @@ const UNIT_TABLE = new Map<string, { dimension: Dimension; toBase: number }>(Obj
   リットル: { dimension: "volume", toBase: 1000 },
 } as Record<string, { dimension: Dimension; toBase: number }>));
 
-function normalizeUnit(unit: string): string {
+export function normalizeUnit(unit: string): string {
   return unit.normalize("NFKC").trim().toLowerCase();
+}
+
+/** 重さ・容量の単位なら、その種類と基準単位(g・ml)に対する倍率。それ以外(個・本など)は null */
+export function measureUnitInfo(unit: string): { dimension: Dimension; toBase: number } | null {
+  return UNIT_TABLE.get(normalizeUnit(unit)) ?? null;
 }
 
 /** 同じ単位とみなせるか(表記ゆれ込み) */

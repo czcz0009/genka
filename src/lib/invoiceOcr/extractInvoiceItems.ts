@@ -6,7 +6,7 @@ import { parseExtractionResponse } from "./parseExtractionResponse.ts";
 import type { InvoiceImageType } from "./imageType.ts";
 import { classifyAiError } from "./serviceError.ts";
 import { ocrGateMessage } from "./usageLimit.ts";
-import type { ExtractedInvoiceItem } from "./types.ts";
+import type { ExtractedInvoiceItem, InvoiceMeta } from "./types.ts";
 
 /**
  * 納品書・請求書の写真から、食材名・数量・単価をClaude(Vision)で読み取る。
@@ -30,24 +30,37 @@ const MODEL = "claude-haiku-4-5-20251001";
 
 const EXTRACTION_PROMPT = `あなたは飲食店向け原価計算ツールの一部として、納品書・請求書の写真から仕入れ品目を読み取るアシスタントです。
 
-この画像(印刷された納品書または請求書)を読み取り、記載されている品目ごとに以下の情報をJSON配列として出力してください。
+この画像(印刷された納品書または請求書)を読み取り、次の形のJSONを出力してください。
 
+{"invoice": {...納品書全体の情報...}, "items": [{...品目1...}, {...品目2...}]}
+
+invoice(納品書全体の情報):
+- date: 納品日(または伝票の日付)。"YYYY-MM-DD" の形(例: "2026-10-20")。和暦は西暦に直す。読み取れなければnull
+- supplier: 仕入れ先(納品書を出した会社・お店)の名前。印字されている表記のまま。読み取れなければnull
+- totalAmount: 納品書の合計金額(数値。消費税を含む最終的な請求額)。読み取れなければnull
+- taxBasis: 品目の単価・金額が税込なら "inclusive"、税抜なら "exclusive"。「税抜」「外税」「消費税 別」「小計の下に消費税が別に足されている」などは "exclusive"、「税込」「内税」などは "inclusive"。判断できなければnull
+
+items(品目ごと):
 - name: 品目名(食材名)。印字されている表記のまま
 - quantity: 数量(数値。読み取れなければnull)
 - unit: 単位(例: "kg", "g", "本", "個"。読み取れなければnull)
 - unitPrice: 単価(1単位あたりの金額。数値。記載が無ければnull)
-- totalAmount: その行の合計金額(数値。記載が無ければnull)
+- totalAmount: その行の金額(数値。記載が無ければnull)
+- taxRate: その行の消費税率。8 または 10。「※」「軽」などの軽減税率の印があれば8、10%の印(酒類・資材など)があれば10。印が無く判断できなければnull
 - lowConfidence: 手ブレ・かすれ・判読困難などで読み取りに自信が持てない場合はtrue、そうでなければfalse
 - note: lowConfidenceがtrueの場合、その理由を一言(日本語)。自信があればnull
 
 守ってほしいこと:
 - 手書きの文字は今回のスコープ外です。印刷された文字を中心に読み取ってください
 - 読み取れない・自信が持てない値は無理に推測せず、null にしたうえでlowConfidenceをtrueにしてください
-- 出力は上記のJSON配列のみとし、説明文やMarkdownのコードフェンスは付けないでください
-- 品目が1つも読み取れない場合は空配列 [] を返してください`;
+- 単価が書かれていない場合、unitPrice は null のままにしてください(金額と数量から計算しないでください。計算はアプリが行います)
+- 出力は上記のJSONのみとし、説明文やMarkdownのコードフェンスは付けないでください
+- 品目が1つも読み取れない場合は items を空配列 [] にしてください`;
 
 export interface ExtractInvoiceItemsResult {
   items: ExtractedInvoiceItem[];
+  /** 納品書全体の情報(2026-10-28)。読めなかったときは無し */
+  invoice?: InvoiceMeta;
   error: string | null;
   /**
    * AI側の都合(残高不足・鍵・混雑・障害・通信)で読めなかったときの記録の種類。このときは店主の回数を減らさない
@@ -97,7 +110,7 @@ export async function extractInvoiceItems(imageBuffer: Buffer, type: InvoiceImag
   try {
     const message = await client.messages.create({
       model: MODEL,
-      max_tokens: 2048,
+      max_tokens: 3072, // 2026-10-28: 納品書全体の情報と税率を足したぶん、少し増やした
       messages: [
         {
           role: "user",

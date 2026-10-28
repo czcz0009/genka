@@ -44,3 +44,45 @@ test("parseExtractionResponse: 数値が文字列(カンマ・円マーク付き
   assert.equal(result.items[0].unitPrice, 350);
   assert.equal(result.items[0].totalAmount, 3500);
 });
+
+// ---------- 納品書全体の情報(設計の2・3段目、2026-10-28。P-1〜P-4はMahiroが確認する) ----------
+// 税込・税抜の判定と、二度読みに気づくために、品目の一覧に加えて「日付・仕入れ先・合計金額・税の記載」も読み取る。
+
+test("P-1 新しい形({ invoice, items })を読み取れる。金額の「12,960」も数にする", () => {
+  const raw = JSON.stringify({
+    invoice: { date: "2026-10-20", supplier: "(株)山田青果", totalAmount: "12,960", taxBasis: "exclusive" },
+    items: [{ name: "玉ねぎ", quantity: 20, unit: "個", unitPrice: null, totalAmount: 1100, taxRate: 8, lowConfidence: false, note: null }],
+  });
+  const r = parseExtractionResponse(raw);
+  assert.equal(r.error, null);
+  assert.deepEqual(r.invoice, { date: "2026-10-20", supplier: "(株)山田青果", totalAmount: 12960, taxBasis: "exclusive" });
+  assert.equal(r.items.length, 1);
+  assert.equal(r.items[0].taxRate, 8);
+});
+
+test("P-2 古い形(品目の配列だけ)でも読める。納品書全体の情報はすべて不明(null)", () => {
+  const r = parseExtractionResponse(JSON.stringify([{ name: "醤油", quantity: 1, unit: "本" }]));
+  assert.equal(r.error, null);
+  assert.deepEqual(r.invoice, { date: null, supplier: null, totalAmount: null, taxBasis: null });
+  assert.equal(r.items[0].taxRate, null);
+});
+
+test("P-3 税の記載は inclusive・exclusive だけ受け付ける(ほかは不明)。日付は 2026-10-20・2026/10/20 を受け付け、ほかは不明", () => {
+  const meta = (invoice: Record<string, unknown>) => parseExtractionResponse(JSON.stringify({ invoice, items: [] })).invoice;
+  assert.equal(meta({ taxBasis: "inclusive" }).taxBasis, "inclusive");
+  assert.equal(meta({ taxBasis: "税抜" }).taxBasis, null);
+  assert.equal(meta({ taxBasis: "unknown" }).taxBasis, null);
+  assert.equal(meta({ date: "2026/10/20" }).date, "2026-10-20");
+  assert.equal(meta({ date: "2026-2-3" }).date, "2026-02-03");
+  assert.equal(meta({ date: "R8.10.20" }).date, null);
+  assert.equal(meta({ date: "2026-13-01" }).date, null); // 13月は無い
+  assert.equal(meta({ supplier: "  " }).supplier, null);
+});
+
+test("P-4 品目の税率は 8・10 だけ受け付ける(ほかは不明 = 画面では8%として扱う)", () => {
+  const rate = (taxRate: unknown) => parseExtractionResponse(JSON.stringify({ items: [{ name: "清酒", taxRate }] })).items[0].taxRate;
+  assert.equal(rate(10), 10);
+  assert.equal(rate("8"), 8);
+  assert.equal(rate(5), null);
+  assert.equal(rate(null), null);
+});

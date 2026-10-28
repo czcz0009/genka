@@ -2,12 +2,17 @@
 
 import { requireAuthedClient } from "@/lib/supabase/requireAuthedClient";
 import { extractInvoiceItems } from "@/lib/invoiceOcr/extractInvoiceItems.ts";
-import type { ExtractedInvoiceItem } from "@/lib/invoiceOcr/types.ts";
+import type { ExtractedInvoiceItem, InvoiceMeta } from "@/lib/invoiceOcr/types.ts";
+import type { ConversionRowToSave } from "@/lib/invoiceOcr/conversionMemory.ts";
+import { CONVERSION_MAX } from "@/lib/invoiceOcr/unitPrice.ts";
+import { normalizeSupplier } from "@/lib/invoiceOcr/duplicateInvoice.ts";
 import { OCR_MONTHLY_USE_LIMIT, ocrGateMessage, remainingOcrUses } from "@/lib/invoiceOcr/usageLimit.ts";
 import { beginOcrAttempt, cancelOcrAttempt, completeOcrSuccess } from "@/lib/invoiceOcr/ocrGate.ts";
 import { checkInvoiceUpload, IMAGE_HEAD_BYTES } from "@/lib/invoiceOcr/imageType.ts";
 
-export type ScanInvoiceResult = { success: true; items: ExtractedInvoiceItem[]; remaining: number } | { success: false; error: string };
+export type ScanInvoiceResult =
+  | { success: true; items: ExtractedInvoiceItem[]; invoice: InvoiceMeta; remaining: number }
+  | { success: false; error: string };
 
 /**
  * 納品書・請求書の写真をアップロードし、Claude(Vision)で品目を読み取る。
@@ -53,5 +58,53 @@ export async function scanInvoicePhoto(formData: FormData): Promise<ScanInvoiceR
 
   // 読み取りに成功したときだけ「成功回数」を数える
   const used = await completeOcrSuccess(ctx.supabase, gate.reservation);
-  return { success: true, items: result.items, remaining: remainingOcrUses(used ?? OCR_MONTHLY_USE_LIMIT, OCR_MONTHLY_USE_LIMIT) };
+  const invoice: InvoiceMeta = result.invoice ?? { date: null, supplier: null, totalAmount: null, taxBasis: null };
+  return { success: true, items: result.items, invoice, remaining: remainingOcrUses(used ?? OCR_MONTHLY_USE_LIMIT, OCR_MONTHLY_USE_LIMIT) };
+}
+
+/**
+ * 換算を覚える(マイグレーション0031の ingredient_unit_conversions。2026-10-28)。
+ * 何を保存するかは画面側の conversionToSave(conversionMemory.ts)で決めている(確かめていない目安は渡ってこない)。
+ * ここでは値の範囲だけ確かめる。どの店の食材かはDBの決まり(RLS)で確かめる(他の店の食材なら断られる)。
+ */
+export async function rememberConversions(rows: ConversionRowToSave[]): Promise<{ success: true; saved: number } | { success: false; error: string }> {
+  const ctx = await requireAuthedClient();
+  if ("error" in ctx) return { success: false, error: ctx.error };
+  if (!Array.isArray(rows) || rows.length === 0) return { success: true, saved: 0 };
+  if (rows.length > 100) return { success: false, error: "一度に覚えられる換算は100件までです" };
+  for (const r of rows) {
+    const unitOk = typeof r.purchase_unit === "string" && r.purchase_unit.trim().length >= 1 && r.purchase_unit.trim().length <= 20;
+    const amountUnitOk = typeof r.amount_unit === "string" && r.amount_unit.trim().length >= 1 && r.amount_unit.trim().length <= 20;
+    const amountOk = typeof r.amount === "number" && Number.isFinite(r.amount) && r.amount > 0 && r.amount <= CONVERSION_MAX;
+    if (!unitOk || !amountUnitOk || !amountOk || (r.source !== "owner" && r.source !== "estimate") || typeof r.ingredient_id !== "string") {
+      return { success: false, error: "換算の値が正しくありません" };
+    }
+  }
+  const { error } = await ctx.supabase.from("ingredient_unit_conversions").upsert(
+    rows.map((r) => ({ ingredient_id: r.ingredient_id, purchase_unit: r.purchase_unit.trim(), amount: r.amount, amount_unit: r.amount_unit.trim(), source: r.source })),
+    { onConflict: "ingredient_id,normalized_unit" },
+  );
+  if (error) {
+    console.error("rememberConversions failed", error.code);
+    return { success: false, error: "換算を覚えられませんでした(単価の更新は済んでいます)。次の納品書で、もう一度入れてください。" };
+  }
+  return { success: true, saved: rows.length };
+}
+
+/**
+ * 確定した納品書の、日付・仕入れ先(書き方をそろえたもの)・合計金額だけを記録する(同じ納品書の二度読みに気づくため。0031の invoice_scan_records)。
+ * 写真・明細は残さない。記録に失敗しても、単価の更新は済んでいるので、画面には出さない。
+ */
+export async function recordInvoiceScan(input: { storeId: string; invoiceDate: string; supplier: string; totalAmount: number }): Promise<{ success: boolean }> {
+  const ctx = await requireAuthedClient();
+  if ("error" in ctx) return { success: false };
+  const supplier = normalizeSupplier(String(input.supplier ?? "")).slice(0, 100);
+  const dateOk = typeof input.invoiceDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input.invoiceDate);
+  const totalOk = typeof input.totalAmount === "number" && Number.isFinite(input.totalAmount) && input.totalAmount >= 0 && input.totalAmount < 100_000_000;
+  if (!supplier || !dateOk || !totalOk) return { success: false };
+  const { error } = await ctx.supabase
+    .from("invoice_scan_records")
+    .insert({ store_id: input.storeId, invoice_date: input.invoiceDate, supplier_normalized: supplier, total_amount: input.totalAmount });
+  if (error) console.error("recordInvoiceScan failed", error.code);
+  return { success: !error };
 }

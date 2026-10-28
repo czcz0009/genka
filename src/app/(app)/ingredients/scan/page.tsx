@@ -6,7 +6,8 @@ import { getSessionStore } from "@/lib/store";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
 import { OCR_MONTHLY_USE_LIMIT, jstMonthKey, remainingOcrUses } from "@/lib/invoiceOcr/usageLimit.ts";
-import { ScanView, type ExistingIngredientOption } from "./ScanView.tsx";
+import { ScanView, type ExistingIngredientOption, type RememberedConversion } from "./ScanView.tsx";
+import { DUPLICATE_LOOKBACK_DAYS, daysAgoKey, type InvoiceRecord } from "@/lib/invoiceOcr/duplicateInvoice.ts";
 
 export const metadata: Metadata = {
   title: "納品書から読み取る",
@@ -32,7 +33,7 @@ export default async function ScanInvoicePage() {
   // 読み取り結果との突き合わせ対象からは除外する。
   const { data: ingredients } = await supabase
     .from("ingredients")
-    .select("id, name, unit, current_purchase_price, yield_rate_percent")
+    .select("id, name, unit, current_purchase_price, price_is_set, yield_rate_percent")
     .eq("store_id", store.id)
     .eq("is_prep_item", false)
     .order("name");
@@ -45,12 +46,37 @@ export default async function ScanInvoicePage() {
     .maybeSingle();
   const initialRemaining = remainingOcrUses(usage?.used_count ?? 0, OCR_MONTHLY_USE_LIMIT);
 
+  // 覚えた換算と、二度読みに気づくための記録(マイグレーション0031、2026-10-28)。
+  // 0031をまだ当てていない・読めないときは、無いものとして画面を出す(読み取り自体は止めない)。
+  const { data: conversionRows } = await supabase.from("ingredient_unit_conversions").select("ingredient_id, purchase_unit, amount, amount_unit");
+  const since = daysAgoKey(new Date(), DUPLICATE_LOOKBACK_DAYS);
+  const { data: recordRows } = await supabase
+    .from("invoice_scan_records")
+    .select("invoice_date, supplier_normalized, total_amount, created_at")
+    .eq("store_id", store.id)
+    .gte("invoice_date", since)
+    .order("created_at", { ascending: false })
+    .limit(1000);
+
   const existingIngredients: ExistingIngredientOption[] = (ingredients ?? []).map((i) => ({
     id: i.id,
     name: i.name,
     unit: i.unit,
     currentPurchasePrice: i.current_purchase_price,
+    priceIsSet: i.price_is_set !== false,
     yieldRatePercent: i.yield_rate_percent,
+  }));
+  const rememberedConversions: RememberedConversion[] = (conversionRows ?? []).map((c) => ({
+    ingredientId: c.ingredient_id,
+    purchaseUnit: c.purchase_unit,
+    amount: Number(c.amount),
+    unit: c.amount_unit,
+  }));
+  const invoiceRecords: InvoiceRecord[] = (recordRows ?? []).map((r) => ({
+    invoiceDate: r.invoice_date,
+    supplierNormalized: r.supplier_normalized,
+    totalAmount: Number(r.total_amount),
+    createdAt: r.created_at,
   }));
 
   return (
@@ -60,7 +86,14 @@ export default async function ScanInvoicePage() {
         title="納品書から読み取る"
         description="納品書・請求書を写真で撮ってアップロードすると、AIが食材名・数量・単価を読み取ります。読み取り結果は必ずこの画面で確認・修正してから登録されます(自動では確定しません)。印刷された文字が中心の書類を対象としています(手書きの伝票は対象外です)。"
       />
-      <ScanView storeId={store.id} existingIngredients={existingIngredients} initialRemaining={initialRemaining} />
+      <ScanView
+        storeId={store.id}
+        storeTaxMode={store.ingredientPriceTaxMode}
+        existingIngredients={existingIngredients}
+        rememberedConversions={rememberedConversions}
+        invoiceRecords={invoiceRecords}
+        initialRemaining={initialRemaining}
+      />
     </div>
   );
 }

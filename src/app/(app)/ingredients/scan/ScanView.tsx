@@ -1,23 +1,53 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { normalizeForDedupe } from "@/lib/normalize.ts";
 import { ActionErrorMessage } from "@/components/ActionErrorMessage.tsx";
 import { StatusBadge } from "@/components/StatusBadge.tsx";
-import { scanInvoicePhoto } from "./actions.ts";
+import { recordInvoiceScan, rememberConversions, scanInvoicePhoto } from "./actions.ts";
 import { createIngredient, updateIngredient } from "../actions.ts";
-import type { ExtractedInvoiceItem } from "@/lib/invoiceOcr/types.ts";
-import { convertUnitPrice, isSameUnit } from "@/lib/invoiceOcr/convertUnitPrice.ts";
+import type { ExtractedInvoiceItem, InvoiceMeta } from "@/lib/invoiceOcr/types.ts";
+import { isSameUnit } from "@/lib/invoiceOcr/convertUnitPrice.ts";
 import { prepareUpload, resizeInBrowser, runScan } from "@/lib/invoiceOcr/uploadPrep.ts";
-import { unitMismatchNote } from "@/lib/invoiceOcr/unitNote.ts";
+import { computeRowPrice, validateConversionInput, type InvoiceTaxBasis } from "@/lib/invoiceOcr/unitPrice.ts";
+import { confirmBlockers, reviewReasonLabel, reviewReasons, type ReviewReason } from "@/lib/invoiceOcr/reviewRows.ts";
+import {
+  confirmEstimate,
+  conversionFromState,
+  conversionToSave,
+  editConversionValue,
+  initialConversionState,
+  isUnconfirmedEstimate,
+  type ConversionRowToSave,
+  type ConversionState,
+} from "@/lib/invoiceOcr/conversionMemory.ts";
+import { duplicateNotice, findPossibleDuplicate, type InvoiceRecord } from "@/lib/invoiceOcr/duplicateInvoice.ts";
+import { ingredientPriceTaxModeLabel, type IngredientPriceTaxMode } from "@/lib/taxMode.ts";
+
+/**
+ * 納品書の読み取り → 確認 → まとめて確定(設計の2・3段目、2026-10-28。docs/design-invoice-flow.md)。
+ * 計算と決まりは src/lib/invoiceOcr/ にあり、テストで確かめている(unitPrice・reviewRows・conversionMemory・duplicateInvoice)。
+ * - 読み取った直後に「要確認」と「いつもどおり」に分ける(直している途中で行が移動しないよう、分け方は最初に決める)
+ * - すべての欄をその場で直せる。税込・税抜は納品書1枚につき1回選ぶ(AIが判定できなかったときだけ必須)
+ * - 換算(1個 = 何g)は、覚えた値 → 目安 → 空欄 の順で最初の値を入れる。目安は店主が確かめるまで確定できない
+ */
 
 export interface ExistingIngredientOption {
   id: string;
   name: string;
   unit: string;
   currentPurchasePrice: number;
+  priceIsSet: boolean;
   yieldRatePercent: number;
+}
+
+export interface RememberedConversion {
+  ingredientId: string;
+  purchaseUnit: string;
+  amount: number;
+  unit: string;
 }
 
 const inputStyle: React.CSSProperties = {
@@ -26,7 +56,12 @@ const inputStyle: React.CSSProperties = {
   color: "var(--foreground)",
   fontFamily: "var(--font-noto-sans-jp)",
 };
-const INPUT_CLASS = "w-full rounded border px-3 py-2.5 text-base focus:outline-none focus:ring-2";
+const INPUT_CLASS = "w-full min-w-0 rounded border px-3 py-2.5 text-base focus:outline-none focus:ring-2 disabled:opacity-60";
+const LABEL_CLASS = "flex min-w-0 flex-col gap-1 text-sm";
+const JP: React.CSSProperties = { fontFamily: "var(--font-noto-sans-jp)" };
+
+/** 新しい食材の単位の候補(自由に入力もできる) */
+const UNIT_OPTIONS = ["g", "kg", "ml", "L", "個", "本", "玉", "袋", "パック", "束", "枚", "切れ", "缶", "箱", "株"];
 
 let keySeq = 0;
 function nextKey(): string {
@@ -34,91 +69,60 @@ function nextKey(): string {
   return `scan-row-${keySeq}`;
 }
 
-interface LocalRow {
+interface Row {
   key: string;
-  /** "new" = 新しい食材として登録。それ以外は既存食材のID(単価を更新する) */
+  /** この行を確定するか */
+  included: boolean;
+  /** "new" = 新しい食材として登録。それ以外は登録済みの食材のID(単価を更新) */
   target: "new" | string;
-  name: string;
-  unit: string;
-  unitPrice: string;
-  /** 納品書に書かれていた単位・単価(登録先を変えたときの再換算に使う) */
+  /** 登録先の検索の文字 */
+  search: string;
+  /** 新しい食材として登録するときの名前・単位 */
+  newName: string;
+  newUnit: string;
+  /** 納品書の表記(画面の見出しに出す) */
+  invoiceName: string;
+  /** 納品書の数量・単位・単価(直せる)。単価が空欄なら 金額÷数量 で計算する */
+  quantity: string;
   invoiceUnit: string;
-  invoicePrice: number | null;
-  /** 単位の換算・不一致に関する注意書き */
-  unitNote: string | null;
-  quantity: number | null;
+  unitPrice: string;
+  totalAmount: number | null;
+  taxRate: 8 | 10;
+  conversion: ConversionState | null;
   lowConfidence: boolean;
   note: string | null;
-  included: boolean;
-  saving: boolean;
-  saved: boolean;
+  /** 読み取った直後に決めた分け方(要確認なら true) */
+  needsReview: boolean;
+  status: "idle" | "saving" | "saved" | "error";
   error: string | null;
+  /** 確定した後の食材ID(新しく登録した食材の換算を覚えるため) */
+  savedIngredientId: string | null;
 }
 
-function formatPrice(price: number | null): string {
-  return price != null ? String(Math.round(price * 100) / 100) : "";
+function numOrNull(s: string): number | null {
+  const t = s.normalize("NFKC").replace(/[,¥\s]/g, "");
+  if (t === "") return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
 }
 
-/** 既存食材に登録するとき、納品書の単価を登録済みの単位に合わせる */
-function resolvePriceForExisting(
-  invoiceUnit: string,
-  invoicePrice: number | null,
-  existingUnit: string,
-): { unitPrice: string; unitNote: string | null } {
-  if (invoicePrice == null || !invoiceUnit || isSameUnit(invoiceUnit, existingUnit)) {
-    return { unitPrice: formatPrice(invoicePrice), unitNote: null };
-  }
-  const converted = convertUnitPrice(invoicePrice, invoiceUnit, existingUnit);
-  if (converted != null) {
-    return {
-      unitPrice: formatPrice(converted),
-      unitNote: `納品書の単位(${invoiceUnit})から登録済みの単位(${existingUnit})に換算しました。納品書の単価: ${formatPrice(invoicePrice)}円/${invoiceUnit}`,
-    };
-  }
-  return {
-    unitPrice: formatPrice(invoicePrice),
-    unitNote: unitMismatchNote(invoiceUnit, existingUnit),
-  };
+function formatYen(n: number): string {
+  return `${n.toLocaleString("ja-JP", { maximumFractionDigits: 4 })}円`;
 }
-
-function buildInitialRow(item: ExtractedInvoiceItem, existingByNormalizedName: Map<string, ExistingIngredientOption>): LocalRow {
-  const matched = existingByNormalizedName.get(normalizeForDedupe(item.name));
-  const invoiceUnit = item.unit ?? "";
-  const invoicePrice =
-    item.unitPrice ?? (item.totalAmount != null && item.quantity != null && item.quantity > 0 ? item.totalAmount / item.quantity : null);
-  const resolved = matched
-    ? resolvePriceForExisting(invoiceUnit, invoicePrice, matched.unit)
-    : { unitPrice: formatPrice(invoicePrice), unitNote: null };
-
-  return {
-    key: nextKey(),
-    target: matched ? matched.id : "new",
-    name: matched ? matched.name : item.name,
-    unit: matched ? matched.unit : invoiceUnit,
-    unitPrice: resolved.unitPrice,
-    invoiceUnit,
-    invoicePrice,
-    unitNote: resolved.unitNote,
-    quantity: item.quantity,
-    lowConfidence: item.lowConfidence,
-    note: item.note,
-    included: true,
-    saving: false,
-    saved: false,
-    error: null,
-  };
-}
-
-/** 新しい食材の単位の候補(自由に入力もできる) */
-const UNIT_OPTIONS = ["g", "kg", "ml", "L", "個", "本", "玉", "袋", "パック", "束", "枚", "切れ", "缶", "箱", "株"];
 
 export function ScanView({
   storeId,
+  storeTaxMode,
   existingIngredients,
+  rememberedConversions,
+  invoiceRecords,
   initialRemaining,
 }: {
   storeId: string;
+  storeTaxMode: IngredientPriceTaxMode;
   existingIngredients: ExistingIngredientOption[];
+  rememberedConversions: RememberedConversion[];
+  invoiceRecords: InvoiceRecord[];
   initialRemaining: number;
 }) {
   const router = useRouter();
@@ -129,17 +133,116 @@ export function ScanView({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
-  const [rows, setRows] = useState<LocalRow[] | null>(null);
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [invoice, setInvoice] = useState<InvoiceMeta | null>(null);
+  /** 納品書の金額が税込か税抜か(AIの判定。判定できなければ店主が選ぶ) */
+  const [taxBasis, setTaxBasis] = useState<InvoiceTaxBasis | null>(null);
+  const [taxBasisFromAi, setTaxBasisFromAi] = useState(false);
   const [remaining, setRemaining] = useState(initialRemaining);
-  const [savingAll, setSavingAll] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [showBlockers, setShowBlockers] = useState(false);
+  const [done, setDone] = useState<{ updated: number; created: number; remembered: number; failed: number; conversionError: string | null } | null>(null);
 
   const existingById = new Map(existingIngredients.map((i) => [i.id, i]));
   const existingByNormalizedName = new Map(existingIngredients.map((i) => [normalizeForDedupe(i.name), i]));
+
+  function rememberedFor(ingredientId: string, purchaseUnit: string) {
+    const hit = rememberedConversions.find((c) => c.ingredientId === ingredientId && isSameUnit(c.purchaseUnit, purchaseUnit));
+    return hit ? { amount: hit.amount, unit: hit.unit } : null;
+  }
+
+  function ingredientUnitOf(row: Pick<Row, "target" | "newUnit">): string {
+    return row.target === "new" ? row.newUnit : (existingById.get(row.target)?.unit ?? "");
+  }
+
+  /** 登録先・単位が変わったときに、換算の欄を作り直す */
+  function freshConversion(row: Pick<Row, "target" | "newUnit" | "newName" | "invoiceUnit">): ConversionState | null {
+    const existing = row.target === "new" ? null : existingById.get(row.target);
+    return initialConversionState({
+      ingredientName: existing ? existing.name : row.newName,
+      purchaseUnit: row.invoiceUnit,
+      ingredientUnit: ingredientUnitOf(row),
+      remembered: existing ? rememberedFor(existing.id, row.invoiceUnit) : null,
+    });
+  }
+
+  /** 1行の計算(単価・要確認の理由)。表示のたびに計算する */
+  function derive(row: Row, basis: InvoiceTaxBasis | null) {
+    const ingredientUnit = ingredientUnitOf(row);
+    const existing = row.target === "new" ? null : existingById.get(row.target);
+    const conv = conversionFromState(row.conversion);
+    const calc = computeRowPrice({
+      quantity: numOrNull(row.quantity),
+      unitPrice: numOrNull(row.unitPrice),
+      totalAmount: row.totalAmount,
+      invoiceUnit: row.invoiceUnit,
+      invoiceTaxBasis: basis,
+      storeTaxMode,
+      taxRatePercent: row.taxRate,
+      ingredientUnit,
+      conversion: conv,
+    });
+    const needsConversion = row.conversion != null && conv == null;
+    const unconfirmedEstimate = isUnconfirmedEstimate(row.conversion);
+    const previousPrice = existing && existing.priceIsSet ? existing.currentPurchasePrice : null;
+    const reasons = reviewReasons({
+      isNew: row.target === "new",
+      needsConversion: needsConversion || unconfirmedEstimate,
+      lowConfidence: row.lowConfidence,
+      amountMismatch: calc.amountMismatch,
+      computedFromAmount: calc.computedFromAmount,
+      previousPrice,
+      newPrice: calc.price,
+    });
+    return {
+      ingredientUnit,
+      existing,
+      calc,
+      needsConversion,
+      unconfirmedEstimate,
+      previousPrice,
+      reasons,
+      conversionError: row.conversion && row.conversion.value.trim() !== "" ? validateConversionInput(row.conversion.value) : null,
+    };
+  }
+
+  function buildRow(item: ExtractedInvoiceItem, basis: InvoiceTaxBasis | null): Row {
+    const matched = existingByNormalizedName.get(normalizeForDedupe(item.name));
+    const invoiceUnit = item.unit ?? "";
+    const base = {
+      target: matched ? matched.id : ("new" as const),
+      newName: item.name,
+      newUnit: invoiceUnit,
+      invoiceUnit,
+    };
+    const row: Row = {
+      key: nextKey(),
+      included: true,
+      search: "",
+      ...base,
+      invoiceName: item.name,
+      quantity: item.quantity != null ? String(item.quantity) : "",
+      unitPrice: item.unitPrice != null ? String(item.unitPrice) : "",
+      totalAmount: item.totalAmount,
+      taxRate: item.taxRate ?? 8,
+      conversion: null,
+      lowConfidence: item.lowConfidence,
+      note: item.note,
+      needsReview: false,
+      status: "idle",
+      error: null,
+      savedIngredientId: null,
+    };
+    row.conversion = freshConversion(row);
+    row.needsReview = derive(row, basis).reasons.length > 0;
+    return row;
+  }
 
   function handleFileChange(file: File | null) {
     setSelectedFile(file);
     setScanError(null);
     setRows(null);
+    setDone(null);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(file ? URL.createObjectURL(file) : null);
   }
@@ -164,6 +267,8 @@ export function ScanView({
     setScanning(true);
     setScanError(null);
     setRows(null);
+    setDone(null);
+    setShowBlockers(false);
     try {
       let resized: Blob | null = null;
       const prepared = await prepareUpload(file, async () => (resized = await resizeInBrowser(file)));
@@ -182,93 +287,322 @@ export function ScanView({
         return;
       }
       setRemaining(result.remaining);
-      setRows(result.items.map((item) => buildInitialRow(item, existingByNormalizedName)));
+      setInvoice(result.invoice);
+      setTaxBasis(result.invoice.taxBasis);
+      setTaxBasisFromAi(result.invoice.taxBasis != null);
+      setRows(result.items.map((item) => buildRow(item, result.invoice.taxBasis ?? storeTaxMode)));
     } finally {
       setScanning(false);
     }
   }
 
-  function updateRow(key: string, patch: Partial<LocalRow>) {
-    setRows((prev) => (prev ? prev.map((r) => (r.key === key ? { ...r, ...patch } : r)) : prev));
+  function updateRow(key: string, patch: Partial<Row> | ((r: Row) => Partial<Row>)) {
+    setRows((prev) => (prev ? prev.map((r) => (r.key === key ? { ...r, ...(typeof patch === "function" ? patch(r) : patch) } : r)) : prev));
   }
 
-  function handleTargetChange(row: LocalRow, target: string) {
-    if (target === "new") {
-      updateRow(row.key, { target: "new", unit: row.invoiceUnit, unitPrice: formatPrice(row.invoicePrice), unitNote: null });
-      return;
-    }
-    const existing = existingById.get(target);
-    if (!existing) return;
-    updateRow(row.key, { target, name: existing.name, unit: existing.unit, ...resolvePriceForExisting(row.invoiceUnit, row.invoicePrice, existing.unit) });
+  /** 登録先・単位(納品書・新しい食材)が変わったら、換算を作り直す */
+  function updateRowAndConversion(key: string, patch: Partial<Row>) {
+    updateRow(key, (r) => {
+      const next = { ...r, ...patch };
+      return { ...patch, conversion: freshConversion(next) };
+    });
   }
 
-  async function handleSaveRow(row: LocalRow) {
-    updateRow(row.key, { saving: true, error: null });
-    // 空欄(未入力)と、数字として読めない入力を区別する。空欄は「未設定」として
-    // 保存を許すが、既存食材の更新では意図せず単価を消してしまう事故を防ぐため
-    // 別途ブロックする(下記)。
-    const trimmed = row.unitPrice.trim();
-    const isBlank = trimmed === "";
-    const price = isBlank ? 0 : Number(trimmed);
-    if (!isBlank && (!Number.isFinite(price) || price < 0)) {
-      updateRow(row.key, { saving: false, error: "単価は0以上の数値で入力してください(空欄のままなら未設定として保存されます)" });
+  const rowViews = (rows ?? []).map((row) => ({ row, d: derive(row, taxBasis) }));
+  const pending = rowViews.filter((v) => v.row.included && v.row.status !== "saved");
+  const blockers = confirmBlockers({
+    needsTaxChoice: rows != null && taxBasis == null,
+    rows: pending.map(({ row, d }) => ({
+      name: row.target === "new" ? row.newName || row.invoiceName : (d.existing?.name ?? row.invoiceName),
+      included: row.included,
+      needsConversion: d.needsConversion,
+      priceBlank: d.calc.price == null && !d.needsConversion && d.calc.taxAdjustedUnitPrice == null && taxBasis != null,
+      conversionError: d.conversionError,
+      estimateUnconfirmed: d.unconfirmedEstimate,
+    })),
+  });
+  const newNameErrors = pending
+    .filter(({ row }) => row.target === "new" && (!row.newName.trim() || !row.newUnit.trim()))
+    .map(({ row }) => `${row.invoiceName}: 新しい食材の名前と単位を入れてください`);
+  const allBlockers = [...blockers, ...newNameErrors];
+  const duplicate = invoice ? findPossibleDuplicate({ invoiceDate: invoice.date, supplier: invoice.supplier, totalAmount: invoice.totalAmount }, invoiceRecords) : null;
+
+  async function handleConfirm() {
+    if (!rows) return;
+    if (allBlockers.length > 0) {
+      setShowBlockers(true);
       return;
     }
-
-    if (row.target === "new") {
-      if (!row.name.trim() || !row.unit.trim()) {
-        updateRow(row.key, { saving: false, error: "食材名と単位を入力してください" });
-        return;
-      }
-      const result = await createIngredient({
-        storeId,
-        name: row.name,
-        unit: row.unit,
-        purchasePrice: price,
-        priceIsSet: !isBlank,
-        yieldRatePercent: 100,
-      });
-      updateRow(row.key, { saving: false, saved: result.success, error: result.success ? null : result.error });
-    } else {
-      // 既存食材の更新で単価が空欄なのは、正しい単価を誤って消してしまう事故に
-      // つながるため保存をブロックする。単価を入力するか、この行の「保存対象に
-      // する」を外して更新自体をスキップしてもらう。
-      if (isBlank) {
-        updateRow(row.key, {
-          saving: false,
-          error: "単価を入力するか、上の「保存対象にする」のチェックを外してこの行の更新をスキップしてください",
+    setConfirming(true);
+    let updated = 0;
+    let created = 0;
+    let failed = 0;
+    const savedIds = new Map<string, string>();
+    // 同時に大量の保存が走って店舗の食材の一意の決まりに引っかかる事故を避けるため、順番に保存する
+    for (const { row, d } of pending) {
+      const price = d.calc.price;
+      if (price == null) continue;
+      updateRow(row.key, { status: "saving", error: null });
+      if (row.target === "new") {
+        const result = await createIngredient({ storeId, name: row.newName, unit: row.newUnit, purchasePrice: price, priceIsSet: true, yieldRatePercent: 100 });
+        if (result.success) {
+          created += 1;
+          savedIds.set(row.key, result.ingredient.id);
+          updateRow(row.key, { status: "saved", savedIngredientId: result.ingredient.id });
+        } else {
+          failed += 1;
+          updateRow(row.key, { status: "error", error: result.error });
+        }
+      } else {
+        const existing = d.existing;
+        const result = await updateIngredient({
+          storeId,
+          ingredientId: row.target,
+          name: existing?.name ?? row.newName,
+          purchasePrice: price,
+          priceIsSet: true,
+          yieldRatePercent: existing?.yieldRatePercent ?? 100,
         });
-        return;
+        if (result.success) {
+          updated += 1;
+          savedIds.set(row.key, row.target);
+          updateRow(row.key, { status: "saved", savedIngredientId: row.target });
+        } else {
+          failed += 1;
+          updateRow(row.key, { status: "error", error: result.error });
+        }
       }
-      const existing = existingById.get(row.target);
-      const result = await updateIngredient({
-        storeId,
-        ingredientId: row.target,
-        name: existing?.name ?? row.name,
-        purchasePrice: price,
-        priceIsSet: true,
-        yieldRatePercent: existing?.yieldRatePercent ?? 100,
-      });
-      updateRow(row.key, { saving: false, saved: result.success, error: result.success ? null : result.error });
     }
+
+    // 換算を覚える(確かめていない目安は conversionToSave が外す)
+    const toRemember: ConversionRowToSave[] = [];
+    for (const { row } of pending) {
+      const id = savedIds.get(row.key);
+      const c = conversionToSave({ included: row.included, rowSaved: id != null, ingredientId: id ?? "", purchaseUnit: row.invoiceUnit, conversion: row.conversion });
+      if (c) toRemember.push(c);
+    }
+    let remembered = 0;
+    let conversionError: string | null = null;
+    if (toRemember.length > 0) {
+      const r = await rememberConversions(toRemember);
+      if (r.success) remembered = r.saved;
+      else conversionError = r.error;
+    }
+
+    // 二度読みに気づくための記録(日付・仕入れ先・合計がそろっていて、1件以上確定したときだけ)
+    if (savedIds.size > 0 && invoice?.date && invoice.supplier && invoice.totalAmount != null) {
+      await recordInvoiceScan({ storeId, invoiceDate: invoice.date, supplier: invoice.supplier, totalAmount: invoice.totalAmount });
+    }
+
+    setDone({ updated, created, remembered, failed, conversionError });
+    setConfirming(false);
+    setShowBlockers(false);
     router.refresh();
   }
 
-  async function handleSaveAll() {
-    if (!rows) return;
-    setSavingAll(true);
-    // 同時に大量のupsertが走って店舗の食材一意制約に引っかかる事故を避けるため、順番に保存する
-    for (const row of rows) {
-      if (!row.included || row.saved) continue;
-      await handleSaveRow(row);
-    }
-    setSavingAll(false);
+  const reviewRows = rowViews.filter((v) => v.row.needsReview);
+  const usualRows = rowViews.filter((v) => !v.row.needsReview);
+
+  function renderRow({ row, d }: { row: Row; d: ReturnType<typeof derive> }) {
+    const locked = row.status === "saved" || row.status === "saving" || confirming;
+    const reasonCtx = {
+      invoiceUnit: row.invoiceUnit,
+      ingredientUnit: d.ingredientUnit,
+      note: row.note,
+      previousPrice: d.previousPrice,
+      newPrice: d.calc.price,
+    };
+    const filter = normalizeForDedupe(row.search);
+    const options = existingIngredients.filter((i) => !filter || normalizeForDedupe(i.name).includes(filter) || i.id === row.target);
+    const quantityText = row.quantity ? `${row.quantity}${row.invoiceUnit}` : "";
+    const amountText = row.totalAmount != null ? formatYen(row.totalAmount) : "";
+    return (
+      <li key={row.key} className="flex min-w-0 flex-col gap-3 rounded border p-4" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
+        <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+          <p className="min-w-0 text-sm font-semibold [overflow-wrap:anywhere]" style={{ color: "var(--foreground)", ...JP }}>
+            納品書: {row.invoiceName} {quantityText} {amountText}
+          </p>
+          {row.status === "saved" && <StatusBadge status="ok" label="確定済み" />}
+        </div>
+
+        {d.reasons.length > 0 && row.status !== "saved" && (
+          <ul className="flex flex-col gap-1">
+            {d.reasons.map((reason: ReviewReason) => (
+              <li key={reason} className="text-sm [overflow-wrap:anywhere]" style={{ color: "var(--status-warn)", ...JP }}>
+                ⚠ {reasonLabel(reason, reasonCtx, d)}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <label className="flex items-center gap-2 text-sm" style={{ color: "var(--foreground)", ...JP }}>
+          <input type="checkbox" checked={row.included} disabled={locked} onChange={(e) => updateRow(row.key, { included: e.target.checked })} />
+          この行を確定する(外すと、この行は何も変えません)
+        </label>
+
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className={LABEL_CLASS} style={{ color: "var(--foreground)", ...JP }}>
+            <span>登録先</span>
+            {existingIngredients.length > 8 && (
+              <input
+                value={row.search}
+                onChange={(e) => updateRow(row.key, { search: e.target.value })}
+                disabled={locked}
+                placeholder="食材の名前で探す"
+                aria-label="登録先の食材を探す"
+                className={INPUT_CLASS}
+                style={inputStyle}
+              />
+            )}
+            <select
+              value={row.target}
+              onChange={(e) => updateRowAndConversion(row.key, { target: e.target.value })}
+              disabled={locked}
+              aria-label="登録先"
+              className={INPUT_CLASS}
+              style={inputStyle}
+            >
+              <option value="new">新しい食材として登録</option>
+              {options.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.name}({i.unit})の単価を更新
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {row.target === "new" ? (
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_6rem] gap-2">
+              <label className={LABEL_CLASS} style={{ color: "var(--foreground)", ...JP }}>
+                新しい食材の名前
+                <input value={row.newName} disabled={locked} onChange={(e) => updateRowAndConversion(row.key, { newName: e.target.value })} className={INPUT_CLASS} style={inputStyle} />
+              </label>
+              <label className={LABEL_CLASS} style={{ color: "var(--foreground)", ...JP }}>
+                食材の単位
+                <input
+                  value={row.newUnit}
+                  disabled={locked}
+                  list="scan-unit-options"
+                  placeholder="g"
+                  onChange={(e) => updateRowAndConversion(row.key, { newUnit: e.target.value })}
+                  className={INPUT_CLASS}
+                  style={inputStyle}
+                />
+              </label>
+            </div>
+          ) : (
+            <p className="self-end text-xs" style={{ color: "var(--muted-foreground)", ...JP }}>
+              登録済みの食材の名前と単位は、ここでは変えません。単位が違うときは、下の換算で合わせます。
+            </p>
+          )}
+        </div>
+
+        <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4">
+          <label className={LABEL_CLASS} style={{ color: "var(--foreground)", ...JP }}>
+            数量
+            <input value={row.quantity} disabled={locked} inputMode="decimal" onChange={(e) => updateRow(row.key, { quantity: e.target.value })} className={INPUT_CLASS + " font-mono"} style={inputStyle} />
+          </label>
+          <label className={LABEL_CLASS} style={{ color: "var(--foreground)", ...JP }}>
+            納品書の単位
+            <input
+              value={row.invoiceUnit}
+              disabled={locked}
+              list="scan-unit-options"
+              onChange={(e) => updateRowAndConversion(row.key, { invoiceUnit: e.target.value })}
+              className={INPUT_CLASS}
+              style={inputStyle}
+            />
+          </label>
+          <label className={LABEL_CLASS} style={{ color: "var(--foreground)", ...JP }}>
+            納品書の単価(円)
+            <input
+              value={row.unitPrice}
+              disabled={locked}
+              inputMode="decimal"
+              placeholder={row.totalAmount != null ? "金額÷数量" : ""}
+              onChange={(e) => updateRow(row.key, { unitPrice: e.target.value })}
+              className={INPUT_CLASS + " font-mono"}
+              style={inputStyle}
+            />
+          </label>
+          <label className={LABEL_CLASS} style={{ color: "var(--foreground)", ...JP }}>
+            税率
+            <select value={row.taxRate} disabled={locked} onChange={(e) => updateRow(row.key, { taxRate: e.target.value === "10" ? 10 : 8 })} className={INPUT_CLASS} style={inputStyle}>
+              <option value={8}>8%(食品)</option>
+              <option value={10}>10%(酒・資材など)</option>
+            </select>
+          </label>
+        </div>
+
+        {row.conversion && (
+          <div className="flex min-w-0 flex-col gap-2 rounded border p-3" style={{ borderColor: "var(--border)", background: "var(--muted)" }}>
+            <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm" style={{ color: "var(--foreground)", ...JP }}>
+              <span>換算: 1{row.invoiceUnit} =</span>
+              <input
+                value={row.conversion.value}
+                disabled={locked}
+                inputMode="decimal"
+                aria-label={`1${row.invoiceUnit}あたりの${d.ingredientUnit}`}
+                onChange={(e) => updateRow(row.key, (r) => ({ conversion: r.conversion ? editConversionValue(r.conversion, e.target.value) : null }))}
+                className="w-24 min-w-0 rounded border px-2 py-2 text-base font-mono focus:outline-none focus:ring-2"
+                style={inputStyle}
+              />
+              <span>{row.conversion.unit}</span>
+              {row.conversion.source === "estimate" && <StatusBadge status="warn" label="目安" />}
+              {row.conversion.source === "remembered" && <StatusBadge status="muted" label="前回覚えた値" />}
+            </div>
+            {row.conversion.source === "estimate" && (
+              <label className="flex items-start gap-2 text-sm" style={{ color: "var(--foreground)", ...JP }}>
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={row.conversion.estimateConfirmed}
+                  disabled={locked}
+                  onChange={(e) => updateRow(row.key, (r) => ({ conversion: r.conversion ? confirmEstimate(r.conversion, e.target.checked) : null }))}
+                />
+                この値で正しい(目安は一般的な重さです。お店の仕入れに合わせて確かめてください)
+              </label>
+            )}
+            <label className="flex items-center gap-2 text-sm" style={{ color: "var(--foreground)", ...JP }}>
+              <input
+                type="checkbox"
+                checked={row.conversion.remember}
+                disabled={locked}
+                onChange={(e) => updateRow(row.key, (r) => ({ conversion: r.conversion ? { ...r.conversion, remember: e.target.checked } : null }))}
+              />
+              この換算を覚える(次の納品書から自動で使います)
+            </label>
+            {d.conversionError && <p className="text-sm" style={{ color: "var(--status-danger)", ...JP }}>{d.conversionError}</p>}
+          </div>
+        )}
+
+        <p className="text-sm [overflow-wrap:anywhere]" style={{ color: "var(--foreground)", ...JP }}>
+          {d.calc.price != null ? (
+            <>
+              登録する単価: <span className="font-mono font-bold">{formatYen(d.calc.price)}</span>/{d.ingredientUnit}({ingredientPriceTaxModeLabel(storeTaxMode)})
+              {d.previousPrice != null && (
+                <span style={{ color: "var(--muted-foreground)" }}>
+                  {" "}
+                  前回 {formatYen(d.previousPrice)}/{d.ingredientUnit}
+                </span>
+              )}
+            </>
+          ) : (
+            <span style={{ color: "var(--muted-foreground)" }}>
+              {taxBasis == null ? "上で、納品書の金額が税込か税抜かを選ぶと、単価を計算します" : d.needsConversion ? "換算を入れると、単価を計算します" : "単価か金額を入れると、単価を計算します"}
+            </span>
+          )}
+        </p>
+
+        {row.error && <ActionErrorMessage error={row.error} />}
+      </li>
+    );
   }
 
   return (
-    <div className="mt-6 flex flex-col gap-6">
+    <div className="mt-6 flex min-w-0 flex-col gap-6">
       <div className="flex flex-col gap-4 rounded border p-5" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-        <p className="text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+        <p className="text-base" style={{ color: "var(--foreground)", ...JP }}>
           納品書・請求書の写真
         </p>
         <div className="flex flex-col gap-2 sm:flex-row">
@@ -285,13 +619,7 @@ export function ScanView({
           </label>
           <label className="cursor-pointer rounded border px-4 py-3 text-center text-base font-semibold" style={{ borderColor: "var(--border)", color: "var(--foreground)" }}>
             写真・ファイルから選ぶ
-            <input
-              ref={pickInputRef}
-              type="file"
-              accept="image/*"
-              onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
-              className="sr-only"
-            />
+            <input ref={pickInputRef} type="file" accept="image/*" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="sr-only" />
           </label>
         </div>
         {selectedFile && (
@@ -301,7 +629,7 @@ export function ScanView({
         )}
         {previewUrl && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={previewUrl} alt="選択した納品書のプレビュー" className="max-h-64 w-auto rounded border object-contain" style={{ borderColor: "var(--border)" }} />
+          <img src={previewUrl} alt="選択した納品書のプレビュー" className="max-h-64 w-auto max-w-full rounded border object-contain" style={{ borderColor: "var(--border)" }} />
         )}
         {scanError && <ActionErrorMessage error={scanError} />}
         <button
@@ -309,157 +637,134 @@ export function ScanView({
           onClick={handleScan}
           disabled={scanning || remaining <= 0}
           className="self-start rounded px-5 py-3 text-base font-bold transition-colors disabled:opacity-40"
-          style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
+          style={{ background: "var(--primary)", color: "var(--primary-foreground)", ...JP }}
         >
           {scanning ? "読み取り中…" : "この写真を読み取る"}
         </button>
-        <p className="text-sm" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
+        <p className="text-sm" style={{ color: "var(--muted-foreground)", ...JP }}>
           {remaining > 0
             ? `今月の読み取り: あと${remaining}回(読み取りに成功したときに数えます。毎月1日に元に戻ります)`
             : "今月の読み取りの回数の上限に達しました。来月1日に、回数が元に戻ります。"}
         </p>
       </div>
 
-      {rows && rows.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium" style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
-              読み取り結果({rows.length}件)。内容を確認・修正してから保存してください。
-            </p>
-            <button
-              type="button"
-              onClick={handleSaveAll}
-              disabled={savingAll || rows.every((r) => !r.included || r.saved)}
-              className="shrink-0 rounded px-4 py-2.5 text-sm font-bold transition-colors disabled:opacity-40"
-              style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontFamily: "var(--font-noto-sans-jp)" }}
-            >
-              {savingAll ? "保存中…" : "選択した品目をまとめて保存"}
-            </button>
-          </div>
-
-          <ul className="flex flex-col gap-3">
-            {rows.map((row) => (
-              <li key={row.key} className="flex flex-col gap-3 rounded border p-4" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
-                <div className="flex items-start justify-between gap-3">
-                  <label className="flex items-center gap-2 text-sm" style={{ color: "var(--foreground)" }}>
-                    <input
-                      type="checkbox"
-                      checked={row.included}
-                      onChange={(e) => updateRow(row.key, { included: e.target.checked, error: null })}
-                    />
-                    保存対象にする(外すとこの行は更新しない)
+      {rows && rows.length > 0 && invoice && (
+        <div className="flex min-w-0 flex-col gap-4">
+          {/* 納品書全体: 日付・仕入れ先・合計、二度読みのお知らせ、税込・税抜 */}
+          <section className="flex min-w-0 flex-col gap-3 rounded border p-4" style={{ background: "var(--card)", borderColor: "var(--border)" }} aria-label="納品書の情報">
+            <dl className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm" style={{ color: "var(--foreground)", ...JP }}>
+              <dt style={{ color: "var(--muted-foreground)" }}>日付</dt>
+              <dd className="[overflow-wrap:anywhere]">{invoice.date ?? "読み取れませんでした"}</dd>
+              <dt style={{ color: "var(--muted-foreground)" }}>仕入れ先</dt>
+              <dd className="[overflow-wrap:anywhere]">{invoice.supplier ?? "読み取れませんでした"}</dd>
+              <dt style={{ color: "var(--muted-foreground)" }}>合計</dt>
+              <dd className="[overflow-wrap:anywhere]">{invoice.totalAmount != null ? formatYen(invoice.totalAmount) : "読み取れませんでした"}</dd>
+            </dl>
+            {duplicate && (
+              <p className="rounded border p-3 text-sm" style={{ borderColor: "var(--status-warn)", color: "var(--foreground)", ...JP }}>
+                ⚠ {duplicateNotice(duplicate)}
+              </p>
+            )}
+            <fieldset className="flex min-w-0 flex-col gap-2">
+              <legend className="text-sm font-semibold" style={{ color: "var(--foreground)", ...JP }}>
+                この納品書の金額は
+              </legend>
+              <div className="flex flex-wrap gap-4 text-base" style={{ color: "var(--foreground)", ...JP }}>
+                {(["exclusive", "inclusive"] as const).map((b) => (
+                  <label key={b} className="flex items-center gap-2">
+                    <input type="radio" name="invoice-tax-basis" checked={taxBasis === b} disabled={confirming} onChange={() => setTaxBasis(b)} />
+                    {b === "exclusive" ? "税抜" : "税込"}
                   </label>
-                  {row.lowConfidence && <StatusBadge status="warn" label={row.note ? `要確認: ${row.note}` : "要確認"} />}
-                  {row.saved && <StatusBadge status="ok" label="保存済み" />}
-                </div>
+                ))}
+              </div>
+              <p className="text-xs" style={{ color: taxBasis == null ? "var(--status-warn)" : "var(--muted-foreground)", ...JP }}>
+                {taxBasis == null
+                  ? "納品書の記載から判定できませんでした。納品書を見て選んでください(「税抜」「外税」「消費税 別」なら税抜)。"
+                  : taxBasisFromAi
+                    ? "納品書の記載から判定しました。違っていたら選び直してください。"
+                    : ""}
+                お店の設定では、仕入単価を{ingredientPriceTaxModeLabel(storeTaxMode)}で入れています。{ingredientPriceTaxModeLabel(storeTaxMode)}にそろえて登録します。
+              </p>
+            </fieldset>
+          </section>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <label className="flex flex-col gap-1 text-sm" style={{ color: "var(--foreground)" }}>
-                    登録先
-                    <select
-                      value={row.target}
-                      onChange={(e) => handleTargetChange(row, e.target.value)}
-                      disabled={row.saved}
-                      className={INPUT_CLASS}
-                      style={inputStyle}
-                    >
-                      <option value="new">新しい食材として登録</option>
-                      {existingIngredients.map((i) => (
-                        <option key={i.id} value={i.id}>
-                          {i.name}の単価を更新
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+          {done && (
+            <section className="flex min-w-0 flex-col gap-2 rounded border p-4" style={{ background: "var(--card)", borderColor: "var(--status-ok)" }} aria-label="確定の結果">
+              <p className="text-base font-bold" style={{ color: "var(--foreground)", ...JP }}>
+                確定しました
+              </p>
+              <p className="text-sm" style={{ color: "var(--foreground)", ...JP }}>
+                単価を更新: {done.updated}件・新しく登録: {done.created}件・換算を覚えた: {done.remembered}件
+                {done.failed > 0 && `・確定できなかった: ${done.failed}件(下の行に理由があります)`}
+              </p>
+              {done.conversionError && <ActionErrorMessage error={done.conversionError} />}
+              <Link href="/ranking" className="self-start text-sm underline" style={{ color: "var(--accent)", ...JP }}>
+                メニューの原価率を見る
+              </Link>
+            </section>
+          )}
 
-                  <label className="flex flex-col gap-1 text-sm" style={{ color: "var(--foreground)" }}>
-                    食材名
-                    <input
-                      value={row.name}
-                      onChange={(e) => updateRow(row.key, { name: e.target.value })}
-                      disabled={row.target !== "new" || row.saved}
-                      className={INPUT_CLASS}
-                      style={inputStyle}
-                    />
-                  </label>
+          {reviewRows.length > 0 && (
+            <section className="flex min-w-0 flex-col gap-3" aria-label="要確認">
+              <h2 className="text-base font-bold" style={{ color: "var(--foreground)", ...JP }}>
+                要確認 {reviewRows.length}件
+              </h2>
+              <ul className="flex min-w-0 flex-col gap-3">{reviewRows.map(renderRow)}</ul>
+            </section>
+          )}
 
-                  <label className="flex flex-col gap-1 text-sm" style={{ color: "var(--foreground)" }}>
-                    単位
-                    <input
-                      value={row.unit}
-                      onChange={(e) => updateRow(row.key, { unit: e.target.value })}
-                      disabled={row.target !== "new" || row.saved}
-                      placeholder="g"
-                      list="scan-unit-options"
-                      className={INPUT_CLASS}
-                      style={inputStyle}
-                    />
-                  </label>
+          {usualRows.length > 0 && (
+            <details className="flex min-w-0 flex-col gap-3 rounded border p-3" style={{ borderColor: "var(--border)", background: "var(--card)" }} open={reviewRows.length === 0}>
+              <summary className="cursor-pointer text-base font-bold" style={{ color: "var(--foreground)", ...JP }}>
+                いつもどおり {usualRows.length}件(前回から±10%未満)
+              </summary>
+              <ul className="mt-3 flex min-w-0 flex-col gap-3">{usualRows.map(renderRow)}</ul>
+            </details>
+          )}
 
-                  <label className="flex flex-col gap-1 text-sm" style={{ color: "var(--foreground)" }}>
-                    単価(円・1単位あたり)
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      inputMode="decimal"
-                      value={row.unitPrice}
-                      onChange={(e) => updateRow(row.key, { unitPrice: e.target.value })}
-                      disabled={row.saved}
-                      className={INPUT_CLASS + " font-mono"}
-                      style={inputStyle}
-                    />
-                  </label>
-                </div>
-
-                {row.target !== "new" && !row.saved && (
-                  <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-                    登録済みの食材の名前と単位は、ここでは変えられません(灰色の欄)。単価は変えられます。
-                  </p>
-                )}
-                {row.saved && (
-                  <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-                    保存済みのため、この行は変えられません。直すときは、食材一覧から変えてください。
-                  </p>
-                )}
-
-                {row.unitNote && !row.saved && (
-                  <p className="text-sm font-medium" style={{ color: "var(--warning, #b45309)", fontFamily: "var(--font-noto-sans-jp)" }}>
-                    ⚠ {row.unitNote}
-                  </p>
-                )}
-
-                {row.quantity != null && (
-                  <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-                    納品書に記載の数量: {row.quantity}
-                    {row.invoiceUnit || ""}(参考情報。登録内容には反映されません)
-                  </p>
-                )}
-
-                {row.error && <ActionErrorMessage error={row.error} />}
-
-                {!row.saved && (
-                  <button
-                    type="button"
-                    onClick={() => handleSaveRow(row)}
-                    disabled={row.saving || !row.included}
-                    title={!row.included ? "「保存対象にする」にチェックを入れてください" : undefined}
-                    className="self-start rounded border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-40"
-                    style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
-                  >
-                    {row.saving ? "保存中…" : "この行だけ保存する"}
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
           <datalist id="scan-unit-options">
             {UNIT_OPTIONS.map((u) => (
               <option key={u} value={u} />
             ))}
           </datalist>
+
+          {/* 画面の下に固定の「確定する」 */}
+          {pending.length > 0 && (
+            <div className="sticky bottom-0 z-10 -mx-1 flex min-w-0 flex-col gap-2 border-t px-1 py-3" style={{ background: "var(--background)", borderColor: "var(--border)" }}>
+              {showBlockers && allBlockers.length > 0 && (
+                <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto text-sm" style={{ color: "var(--status-danger)", ...JP }} role="alert">
+                  {allBlockers.map((b) => (
+                    <li key={b} className="[overflow-wrap:anywhere]">
+                      {b}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button
+                type="button"
+                onClick={handleConfirm}
+                disabled={confirming}
+                className="w-full rounded px-5 py-3 text-base font-bold transition-colors disabled:opacity-40"
+                style={{ background: "var(--primary)", color: "var(--primary-foreground)", ...JP }}
+              >
+                {confirming ? "確定中…" : `${pending.length}件を確定する`}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
+}
+
+/** 要確認の理由の文言。目安のまま確かめていないときは、その旨を出す */
+function reasonLabel(
+  reason: ReviewReason,
+  ctx: Parameters<typeof reviewReasonLabel>[1],
+  d: { unconfirmedEstimate: boolean; needsConversion: boolean },
+): string {
+  if (reason === "needs_conversion" && d.unconfirmedEstimate && !d.needsConversion) {
+    return `1${ctx.invoiceUnit ?? ""}が何${ctx.ingredientUnit ?? ""}かを確かめてください(目安の値が入っています)`;
+  }
+  return reviewReasonLabel(reason, ctx);
 }

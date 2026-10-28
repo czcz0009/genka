@@ -37,3 +37,11 @@ export function duplicateNotice(hit: InvoiceRecord): string {
   const when = `${jst.getUTCMonth() + 1}月${jst.getUTCDate()}日`;
   return `この納品書は読み取り済みかもしれません(${when}に確定した納品書と、日付・仕入れ先・合計金額が同じです)。同じ納品書なら、確定しなくても大丈夫です`;
 }
+
+/** 二度読みの確かめに使う記録の期間(この日数より前の納品書は確かめない) */
+export const DUPLICATE_LOOKBACK_DAYS = 400;
+
+/** now から days 日前の日付(YYYY-MM-DD) */
+export function daysAgoKey(now: Date, days: number): string {
+  return new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}

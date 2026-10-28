@@ -6,32 +6,19 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { recordTermsConsent } from "../consentActions.ts";
 import { isAlreadyRegisteredSignUp, ALREADY_REGISTERED_MESSAGE } from "@/lib/signUpResult.ts";
+import { TurnstileWidget } from "@/components/TurnstileWidget.tsx";
+import {
+  captchaOptions,
+  submitBlockedByCaptcha,
+  translateAuthError,
+  CAPTCHA_FAILED_MESSAGE,
+  CAPTCHA_LOAD_FAILED_MESSAGE,
+} from "@/lib/auth/captcha.ts";
+
+/** 画像認証のサイトキー(公開してよい値)。未設定なら画像認証を出さない(src/lib/auth/captcha.ts) */
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
 
 type Mode = "signin" | "signup" | "reset";
-
-/**
- * Supabase Authが返す英語のエラーメッセージを、そのまま画面に出さず
- * よくあるケースだけ日本語に置き換える。該当しないものは原文のまま表示する
- * (完全な翻訳表よりは粗いが、代表的な失敗理由だけでも押さえておく)。
- */
-function translateAuthError(message: string): string {
-  if (/invalid login credentials/i.test(message)) {
-    return "メールアドレスまたはパスワードが正しくありません。";
-  }
-  if (/user already registered/i.test(message)) {
-    return "このメールアドレスはすでに登録されています。「ログイン」からお試しください。";
-  }
-  if (/email not confirmed/i.test(message)) {
-    return "メールアドレスの確認が完了していません。届いた確認メール内のリンクを開いてから、もう一度ログインしてください。";
-  }
-  if (/password should be at least/i.test(message)) {
-    return "パスワードは6文字以上で入力してください。";
-  }
-  if (/security purposes.*after/i.test(message) || /email rate limit exceeded/i.test(message)) {
-    return "メール送信の回数制限に達しました。少し時間を空けてから、もう一度お試しください。";
-  }
-  return message;
-}
 
 export function LoginForm() {
   const router = useRouter();
@@ -43,6 +30,18 @@ export function LoginForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // 画像認証(2026-10-28)。結果は1回きりなので、送るたびに作り直す(captchaKey を変える)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaKey, setCaptchaKey] = useState(0);
+  const [captchaLoadFailed, setCaptchaLoadFailed] = useState(false);
+  const [captchaFailed, setCaptchaFailed] = useState(false);
+  const captchaEnabled = TURNSTILE_SITE_KEY !== "";
+
+  function resetCaptcha() {
+    setCaptchaToken(null);
+    setCaptchaFailed(false);
+    setCaptchaKey((k) => k + 1);
+  }
 
   const supabase = createClient();
 
@@ -68,10 +67,16 @@ export function LoginForm() {
       return;
     }
 
+    const blocked = submitBlockedByCaptcha({ enabled: captchaEnabled, token: captchaToken, loadFailed: captchaLoadFailed, failed: captchaFailed });
+    if (blocked) {
+      setError(blocked);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       if (mode === "signin") {
-        const { error } = await supabase!.auth.signInWithPassword({ email, password });
+        const { error } = await supabase!.auth.signInWithPassword({ email, password, options: captchaOptions(captchaToken) });
         if (error) {
           setError(translateAuthError(error.message));
           return;
@@ -79,7 +84,7 @@ export function LoginForm() {
         router.push("/");
         router.refresh();
       } else if (mode === "signup") {
-        const { data, error } = await supabase!.auth.signUp({ email, password });
+        const { data, error } = await supabase!.auth.signUp({ email, password, options: captchaOptions(captchaToken) });
         if (error) {
           setError(translateAuthError(error.message));
           return;
@@ -108,6 +113,7 @@ export function LoginForm() {
         // (登録済みかどうかをこの画面から探れないようにするSupabaseの既定挙動)。
         const { error } = await supabase!.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/reset-password`,
+          ...captchaOptions(captchaToken),
         });
         if (error) {
           setError(translateAuthError(error.message));
@@ -118,6 +124,7 @@ export function LoginForm() {
       }
     } finally {
       setIsSubmitting(false);
+      if (captchaEnabled) resetCaptcha();
     }
   }
 
@@ -259,6 +266,41 @@ export function LoginForm() {
         <p className="text-sm" style={{ color: "var(--status-ok)" }}>
           {notice}
         </p>
+      )}
+
+      {captchaEnabled && (
+        <div className="flex min-w-0 flex-col gap-2">
+          <TurnstileWidget
+            key={captchaKey}
+            siteKey={TURNSTILE_SITE_KEY}
+            onToken={(t) => {
+              setCaptchaToken(t);
+              setCaptchaFailed(false);
+            }}
+            onExpire={() => setCaptchaToken(null)}
+            onError={() => {
+              setCaptchaToken(null);
+              setCaptchaFailed(true);
+            }}
+            onLoadError={() => setCaptchaLoadFailed(true)}
+          />
+          {captchaLoadFailed && (
+            <div className="flex flex-col gap-2 text-sm" style={{ color: "var(--status-danger)" }}>
+              <p>{CAPTCHA_LOAD_FAILED_MESSAGE}</p>
+              <button type="button" onClick={() => window.location.reload()} className="self-start underline underline-offset-2">
+                ページを読み込み直す
+              </button>
+            </div>
+          )}
+          {captchaFailed && (
+            <div className="flex flex-col gap-2 text-sm" style={{ color: "var(--status-danger)" }}>
+              <p>{CAPTCHA_FAILED_MESSAGE}</p>
+              <button type="button" onClick={resetCaptcha} className="self-start underline underline-offset-2">
+                画像認証をやり直す
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       <button

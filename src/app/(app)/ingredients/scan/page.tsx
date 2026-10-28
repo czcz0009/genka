@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { getSessionStore } from "@/lib/store";
+import { getSessionStore, getStoreData } from "@/lib/store";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
 import { OCR_MONTHLY_USE_LIMIT, jstMonthKey, remainingOcrUses } from "@/lib/invoiceOcr/usageLimit.ts";
-import { ScanView, type ExistingIngredientOption, type RememberedConversion } from "./ScanView.tsx";
+import { ScanView, type ExistingIngredientOption, type RememberedConversion, type CostData } from "./ScanView.tsx";
 import { DUPLICATE_LOOKBACK_DAYS, daysAgoKey, type InvoiceRecord } from "@/lib/invoiceOcr/duplicateInvoice.ts";
 
 export const metadata: Metadata = {
@@ -58,6 +58,18 @@ export default async function ScanInvoicePage() {
     .order("created_at", { ascending: false })
     .limit(1000);
 
+  // 完了画面「原価率が変わったメニュー」の計算に使う(2026-10-28)。読めなければ、その一覧だけ出さない
+  const storeData = await getStoreData(supabase);
+  const costData: CostData | null = storeData
+    ? {
+        menus: storeData.menus.map((m) => ({ id: m.id, name: m.name, sellingPrice: m.sellingPrice, targetCostRate: m.targetCostRate })),
+        ingredients: storeData.ingredients,
+        menuIngredients: storeData.menuIngredients,
+        prepItemComponents: storeData.prepItemComponents,
+        defaultTargetCostRate: store.defaultTargetCostRate,
+      }
+    : null;
+
   const existingIngredients: ExistingIngredientOption[] = (ingredients ?? []).map((i) => ({
     id: i.id,
     name: i.name,
@@ -92,6 +104,7 @@ export default async function ScanInvoicePage() {
         existingIngredients={existingIngredients}
         rememberedConversions={rememberedConversions}
         invoiceRecords={invoiceRecords}
+        costData={costData}
         initialRemaining={initialRemaining}
       />
     </div>

@@ -24,6 +24,7 @@ import {
   type ConversionState,
 } from "@/lib/invoiceOcr/conversionMemory.ts";
 import { duplicateNotice, findPossibleDuplicate, type InvoiceRecord } from "@/lib/invoiceOcr/duplicateInvoice.ts";
+import { affectedMenus, type AffectedMenu } from "@/lib/invoiceOcr/affectedMenus.ts";
 import { ingredientPriceTaxModeLabel, type IngredientPriceTaxMode } from "@/lib/taxMode.ts";
 
 /**
@@ -42,6 +43,9 @@ export interface ExistingIngredientOption {
   priceIsSet: boolean;
   yieldRatePercent: number;
 }
+
+/** 完了画面「原価率が変わったメニュー」の計算に使うデータ(affectedMenus.ts) */
+export type CostData = Omit<Parameters<typeof affectedMenus>[0], "updates">;
 
 export interface RememberedConversion {
   ingredientId: string;
@@ -116,6 +120,7 @@ export function ScanView({
   existingIngredients,
   rememberedConversions,
   invoiceRecords,
+  costData,
   initialRemaining,
 }: {
   storeId: string;
@@ -123,6 +128,7 @@ export function ScanView({
   existingIngredients: ExistingIngredientOption[];
   rememberedConversions: RememberedConversion[];
   invoiceRecords: InvoiceRecord[];
+  costData: CostData | null;
   initialRemaining: number;
 }) {
   const router = useRouter();
@@ -141,7 +147,14 @@ export function ScanView({
   const [remaining, setRemaining] = useState(initialRemaining);
   const [confirming, setConfirming] = useState(false);
   const [showBlockers, setShowBlockers] = useState(false);
-  const [done, setDone] = useState<{ updated: number; created: number; remembered: number; failed: number; conversionError: string | null } | null>(null);
+  const [done, setDone] = useState<{
+    updated: number;
+    created: number;
+    remembered: number;
+    failed: number;
+    conversionError: string | null;
+    menus: AffectedMenu[];
+  } | null>(null);
 
   const existingById = new Map(existingIngredients.map((i) => [i.id, i]));
   const existingByNormalizedName = new Map(existingIngredients.map((i) => [normalizeForDedupe(i.name), i]));
@@ -338,6 +351,7 @@ export function ScanView({
     let created = 0;
     let failed = 0;
     const savedIds = new Map<string, string>();
+    const priceUpdates: { ingredientId: string; newPrice: number }[] = [];
     // 同時に大量の保存が走って店舗の食材の一意の決まりに引っかかる事故を避けるため、順番に保存する
     for (const { row, d } of pending) {
       const price = d.calc.price;
@@ -366,6 +380,7 @@ export function ScanView({
         if (result.success) {
           updated += 1;
           savedIds.set(row.key, row.target);
+          priceUpdates.push({ ingredientId: row.target, newPrice: price });
           updateRow(row.key, { status: "saved", savedIngredientId: row.target });
         } else {
           failed += 1;
@@ -394,7 +409,9 @@ export function ScanView({
       await recordInvoiceScan({ storeId, invoiceDate: invoice.date, supplier: invoice.supplier, totalAmount: invoice.totalAmount });
     }
 
-    setDone({ updated, created, remembered, failed, conversionError });
+    // 原価率が変わったメニュー(単価を更新した登録済みの食材を使うメニュー。新しく登録した食材は、まだどのメニューにも使われていない)
+    const menus = costData && priceUpdates.length > 0 ? affectedMenus({ ...costData, updates: priceUpdates }) : [];
+    setDone({ updated, created, remembered, failed, conversionError, menus });
     setConfirming(false);
     setShowBlockers(false);
     router.refresh();
@@ -698,6 +715,43 @@ export function ScanView({
                 {done.failed > 0 && `・確定できなかった: ${done.failed}件(下の行に理由があります)`}
               </p>
               {done.conversionError && <ActionErrorMessage error={done.conversionError} />}
+              {done.menus.length > 0 ? (
+                <div className="flex min-w-0 flex-col gap-2">
+                  <p className="text-sm font-semibold" style={{ color: "var(--foreground)", ...JP }}>
+                    原価率が変わったメニュー({done.menus.length}件)
+                  </p>
+                  <ul className="flex min-w-0 flex-col gap-2">
+                    {done.menus.map((m) => (
+                      <li key={m.menuId} className="flex min-w-0 flex-col gap-1 rounded border p-3 text-sm" style={{ borderColor: "var(--border)", ...JP }}>
+                        <span className="font-semibold [overflow-wrap:anywhere]" style={{ color: "var(--foreground)" }}>
+                          {m.name}
+                        </span>
+                        {m.unsetText ? (
+                          <span className="[overflow-wrap:anywhere]" style={{ color: "var(--muted-foreground)" }}>
+                            {m.unsetText}
+                          </span>
+                        ) : (
+                          <span className="[overflow-wrap:anywhere]" style={{ color: "var(--foreground)" }}>
+                            原価率 {m.beforeRateText ?? "—"} → <span className="font-bold">{m.afterRateText}</span>
+                            {m.changeText && `(${m.changeText})`}
+                          </span>
+                        )}
+                        {m.targetLabel && (
+                          <span className="self-start">
+                            <StatusBadge status={m.targetLabel.endsWith("超えました") ? "danger" : "warn"} label={m.targetLabel} wrap />
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                done.updated > 0 && (
+                  <p className="text-sm" style={{ color: "var(--muted-foreground)", ...JP }}>
+                    原価率が変わったメニューはありません(更新した食材を使っているメニューがありません)。
+                  </p>
+                )
+              )}
               <Link href="/ranking" className="self-start text-sm underline" style={{ color: "var(--accent)", ...JP }}>
                 メニューの原価率を見る
               </Link>

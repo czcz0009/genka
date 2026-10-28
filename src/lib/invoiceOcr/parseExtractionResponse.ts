@@ -1,9 +1,11 @@
-import type { ExtractedInvoiceItem, InvoiceMeta } from "./types.ts";
+import type { ExtractedInvoiceItem, InvoiceMeta, InvoicePage } from "./types.ts";
 
 export interface ParseExtractionResult {
   items: ExtractedInvoiceItem[];
   /** 納品書全体の情報。古い形(品目の配列だけ)の応答では、すべてnull */
   invoice: InvoiceMeta;
+  /** ページごとの日付・仕入れ先(無ければ空) */
+  pages: InvoicePage[];
   /** JSON自体を解析できなかった場合のエラーメッセージ。成功時はnull。 */
   error: string | null;
 }
@@ -49,6 +51,19 @@ function parseMeta(raw: unknown): InvoiceMeta {
   };
 }
 
+function parsePages(raw: unknown): InvoicePage[] {
+  if (!Array.isArray(raw)) return [];
+  const out: InvoicePage[] = [];
+  for (const p of raw) {
+    if (typeof p !== "object" || p == null) continue;
+    const r = p as Record<string, unknown>;
+    const page = toNumberOrNull(r.page);
+    if (page == null || !Number.isInteger(page) || page < 1) continue;
+    out.push({ page, date: toDateOrNull(r.date), supplier: toStringOrNull(r.supplier) });
+  }
+  return out;
+}
+
 function toStringOrNull(value: unknown): string | null {
   if (value == null) return null;
   const s = String(value).trim();
@@ -70,19 +85,21 @@ export function parseExtractionResponse(rawText: string): ParseExtractionResult 
   try {
     parsed = JSON.parse(stripCodeFence(rawText));
   } catch {
-    return { items: [], invoice: EMPTY_META, error: "読み取り結果を解析できませんでした。もう一度撮影し直してお試しください。" };
+    return { items: [], invoice: EMPTY_META, pages: [], error: "読み取り結果を解析できませんでした。もう一度撮影し直してお試しください。" };
   }
 
   // 新しい形 { invoice, items }(2026-10-28)と、古い形(品目の配列だけ)の両方を受け付ける
   let rawItems: unknown = parsed;
   let invoice = EMPTY_META;
+  let pages: InvoicePage[] = [];
   if (parsed != null && typeof parsed === "object" && !Array.isArray(parsed)) {
     const o = parsed as Record<string, unknown>;
     rawItems = o.items;
     invoice = parseMeta(o.invoice);
+    pages = parsePages(o.pages);
   }
   if (!Array.isArray(rawItems)) {
-    return { items: [], invoice: EMPTY_META, error: "読み取り結果を解析できませんでした。もう一度撮影し直してお試しください。" };
+    return { items: [], invoice: EMPTY_META, pages: [], error: "読み取り結果を解析できませんでした。もう一度撮影し直してお試しください。" };
   }
 
   const items: ExtractedInvoiceItem[] = [];
@@ -104,5 +121,5 @@ export function parseExtractionResponse(rawText: string): ParseExtractionResult 
     });
   }
 
-  return { items, invoice, error: null };
+  return { items, invoice, pages, error: null };
 }

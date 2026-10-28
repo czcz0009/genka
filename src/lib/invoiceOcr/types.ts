@@ -27,3 +27,10 @@ export interface InvoiceMeta {
   /** 金額が税込か税抜か */
   taxBasis: "inclusive" | "exclusive" | null;
 }
+
+/** ページごとの日付・仕入れ先(2026-10-28)。複数の写真・PDFの複数ページが、別々の納品書でないかを確かめるために使う */
+export interface InvoicePage {
+  page: number;
+  date: string | null;
+  supplier: string | null;
+}

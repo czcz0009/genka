@@ -86,3 +86,23 @@ test("P-4 品目の税率は 8・10 だけ受け付ける(ほかは不明 = 画�
   assert.equal(rate(5), null);
   assert.equal(rate(null), null);
 });
+
+test("P-5 ページごとの日付・仕入れ先(pages)を読み取れる。無ければ空。おかしな行は飛ばす(2026-10-28)", () => {
+  const r = parseExtractionResponse(
+    JSON.stringify({
+      invoice: { date: "2026-10-20" },
+      pages: [
+        { page: 1, date: "2026-10-20", supplier: "山田青果" },
+        { page: "2", date: "2026/10/21", supplier: " " },
+        "壊れた行",
+      ],
+      items: [],
+    }),
+  );
+  assert.deepEqual(r.pages, [
+    { page: 1, date: "2026-10-20", supplier: "山田青果" },
+    { page: 2, date: "2026-10-21", supplier: null },
+  ]);
+  assert.deepEqual(parseExtractionResponse(JSON.stringify({ items: [] })).pages, []);
+  assert.deepEqual(parseExtractionResponse("[]").pages, []);
+});

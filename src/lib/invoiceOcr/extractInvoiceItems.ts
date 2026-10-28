@@ -6,6 +6,7 @@ import { parseExtractionResponse } from "./parseExtractionResponse.ts";
 import type { InvoiceImageType } from "./imageType.ts";
 import { classifyAiError } from "./serviceError.ts";
 import { ocrGateMessage } from "./usageLimit.ts";
+import { OCR_MAX_TOKENS, OCR_MODEL, OCR_TEMPERATURE } from "./extractionSettings.ts";
 import type { ExtractedInvoiceItem, InvoiceMeta } from "./types.ts";
 
 /**
@@ -26,7 +27,7 @@ const MAX_LONG_EDGE = 1568;
 // 読み取り精度とコストのバランスを見てHaiku 4.5を既定にしている
 // (構造化されたJSON抽出という定型タスクのため、上位モデルほどの推論力は
 // 必須ではない想定。精度に問題が出た場合はSonnet系への切り替えを検討する)。
-const MODEL = "claude-haiku-4-5-20251001";
+const MODEL = OCR_MODEL;
 
 const EXTRACTION_PROMPT = `あなたは飲食店向け原価計算ツールの一部として、納品書・請求書の写真から仕入れ品目を読み取るアシスタントです。
 
@@ -110,7 +111,8 @@ export async function extractInvoiceItems(imageBuffer: Buffer, type: InvoiceImag
   try {
     const message = await client.messages.create({
       model: MODEL,
-      max_tokens: 3072, // 2026-10-28: 納品書全体の情報と税率を足したぶん、少し増やした
+      max_tokens: OCR_MAX_TOKENS,
+      temperature: OCR_TEMPERATURE, // ばらつきを小さくする(extractionSettings.ts)
       messages: [
         {
           role: "user",

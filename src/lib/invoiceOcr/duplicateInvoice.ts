@@ -1,6 +1,6 @@
 /**
  * 同じ納品書の二度読みに気づく決まり(2026-10-28)。テストは duplicateInvoice.test.ts(D)。
- * 日付・仕入れ先(書き方をそろえたもの)・合計金額の3つが一致したら知らせる。止めはしない。
+ * 日付・仕入れ先(書き方をそろえたもの)・合計金額の3つ、または日付・合計金額の2つが一致したら知らせる。止めはしない。
  * 記録は確定した納品書のものだけ(マイグレーション0031の invoice_scan_records。写真・明細は持たない)。
  */
 
@@ -20,19 +20,31 @@ export interface InvoiceRecord {
   createdAt: string; // 確定した日時
 }
 
+export type DuplicateHit = InvoiceRecord & {
+  /** 仕入れ先まで一致したか(false = 日付と合計だけが一致。仕入れ先の読み違い・読み取れなかった場合も含む) */
+  sameSupplier: boolean;
+};
+
+/**
+ * 日付・合計金額が一致する記録を探す(2026-10-28: 仕入れ先の読み違いがあっても気づけるよう、日付と合計の2つで探す)。
+ * 仕入れ先まで一致する記録があれば、それを優先する。日付か合計が読み取れなければ確かめない。
+ */
 export function findPossibleDuplicate(
   current: { invoiceDate: string | null; supplier: string | null; totalAmount: number | null },
   records: InvoiceRecord[],
-): InvoiceRecord | null {
-  if (!current.invoiceDate || !current.supplier || current.totalAmount == null) return null;
-  const supplier = normalizeSupplier(current.supplier);
-  if (!supplier) return null;
-  return (
-    records.find((r) => r.invoiceDate === current.invoiceDate && r.supplierNormalized === supplier && Number(r.totalAmount) === current.totalAmount) ?? null
-  );
+): DuplicateHit | null {
+  if (!current.invoiceDate || current.totalAmount == null) return null;
+  const candidates = records.filter((r) => r.invoiceDate === current.invoiceDate && Number(r.totalAmount) === current.totalAmount);
+  if (candidates.length === 0) return null;
+  const supplier = current.supplier ? normalizeSupplier(current.supplier) : "";
+  const same = supplier ? candidates.find((r) => r.supplierNormalized === supplier) : undefined;
+  return same ? { ...same, sameSupplier: true } : { ...candidates[0], sameSupplier: false };
 }
 
-export function duplicateNotice(hit: InvoiceRecord): string {
+export function duplicateNotice(hit: DuplicateHit): string {
+  if (!hit.sameSupplier) {
+    return `同じ日付・同じ合計金額の納品書を、すでに確定しています(仕入れ先の名前は、前回『${hit.supplierNormalized}』と読み取りました)。同じ納品書なら、確定しなくても大丈夫です`;
+  }
   const jst = new Date(new Date(hit.createdAt).getTime() + 9 * 60 * 60 * 1000);
   const when = `${jst.getUTCMonth() + 1}月${jst.getUTCDate()}日`;
   return `この納品書は読み取り済みかもしれません(${when}に確定した納品書と、日付・仕入れ先・合計金額が同じです)。同じ納品書なら、確定しなくても大丈夫です`;

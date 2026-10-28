@@ -1,21 +1,25 @@
 "use server";
 
 import { requireAuthedClient } from "@/lib/supabase/requireAuthedClient";
-import { extractInvoiceItems } from "@/lib/invoiceOcr/extractInvoiceItems.ts";
-import type { ExtractedInvoiceItem, InvoiceMeta } from "@/lib/invoiceOcr/types.ts";
+import { extractInvoiceItems, type InvoiceSource } from "@/lib/invoiceOcr/extractInvoiceItems.ts";
+import type { ExtractedInvoiceItem, InvoiceMeta, InvoicePage } from "@/lib/invoiceOcr/types.ts";
 import type { ConversionRowToSave } from "@/lib/invoiceOcr/conversionMemory.ts";
 import { CONVERSION_MAX } from "@/lib/invoiceOcr/unitPrice.ts";
 import { normalizeSupplier } from "@/lib/invoiceOcr/duplicateInvoice.ts";
 import { OCR_MONTHLY_USE_LIMIT, ocrGateMessage, remainingOcrUses } from "@/lib/invoiceOcr/usageLimit.ts";
 import { beginOcrAttempt, cancelOcrAttempt, completeOcrSuccess } from "@/lib/invoiceOcr/ocrGate.ts";
-import { checkInvoiceUpload, IMAGE_HEAD_BYTES } from "@/lib/invoiceOcr/imageType.ts";
+import { IMAGE_HEAD_BYTES } from "@/lib/invoiceOcr/imageType.ts";
+import { checkInvoiceFile, checkPdfPageCount, checkUploadSet, MAX_PHOTOS, type InvoiceFileKind } from "@/lib/invoiceOcr/uploadSet.ts";
+import { countPdfPages } from "@/lib/invoiceOcr/pdfPageCount.ts";
+import type { AliasRowToSave } from "@/lib/invoiceOcr/nameMatching.ts";
+import { MAX_ALIAS_LENGTH } from "@/lib/invoiceOcr/nameMatching.ts";
 
 export type ScanInvoiceResult =
-  | { success: true; items: ExtractedInvoiceItem[]; invoice: InvoiceMeta; remaining: number }
+  | { success: true; items: ExtractedInvoiceItem[]; invoice: InvoiceMeta; pages: InvoicePage[]; remaining: number }
   | { success: false; error: string };
 
 /**
- * 納品書・請求書の写真をアップロードし、Claude(Vision)で品目を読み取る。
+ * 納品書・請求書の写真(1〜5枚)かPDF(1つ・5ページまで)をアップロードし、Claudeで品目を読み取る(PDF・複数枚は2026-10-28)。
  * ここではDBへの保存は一切行わない(読み取り結果を返すだけ)。実際の
  * 食材登録・単価更新は、画面で確認・修正した後に既存のcreateIngredient/
  * updateIngredientを呼ぶ(ingredients/actions.ts、①のCSV取り込みと同じ
@@ -29,21 +33,34 @@ export async function scanInvoicePhoto(formData: FormData): Promise<ScanInvoiceR
   const ctx = await requireAuthedClient();
   if ("error" in ctx) return { success: false, error: ctx.error };
 
-  const file = formData.get("photo");
-  if (!(file instanceof File) || file.size === 0) {
-    return { success: false, error: "写真を選択してください" };
+  // 写真(1〜5枚)か、PDF(1つ・5ページまで)。種類は申告ではなく中身の先頭で確かめる(uploadSet.ts)。
+  // 回数の上限を使う前に確かめるので、受け付けないファイルでは試行回数は減らない。何枚・何ページでも1回と数える(Mahiro決定、2026-10-28)
+  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  const sources: InvoiceSource[] = [];
+  const kinds: { kind: InvoiceFileKind; size: number }[] = [];
+  for (const file of files.slice(0, MAX_PHOTOS + 1)) {
+    const head = new Uint8Array(await file.slice(0, IMAGE_HEAD_BYTES).arrayBuffer());
+    const checked = checkInvoiceFile({ declaredType: file.type, size: file.size, head });
+    if (!checked.ok) return { success: false, error: checked.error };
+    kinds.push({ kind: checked.kind, size: file.size });
+    const buffer = Buffer.from(await file.arrayBuffer());
+    sources.push(checked.kind === "pdf" ? { kind: "pdf", buffer } : { kind: "image", type: checked.kind, buffer });
   }
-  // 受け付けるのは JPEG・PNG・WebP・HEIC だけ。申告(file.type)ではなく、中身の先頭で確かめる(SVG等を通さない)。
-  // 回数の上限を使う前に確かめるので、受け付けないファイルでは試行回数は減らない。
-  const head = new Uint8Array(await file.slice(0, IMAGE_HEAD_BYTES).arrayBuffer());
-  const checked = checkInvoiceUpload({ declaredType: file.type, size: file.size, head });
-  if (!checked.ok) return { success: false, error: checked.error };
+  // 6つ目まで確かめれば「5枚まで」の判定ができる(それ以上は読まない)
+  const setError = checkUploadSet(kinds);
+  if (setError) return { success: false, error: setError };
+  let pageCount = sources.length;
+  if (sources[0].kind === "pdf") {
+    const pages = await countPdfPages(new Uint8Array(sources[0].buffer));
+    const pageError = checkPdfPageCount(pages);
+    if (pageError) return { success: false, error: pageError };
+    pageCount = pages!;
+  }
 
   const gate = await beginOcrAttempt(ctx.supabase);
   if (!gate.ok) return { success: false, error: ocrGateMessage(gate.reason) };
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const result = await extractInvoiceItems(buffer, checked.type);
+  const result = await extractInvoiceItems(sources, pageCount);
   if (result.unavailable) {
     await cancelOcrAttempt(ctx.supabase, gate.reservation, result.unavailable);
     return { success: false, error: ocrGateMessage("unavailable") };
@@ -59,7 +76,7 @@ export async function scanInvoicePhoto(formData: FormData): Promise<ScanInvoiceR
   // 読み取りに成功したときだけ「成功回数」を数える
   const used = await completeOcrSuccess(ctx.supabase, gate.reservation);
   const invoice: InvoiceMeta = result.invoice ?? { date: null, supplier: null, totalAmount: null, taxBasis: null };
-  return { success: true, items: result.items, invoice, remaining: remainingOcrUses(used ?? OCR_MONTHLY_USE_LIMIT, OCR_MONTHLY_USE_LIMIT) };
+  return { success: true, items: result.items, invoice, pages: result.pages ?? [], remaining: remainingOcrUses(used ?? OCR_MONTHLY_USE_LIMIT, OCR_MONTHLY_USE_LIMIT) };
 }
 
 /**
@@ -107,4 +124,32 @@ export async function recordInvoiceScan(input: { storeId: string; invoiceDate: s
     .insert({ store_id: input.storeId, invoice_date: input.invoiceDate, supplier_normalized: supplier, total_amount: input.totalAmount });
   if (error) console.error("recordInvoiceScan failed", error.code);
   return { success: !error };
+}
+
+/**
+ * 名前の対応づけを覚える(マイグレーション0032の ingredient_name_aliases。2026-10-28)。
+ * 何を覚えるかは画面側の aliasToSave(nameMatching.ts)で決めている(店主が選び直した行だけ)。
+ * ここでは長さだけ確かめる。店舗と食材の食い違い・他の店の食材は、DBの決まり(RLS)が断る。
+ */
+export async function rememberAliases(storeId: string, rows: AliasRowToSave[]): Promise<{ success: true; saved: number } | { success: false; error: string }> {
+  const ctx = await requireAuthedClient();
+  if ("error" in ctx) return { success: false, error: ctx.error };
+  if (!Array.isArray(rows) || rows.length === 0) return { success: true, saved: 0 };
+  if (rows.length > 100) return { success: false, error: "一度に覚えられる名前は100件までです" };
+  for (const r of rows) {
+    const ok =
+      typeof r.ingredient_id === "string" &&
+      typeof r.alias === "string" && r.alias.trim().length >= 1 && r.alias.trim().length <= MAX_ALIAS_LENGTH &&
+      typeof r.normalized_alias === "string" && r.normalized_alias.length >= 1 && r.normalized_alias.length <= MAX_ALIAS_LENGTH;
+    if (!ok) return { success: false, error: "覚える名前が正しくありません" };
+  }
+  const { error } = await ctx.supabase.from("ingredient_name_aliases").upsert(
+    rows.map((r) => ({ store_id: storeId, ingredient_id: r.ingredient_id, alias: r.alias.trim(), normalized_alias: r.normalized_alias })),
+    { onConflict: "store_id,normalized_alias" },
+  );
+  if (error) {
+    console.error("rememberAliases failed", error.code);
+    return { success: false, error: "名前の対応を覚えられませんでした(単価の更新は済んでいます)。" };
+  }
+  return { success: true, saved: rows.length };
 }

@@ -6,9 +6,9 @@ import { useRouter } from "next/navigation";
 import { normalizeForDedupe } from "@/lib/normalize.ts";
 import { ActionErrorMessage } from "@/components/ActionErrorMessage.tsx";
 import { StatusBadge } from "@/components/StatusBadge.tsx";
-import { recordInvoiceScan, rememberConversions, scanInvoicePhoto } from "./actions.ts";
+import { recordInvoiceScan, rememberAliases, rememberConversions, scanInvoicePhoto } from "./actions.ts";
 import { createIngredient, updateIngredient } from "../actions.ts";
-import type { ExtractedInvoiceItem, InvoiceMeta } from "@/lib/invoiceOcr/types.ts";
+import type { ExtractedInvoiceItem, InvoiceMeta, InvoicePage } from "@/lib/invoiceOcr/types.ts";
 import { isSameUnit } from "@/lib/invoiceOcr/convertUnitPrice.ts";
 import { prepareUpload, resizeInBrowser, runScan } from "@/lib/invoiceOcr/uploadPrep.ts";
 import { computeRowPrice, validateConversionInput, type InvoiceTaxBasis } from "@/lib/invoiceOcr/unitPrice.ts";
@@ -25,6 +25,9 @@ import {
 } from "@/lib/invoiceOcr/conversionMemory.ts";
 import { duplicateNotice, findPossibleDuplicate, type InvoiceRecord } from "@/lib/invoiceOcr/duplicateInvoice.ts";
 import { affectedMenus, type AffectedMenu } from "@/lib/invoiceOcr/affectedMenus.ts";
+import { aliasToSave, matchIngredient, type AliasRowToSave } from "@/lib/invoiceOcr/nameMatching.ts";
+import { checkUploadSet, MAX_PHOTOS, type InvoiceFileKind } from "@/lib/invoiceOcr/uploadSet.ts";
+import { MULTI_PAGE_HINT, pagesMismatchNotice } from "@/lib/invoiceOcr/pageConsistency.ts";
 import { ingredientPriceTaxModeLabel, type IngredientPriceTaxMode } from "@/lib/taxMode.ts";
 
 /**
@@ -33,6 +36,8 @@ import { ingredientPriceTaxModeLabel, type IngredientPriceTaxMode } from "@/lib/
  * - 読み取った直後に「要確認」と「いつもどおり」に分ける(直している途中で行が移動しないよう、分け方は最初に決める)
  * - すべての欄をその場で直せる。税込・税抜は納品書1枚につき1回選ぶ(AIが判定できなかったときだけ必須)
  * - 換算(1個 = 何g)は、覚えた値 → 目安 → 空欄 の順で最初の値を入れる。目安は店主が確かめるまで確定できない
+ * - 4・5段目(2026-10-28): 登録先は 名前の一致 → 覚えた対応 で自動、似た名前・同義語は候補のボタンだけ(nameMatching.ts)。
+ *   写真は5枚まで・PDFは1つ5ページまで(同じ納品書の続きのページ。uploadSet.ts)。ページごとの日付・仕入れ先が違えば知らせる
  */
 
 export interface ExistingIngredientOption {
@@ -46,6 +51,11 @@ export interface ExistingIngredientOption {
 
 /** 完了画面「原価率が変わったメニュー」の計算に使うデータ(affectedMenus.ts) */
 export type CostData = Omit<Parameters<typeof affectedMenus>[0], "updates">;
+
+export interface NameAlias {
+  ingredientId: string;
+  normalizedAlias: string;
+}
 
 export interface RememberedConversion {
   ingredientId: string;
@@ -101,6 +111,20 @@ interface Row {
   error: string | null;
   /** 確定した後の食材ID(新しく登録した食材の換算を覚えるため) */
   savedIngredientId: string | null;
+  /** 自動で選んだ登録先(名前・覚えた対応で一致)。無ければ null */
+  autoMatchedId: string | null;
+  /** 候補(似た名前・同義語の辞書。自動では選ばない) */
+  candidateIds: string[];
+  /** 「この名前を覚える」の印(店主が登録先を選び直したときに出す) */
+  rememberName: boolean;
+}
+
+/** 選んだファイル(写真は縮小前のまま持ち、送る直前に縮小する) */
+interface PickedFile {
+  key: string;
+  file: File;
+  kind: "image" | "pdf";
+  previewUrl: string | null;
 }
 
 function numOrNull(s: string): number | null {
@@ -121,6 +145,7 @@ export function ScanView({
   rememberedConversions,
   invoiceRecords,
   costData,
+  nameAliases,
   initialRemaining,
 }: {
   storeId: string;
@@ -129,14 +154,15 @@ export function ScanView({
   rememberedConversions: RememberedConversion[];
   invoiceRecords: InvoiceRecord[];
   costData: CostData | null;
+  nameAliases: NameAlias[];
   initialRemaining: number;
 }) {
   const router = useRouter();
   // 入口は2つ(2026-10-27、設計の1段目): カメラを直接開く「写真を撮る」と、ライブラリやファイルから選ぶ「写真・ファイルから選ぶ」
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const pickInputRef = useRef<HTMLInputElement | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [picked, setPicked] = useState<PickedFile[]>([]);
+  const [pages, setPages] = useState<InvoicePage[]>([]);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [rows, setRows] = useState<Row[] | null>(null);
@@ -151,13 +177,13 @@ export function ScanView({
     updated: number;
     created: number;
     remembered: number;
+    namesRemembered: number;
     failed: number;
     conversionError: string | null;
     menus: AffectedMenu[];
   } | null>(null);
 
   const existingById = new Map(existingIngredients.map((i) => [i.id, i]));
-  const existingByNormalizedName = new Map(existingIngredients.map((i) => [normalizeForDedupe(i.name), i]));
 
   function rememberedFor(ingredientId: string, purchaseUnit: string) {
     const hit = rememberedConversions.find((c) => c.ingredientId === ingredientId && isSameUnit(c.purchaseUnit, purchaseUnit));
@@ -220,10 +246,11 @@ export function ScanView({
   }
 
   function buildRow(item: ExtractedInvoiceItem, basis: InvoiceTaxBasis | null): Row {
-    const matched = existingByNormalizedName.get(normalizeForDedupe(item.name));
+    const match = matchIngredient(item.name, existingIngredients, nameAliases);
+    const autoMatchedId = match.kind === "name" || match.kind === "alias" ? match.ingredientId : null;
     const invoiceUnit = item.unit ?? "";
     const base = {
-      target: matched ? matched.id : ("new" as const),
+      target: autoMatchedId ?? ("new" as const),
       newName: item.name,
       newUnit: invoiceUnit,
       invoiceUnit,
@@ -245,36 +272,51 @@ export function ScanView({
       status: "idle",
       error: null,
       savedIngredientId: null,
+      autoMatchedId,
+      candidateIds: match.kind === "candidates" ? match.ingredientIds : [],
+      rememberName: true,
     };
     row.conversion = freshConversion(row);
     row.needsReview = derive(row, basis).reasons.length > 0;
     return row;
   }
 
-  function handleFileChange(file: File | null) {
-    setSelectedFile(file);
+  /** 選んだ写真・PDFを足す(写真を撮る・選ぶを何回かに分けてもよい。5枚まで) */
+  function addFiles(list: FileList | null) {
+    if (!list || list.length === 0) return;
     setScanError(null);
     setRows(null);
     setDone(null);
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(file ? URL.createObjectURL(file) : null);
+    const added: PickedFile[] = Array.from(list).map((file) => {
+      const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+      return { key: nextKey(), file, kind: isPdf ? "pdf" : "image", previewUrl: isPdf ? null : URL.createObjectURL(file) };
+    });
+    setPicked((prev) => [...prev, ...added]);
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+    if (pickInputRef.current) pickInputRef.current.value = "";
   }
 
-  /** 写真の選択を消して、もう一度選べる状態に戻す(送れなかった・断られたとき) */
+  function removeFile(key: string) {
+    setPicked((prev) => {
+      const hit = prev.find((p) => p.key === key);
+      if (hit?.previewUrl) URL.revokeObjectURL(hit.previewUrl);
+      return prev.filter((p) => p.key !== key);
+    });
+  }
+
+  /** 選んだものを消して、もう一度選べる状態に戻す(送れなかった・断られたとき) */
   function resetPhoto() {
     if (cameraInputRef.current) cameraInputRef.current.value = "";
     if (pickInputRef.current) pickInputRef.current.value = "";
-    setSelectedFile(null);
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(null);
+    picked.forEach((p) => p.previewUrl && URL.revokeObjectURL(p.previewUrl));
+    setPicked([]);
   }
 
-  // 写真はブラウザの中で縮小してから送る(スマホの写真が1MBを超えて送れなかった不具合の対策。uploadPrep.ts)。
+  // 写真はブラウザの中で1枚ずつ縮小してから送る(スマホの写真が大きすぎて送れなかった不具合の対策。uploadPrep.ts)。PDFはそのまま送る。
   // 送れなかった・断られた・時間がかかりすぎたときも、必ず日本語のエラーを出して、選び直せる状態に戻す。
   async function handleScan() {
-    const file = selectedFile;
-    if (!file) {
-      setScanError("写真を選択してください");
+    if (picked.length === 0) {
+      setScanError("写真かPDFを選択してください");
       return;
     }
     setScanning(true);
@@ -283,16 +325,30 @@ export function ScanView({
     setDone(null);
     setShowBlockers(false);
     try {
-      let resized: Blob | null = null;
-      const prepared = await prepareUpload(file, async () => (resized = await resizeInBrowser(file)));
-      if (!prepared.ok) {
-        setScanError(prepared.error);
-        resetPhoto();
+      const formData = new FormData();
+      const sizes: { kind: InvoiceFileKind; size: number }[] = [];
+      for (const p of picked) {
+        if (p.kind === "pdf") {
+          formData.append("files", p.file);
+          sizes.push({ kind: "pdf", size: p.file.size });
+          continue;
+        }
+        let resized: Blob | null = null;
+        const prepared = await prepareUpload(p.file, async () => (resized = await resizeInBrowser(p.file)));
+        if (!prepared.ok) {
+          setScanError(prepared.error);
+          return;
+        }
+        const blob: Blob = prepared.kind === "resized" && resized ? resized : p.file;
+        formData.append("files", blob, prepared.kind === "resized" ? "photo.jpg" : p.file.name);
+        sizes.push({ kind: "jpeg", size: blob.size });
+      }
+      // 送る前に、組み合わせ(5枚まで・PDFと写真を混ぜない・合計3.5MBまで)を確かめる。サーバーでも同じように確かめる
+      const setError = checkUploadSet(sizes);
+      if (setError) {
+        setScanError(setError);
         return;
       }
-      const formData = new FormData();
-      if (prepared.kind === "resized" && resized) formData.append("photo", resized, "photo.jpg");
-      else formData.append("photo", file);
       const result = await runScan(() => scanInvoicePhoto(formData));
       if (!result.success) {
         setScanError(result.error);
@@ -301,6 +357,7 @@ export function ScanView({
       }
       setRemaining(result.remaining);
       setInvoice(result.invoice);
+      setPages(result.pages);
       setTaxBasis(result.invoice.taxBasis);
       setTaxBasisFromAi(result.invoice.taxBasis != null);
       setRows(result.items.map((item) => buildRow(item, result.invoice.taxBasis ?? storeTaxMode)));
@@ -338,6 +395,7 @@ export function ScanView({
     .filter(({ row }) => row.target === "new" && (!row.newName.trim() || !row.newUnit.trim()))
     .map(({ row }) => `${row.invoiceName}: 新しい食材の名前と単位を入れてください`);
   const allBlockers = [...blockers, ...newNameErrors];
+  const pageNotice = pagesMismatchNotice(pages);
   const duplicate = invoice ? findPossibleDuplicate({ invoiceDate: invoice.date, supplier: invoice.supplier, totalAmount: invoice.totalAmount }, invoiceRecords) : null;
 
   async function handleConfirm() {
@@ -404,6 +462,27 @@ export function ScanView({
       else conversionError = r.error;
     }
 
+    // 名前の対応を覚える(店主が登録先を選び直し、「この名前を覚える」に印がある行だけ。aliasToSave)
+    const aliasRows: AliasRowToSave[] = [];
+    for (const { row } of pending) {
+      const id = savedIds.get(row.key);
+      const chosen = row.target === "new" ? null : existingById.get(row.target);
+      const a = aliasToSave({
+        invoiceName: row.invoiceName,
+        chosen: chosen ? { id: chosen.id, name: chosen.name } : null,
+        autoMatched: row.target === row.autoMatchedId,
+        remember: row.rememberName,
+        rowSaved: id != null,
+      });
+      if (a && !aliasRows.some((x) => x.normalized_alias === a.normalized_alias)) aliasRows.push(a);
+    }
+    let namesRemembered = 0;
+    if (aliasRows.length > 0) {
+      const r = await rememberAliases(storeId, aliasRows);
+      if (r.success) namesRemembered = r.saved;
+      else conversionError = conversionError ? `${conversionError} ${r.error}` : r.error;
+    }
+
     // 二度読みに気づくための記録(日付・仕入れ先・合計がそろっていて、1件以上確定したときだけ)
     if (savedIds.size > 0 && invoice?.date && invoice.supplier && invoice.totalAmount != null) {
       await recordInvoiceScan({ storeId, invoiceDate: invoice.date, supplier: invoice.supplier, totalAmount: invoice.totalAmount });
@@ -411,7 +490,7 @@ export function ScanView({
 
     // 原価率が変わったメニュー(単価を更新した登録済みの食材を使うメニュー。新しく登録した食材は、まだどのメニューにも使われていない)
     const menus = costData && priceUpdates.length > 0 ? affectedMenus({ ...costData, updates: priceUpdates }) : [];
-    setDone({ updated, created, remembered, failed, conversionError, menus });
+    setDone({ updated, created, remembered, namesRemembered, failed, conversionError, menus });
     setConfirming(false);
     setShowBlockers(false);
     router.refresh();
@@ -486,6 +565,45 @@ export function ScanView({
                 </option>
               ))}
             </select>
+            {row.candidateIds.length > 0 && row.target === "new" && !locked && (
+              <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm" style={{ color: "var(--foreground)", ...JP }}>
+                <span>登録済みの似た食材:</span>
+                {row.candidateIds.map((id) => {
+                  const c = existingById.get(id);
+                  if (!c) return null;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => updateRowAndConversion(row.key, { target: id })}
+                      className="rounded border px-3 py-1.5 text-sm font-semibold [overflow-wrap:anywhere]"
+                      style={{ borderColor: "var(--accent)", color: "var(--accent)", ...JP }}
+                    >
+                      {c.name}を選ぶ
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {row.target !== "new" && row.target !== row.autoMatchedId && (
+              <label className="flex items-start gap-2 text-sm" style={{ color: "var(--foreground)", ...JP }}>
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={row.rememberName}
+                  disabled={locked}
+                  onChange={(e) => updateRow(row.key, { rememberName: e.target.checked })}
+                />
+                <span className="[overflow-wrap:anywhere]">
+                  この名前を覚える(次から「{row.invoiceName}」は「{d.existing?.name ?? ""}」を自動で選びます)
+                </span>
+              </label>
+            )}
+            {row.target !== "new" && row.target === row.autoMatchedId && normalizeForDedupe(row.invoiceName) !== normalizeForDedupe(d.existing?.name ?? "") && (
+              <p className="text-xs" style={{ color: "var(--muted-foreground)", ...JP }}>
+                前に選んだ対応、または名前の書き方の違い(カタカナ・ひらがな等)から、自動で選びました。
+              </p>
+            )}
           </div>
 
           {row.target === "new" ? (
@@ -620,33 +738,55 @@ export function ScanView({
     <div className="mt-6 flex min-w-0 flex-col gap-6">
       <div className="flex flex-col gap-4 rounded border p-5" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
         <p className="text-base" style={{ color: "var(--foreground)", ...JP }}>
-          納品書・請求書の写真
+          納品書・請求書の写真・PDF
+        </p>
+        <p className="text-sm" style={{ color: "var(--muted-foreground)", ...JP }}>
+          {MULTI_PAGE_HINT}(写真は{MAX_PHOTOS}枚まで、PDFは1つ・5ページまで)
         </p>
         <div className="flex flex-col gap-2 sm:flex-row">
           <label className="cursor-pointer rounded border px-4 py-3 text-center text-base font-semibold" style={{ borderColor: "var(--border)", color: "var(--foreground)" }}>
-            写真を撮る
+            {picked.some((p) => p.kind === "image") ? "もう1枚撮る" : "写真を撮る"}
+            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={(e) => addFiles(e.target.files)} className="sr-only" />
+          </label>
+          <label className="cursor-pointer rounded border px-4 py-3 text-center text-base font-semibold" style={{ borderColor: "var(--border)", color: "var(--foreground)" }}>
+            写真・PDFから選ぶ
             <input
-              ref={cameraInputRef}
+              ref={pickInputRef}
               type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
+              accept="image/*,application/pdf,.pdf"
+              multiple
+              onChange={(e) => addFiles(e.target.files)}
               className="sr-only"
             />
           </label>
-          <label className="cursor-pointer rounded border px-4 py-3 text-center text-base font-semibold" style={{ borderColor: "var(--border)", color: "var(--foreground)" }}>
-            写真・ファイルから選ぶ
-            <input ref={pickInputRef} type="file" accept="image/*" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="sr-only" />
-          </label>
         </div>
-        {selectedFile && (
-          <p className="text-sm break-all" style={{ color: "var(--muted-foreground)" }}>
-            選んだ写真: {selectedFile.name}
-          </p>
-        )}
-        {previewUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={previewUrl} alt="選択した納品書のプレビュー" className="max-h-64 w-auto max-w-full rounded border object-contain" style={{ borderColor: "var(--border)" }} />
+        {picked.length > 0 && (
+          <ul className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3" aria-label="選んだ写真・PDF">
+            {picked.map((p, i) => (
+              <li key={p.key} className="flex min-w-0 flex-col gap-1 rounded border p-2" style={{ borderColor: "var(--border)" }}>
+                {p.previewUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={p.previewUrl} alt={`${i + 1}枚目`} className="h-28 w-full rounded object-contain" />
+                ) : (
+                  <div className="flex h-28 items-center justify-center rounded text-base font-bold" style={{ background: "var(--muted)", color: "var(--foreground)", ...JP }}>
+                    PDF
+                  </div>
+                )}
+                <span className="text-xs [overflow-wrap:anywhere]" style={{ color: "var(--muted-foreground)", ...JP }}>
+                  {i + 1}枚目: {p.file.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeFile(p.key)}
+                  disabled={scanning}
+                  className="self-start rounded border px-2 py-1 text-xs"
+                  style={{ borderColor: "var(--border)", color: "var(--foreground)", ...JP }}
+                >
+                  外す
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
         {scanError && <ActionErrorMessage error={scanError} />}
         <button
@@ -656,7 +796,7 @@ export function ScanView({
           className="self-start rounded px-5 py-3 text-base font-bold transition-colors disabled:opacity-40"
           style={{ background: "var(--primary)", color: "var(--primary-foreground)", ...JP }}
         >
-          {scanning ? "読み取り中…" : "この写真を読み取る"}
+          {scanning ? "読み取り中…" : picked.length > 1 ? `${picked.length}枚をまとめて読み取る` : picked[0]?.kind === "pdf" ? "このPDFを読み取る" : "この写真を読み取る"}
         </button>
         <p className="text-sm" style={{ color: "var(--muted-foreground)", ...JP }}>
           {remaining > 0
@@ -677,6 +817,11 @@ export function ScanView({
               <dt style={{ color: "var(--muted-foreground)" }}>合計</dt>
               <dd className="[overflow-wrap:anywhere]">{invoice.totalAmount != null ? formatYen(invoice.totalAmount) : "読み取れませんでした"}</dd>
             </dl>
+            {pageNotice && (
+              <p className="rounded border p-3 text-sm [overflow-wrap:anywhere]" style={{ borderColor: "var(--status-warn)", color: "var(--foreground)", ...JP }}>
+                ⚠ {pageNotice}
+              </p>
+            )}
             {duplicate && (
               <p className="rounded border p-3 text-sm" style={{ borderColor: "var(--status-warn)", color: "var(--foreground)", ...JP }}>
                 ⚠ {duplicateNotice(duplicate)}
@@ -711,7 +856,7 @@ export function ScanView({
                 確定しました
               </p>
               <p className="text-sm" style={{ color: "var(--foreground)", ...JP }}>
-                単価を更新: {done.updated}件・新しく登録: {done.created}件・換算を覚えた: {done.remembered}件
+                単価を更新: {done.updated}件・新しく登録: {done.created}件・換算を覚えた: {done.remembered}件・名前を覚えた: {done.namesRemembered}件
                 {done.failed > 0 && `・確定できなかった: ${done.failed}件(下の行に理由があります)`}
               </p>
               {done.conversionError && <ActionErrorMessage error={done.conversionError} />}

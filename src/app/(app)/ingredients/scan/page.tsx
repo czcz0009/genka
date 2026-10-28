@@ -6,7 +6,7 @@ import { getSessionStore, getStoreData } from "@/lib/store";
 import { StoreLoadError } from "@/components/StoreLoadError.tsx";
 import { PageHeader } from "@/components/PageHeader.tsx";
 import { OCR_MONTHLY_USE_LIMIT, jstMonthKey, remainingOcrUses } from "@/lib/invoiceOcr/usageLimit.ts";
-import { ScanView, type ExistingIngredientOption, type RememberedConversion, type CostData } from "./ScanView.tsx";
+import { ScanView, type ExistingIngredientOption, type RememberedConversion, type CostData, type NameAlias } from "./ScanView.tsx";
 import { DUPLICATE_LOOKBACK_DAYS, daysAgoKey, type InvoiceRecord } from "@/lib/invoiceOcr/duplicateInvoice.ts";
 
 export const metadata: Metadata = {
@@ -49,6 +49,8 @@ export default async function ScanInvoicePage() {
   // 覚えた換算と、二度読みに気づくための記録(マイグレーション0031、2026-10-28)。
   // 0031をまだ当てていない・読めないときは、無いものとして画面を出す(読み取り自体は止めない)。
   const { data: conversionRows } = await supabase.from("ingredient_unit_conversions").select("ingredient_id, purchase_unit, amount, amount_unit");
+  // 覚えた名前の対応(マイグレーション0032、2026-10-28)。読めなければ、無いものとして画面を出す
+  const { data: aliasRows } = await supabase.from("ingredient_name_aliases").select("ingredient_id, normalized_alias").eq("store_id", store.id);
   const since = daysAgoKey(new Date(), DUPLICATE_LOOKBACK_DAYS);
   const { data: recordRows } = await supabase
     .from("invoice_scan_records")
@@ -84,6 +86,7 @@ export default async function ScanInvoicePage() {
     amount: Number(c.amount),
     unit: c.amount_unit,
   }));
+  const nameAliases: NameAlias[] = (aliasRows ?? []).map((a) => ({ ingredientId: a.ingredient_id, normalizedAlias: a.normalized_alias }));
   const invoiceRecords: InvoiceRecord[] = (recordRows ?? []).map((r) => ({
     invoiceDate: r.invoice_date,
     supplierNormalized: r.supplier_normalized,
@@ -96,7 +99,7 @@ export default async function ScanInvoicePage() {
       <PageHeader
         eyebrow="食材"
         title="納品書から読み取る"
-        description="納品書・請求書を写真で撮ってアップロードすると、AIが食材名・数量・単価を読み取ります。読み取り結果は必ずこの画面で確認・修正してから登録されます(自動では確定しません)。印刷された文字が中心の書類を対象としています(手書きの伝票は対象外です)。"
+        description="納品書・請求書を写真で撮るか、写真・PDFを選んでアップロードすると、AIが食材名・数量・単価を読み取ります。読み取り結果は必ずこの画面で確認・修正してから登録されます(自動では確定しません)。印刷された文字が中心の書類を対象としています(手書きの伝票は対象外です)。"
       />
       <ScanView
         storeId={store.id}
@@ -105,6 +108,7 @@ export default async function ScanInvoicePage() {
         rememberedConversions={rememberedConversions}
         invoiceRecords={invoiceRecords}
         costData={costData}
+        nameAliases={nameAliases}
         initialRemaining={initialRemaining}
       />
     </div>

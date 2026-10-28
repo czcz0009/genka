@@ -8,4 +8,8 @@
  */
 export const OCR_MODEL = "claude-haiku-4-5-20251001";
 export const OCR_TEMPERATURE = 0;
-export const OCR_MAX_TOKENS = 3072; // 2026-10-28: 納品書全体の情報と税率を足したぶん、少し増やした
+export const OCR_MAX_TOKENS = 3072; // 1ページあたり。2026-10-28: 納品書全体の情報と税率を足したぶん、少し増やした
+/** AIが返す量の上限。ページ(写真の枚数・PDFのページ数)が多いほど品目が増えるので広げる(費用は実際に返った量だけ。最大8,192) */
+export function ocrMaxTokens(pages: number): number {
+  return Math.min(OCR_MAX_TOKENS * Math.max(1, pages), 8192);
+}

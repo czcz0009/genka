@@ -6,8 +6,8 @@ import { parseExtractionResponse } from "./parseExtractionResponse.ts";
 import type { InvoiceImageType } from "./imageType.ts";
 import { classifyAiError } from "./serviceError.ts";
 import { ocrGateMessage } from "./usageLimit.ts";
-import { OCR_MAX_TOKENS, OCR_MODEL, OCR_TEMPERATURE } from "./extractionSettings.ts";
-import type { ExtractedInvoiceItem, InvoiceMeta } from "./types.ts";
+import { OCR_MODEL, OCR_TEMPERATURE, ocrMaxTokens } from "./extractionSettings.ts";
+import type { ExtractedInvoiceItem, InvoiceMeta, InvoicePage } from "./types.ts";
 
 /**
  * 納品書・請求書の写真から、食材名・数量・単価をClaude(Vision)で読み取る。
@@ -31,15 +31,21 @@ const MODEL = OCR_MODEL;
 
 const EXTRACTION_PROMPT = `あなたは飲食店向け原価計算ツールの一部として、納品書・請求書の写真から仕入れ品目を読み取るアシスタントです。
 
-この画像(印刷された納品書または請求書)を読み取り、次の形のJSONを出力してください。
+渡された画像またはPDF(印刷された納品書または請求書)を読み取り、次の形のJSONを出力してください。
+画像が複数ある場合・PDFが複数ページの場合は、同じ納品書の続きのページとして、すべてのページの品目を items にまとめてください。
 
-{"invoice": {...納品書全体の情報...}, "items": [{...品目1...}, {...品目2...}]}
+{"invoice": {...納品書全体の情報...}, "pages": [{...1ページ目...}, ...], "items": [{...品目1...}, {...品目2...}]}
 
 invoice(納品書全体の情報):
 - date: 納品日(または伝票の日付)。"YYYY-MM-DD" の形(例: "2026-10-20")。和暦は西暦に直す。読み取れなければnull
 - supplier: 仕入れ先(納品書を出した会社・お店)の名前。印字されている表記のまま。読み取れなければnull
 - totalAmount: 納品書の合計金額(数値。消費税を含む最終的な請求額)。読み取れなければnull
 - taxBasis: 品目の単価・金額が税込なら "inclusive"、税抜なら "exclusive"。「税抜」「外税」「消費税 別」「小計の下に消費税が別に足されている」などは "exclusive"、「税込」「内税」などは "inclusive"。判断できなければnull
+
+pages(ページごとの情報。画像1枚・PDF1ページごとに1つ。渡された順):
+- page: ページの番号(1から)
+- date: そのページに書かれている日付("YYYY-MM-DD")。書かれていなければnull
+- supplier: そのページに書かれている仕入れ先の名前。書かれていなければnull
 
 items(品目ごと):
 - name: 品目名(食材名)。印字されている表記のまま
@@ -62,6 +68,8 @@ export interface ExtractInvoiceItemsResult {
   items: ExtractedInvoiceItem[];
   /** 納品書全体の情報(2026-10-28)。読めなかったときは無し */
   invoice?: InvoiceMeta;
+  /** ページごとの日付・仕入れ先(2026-10-28) */
+  pages?: InvoicePage[];
   error: string | null;
   /**
    * AI側の都合(残高不足・鍵・混雑・障害・通信)で読めなかったときの記録の種類。このときは店主の回数を減らさない
@@ -92,15 +100,26 @@ export async function prepareImage(buffer: Buffer, type: InvoiceImageType): Prom
     .toBuffer();
 }
 
-export async function extractInvoiceItems(imageBuffer: Buffer, type: InvoiceImageType): Promise<ExtractInvoiceItemsResult> {
+/** 読み取りに渡すもの: 写真(1〜5枚)か、PDF(1つ・5ページまで)。種類は uploadSet.ts で中身から判定済み */
+export type InvoiceSource = { kind: "image"; type: InvoiceImageType; buffer: Buffer } | { kind: "pdf"; buffer: Buffer };
+
+export async function extractInvoiceItems(sources: InvoiceSource[], pageCount: number): Promise<ExtractInvoiceItemsResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return { items: [], error: ocrGateMessage("unavailable"), unavailable: "auth" };
   }
 
-  let prepared: Buffer;
+  // 写真は縮小・JPEGにしてから、PDFはそのまま送る(Claude APIはPDFを受け取れ、文字の層が無いFAXのPDFも読める。2026-10-28に確認)
+  const blocks: Anthropic.ContentBlockParam[] = [];
   try {
-    prepared = await prepareImage(imageBuffer, type);
+    for (const src of sources) {
+      if (src.kind === "pdf") {
+        blocks.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: src.buffer.toString("base64") } });
+      } else {
+        const prepared = await prepareImage(src.buffer, src.type);
+        blocks.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: prepared.toString("base64") } });
+      }
+    }
   } catch {
     return { items: [], error: "画像を処理できませんでした。別の写真でお試しください。" };
   }
@@ -111,24 +130,16 @@ export async function extractInvoiceItems(imageBuffer: Buffer, type: InvoiceImag
   try {
     const message = await client.messages.create({
       model: MODEL,
-      max_tokens: OCR_MAX_TOKENS,
+      max_tokens: ocrMaxTokens(pageCount),
       temperature: OCR_TEMPERATURE, // ばらつきを小さくする(extractionSettings.ts)
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "image", source: { type: "base64", media_type: "image/jpeg", data: prepared.toString("base64") } },
-            { type: "text", text: EXTRACTION_PROMPT },
-          ],
-        },
-      ],
+      messages: [{ role: "user", content: [...blocks, { type: "text", text: EXTRACTION_PROMPT }] }],
     });
     const textBlock = message.content.find((b) => b.type === "text");
     responseText = textBlock && "text" in textBlock ? textBlock.text : "";
   } catch (e) {
     const c = classifyAiError(e);
     if (c.kind === "unavailable") return { items: [], error: ocrGateMessage("unavailable"), unavailable: c.incident };
-    return { items: [], error: "写真を読み取れませんでした。別の写真でお試しください。" };
+    return { items: [], error: "読み取れませんでした。別の写真・ファイルでお試しください。" };
   }
 
   return parseExtractionResponse(responseText);

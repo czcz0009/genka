@@ -51,6 +51,34 @@ test("T-6 想定していない英語のエラーは、原文を出さず、日�
   assert.equal(translateAuthError("Database error saving new user"), "処理に失敗しました。時間をおいて、もう一度お試しください。");
 });
 
-test("T-7 パスワードの長さのエラーは、Supabaseの設定の長さに合わせて案内する(今は6文字)", () => {
-  assert.equal(translateAuthError("Password should be at least 6 characters."), "パスワードは6文字以上で入力してください。");
+test("T-7 パスワードが短いというエラーは、Supabaseの設定の数字に関係なく「8文字以上」と案内する(2026-10-29、Mahiroの指示)", () => {
+  assert.equal(translateAuthError("Password should be at least 6 characters."), "パスワードは8文字以上で入力してください。");
+  assert.equal(translateAuthError("Password should be at least 8 characters."), "パスワードは8文字以上で入力してください。");
+});
+
+// 2026-10-29(バックログA-1): Supabaseの英語のエラーを、日本語の案内に言い換える(パスワードの再設定の画面も同じ言い換えを使う)
+test("T-8 パスワードの再設定・登録で返りうる英語のエラー", () => {
+  assert.equal(translateAuthError("New password should be different from the old password."), "今のパスワードと違うパスワードを入力してください。");
+  assert.equal(
+    translateAuthError("Password is known to be weak and easy to guess, please choose a different one."),
+    "このパスワードは推測されやすいため使えません。別のパスワードにしてください。",
+  );
+  assert.equal(
+    translateAuthError("Password should contain at least one character of each: abcdefghijklmnopqrstuvwxyz, ABCDEFGHIJKLMNOPQRSTUVWXYZ, 0123456789"),
+    "パスワードに、英字の小文字・大文字・数字をそれぞれ1文字以上入れてください。",
+  );
+  assert.equal(
+    translateAuthError("Auth session missing!"),
+    "ログインの有効期限が切れました。もう一度ログイン画面から「パスワードをお忘れの場合」をお試しください。",
+  );
+});
+
+test("T-9 メールアドレスの形のエラー", () => {
+  assert.equal(translateAuthError("Unable to validate email address: invalid format"), "メールアドレスの形が正しくありません。もう一度確かめてください。");
+  assert.equal(translateAuthError('Email address "a@b" is invalid'), "メールアドレスの形が正しくありません。もう一度確かめてください。");
+});
+
+test("T-10 通信の失敗(Failed to fetch 等)", () => {
+  assert.equal(translateAuthError("Failed to fetch"), "通信に失敗しました。電波の状態を確かめて、もう一度お試しください。");
+  assert.equal(translateAuthError("NetworkError when attempting to fetch resource."), "通信に失敗しました。電波の状態を確かめて、もう一度お試しください。");
 });

@@ -14,6 +14,7 @@ import {
   CAPTCHA_FAILED_MESSAGE,
   CAPTCHA_LOAD_FAILED_MESSAGE,
 } from "@/lib/auth/captcha.ts";
+import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, passwordLengthError } from "@/lib/auth/password.ts";
 
 /** 画像認証のサイトキー(公開してよい値)。未設定なら画像認証を出さない(src/lib/auth/captcha.ts) */
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
@@ -58,6 +59,12 @@ export function LoginForm() {
     setError(null);
     setNotice(null);
 
+    // 新規登録は8文字以上(ログインは文字数で断らない。password.ts)
+    const lengthError = mode === "signup" ? passwordLengthError(password, "signup") : null;
+    if (lengthError) {
+      setError(lengthError);
+      return;
+    }
     if (mode === "signup" && password !== confirmPassword) {
       setError("パスワードが一致しません。もう一度入力してください。");
       return;
@@ -183,12 +190,17 @@ export function LoginForm() {
           <input
             type="password"
             required
-            minLength={6}
+            minLength={mode === "signup" ? PASSWORD_MIN_LENGTH : undefined}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full rounded border px-4 py-3 text-base focus:outline-none focus:ring-2"
             style={{ background: "var(--card)", borderColor: "var(--border)", color: "var(--foreground)" }}
           />
+          {mode === "signup" && (
+            <span className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+              {PASSWORD_HINT}
+            </span>
+          )}
         </label>
       )}
 
@@ -198,7 +210,7 @@ export function LoginForm() {
           <input
             type="password"
             required
-            minLength={6}
+            minLength={PASSWORD_MIN_LENGTH}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             className="w-full rounded border px-4 py-3 text-base focus:outline-none focus:ring-2"

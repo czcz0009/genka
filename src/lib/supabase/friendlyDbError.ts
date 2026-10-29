@@ -17,7 +17,7 @@ export function friendlyDbError(
 ): string {
   if (error?.code === "23505") return duplicateMessage;
   if (error) console.error("[db error]", error);
-  return "処理に失敗しました。時間をおいて再度お試しください。";
+  return "処理に失敗しました。時間をおいて、もう一度お試しください。";
 }
 
 /**
@@ -30,5 +30,5 @@ export function friendlyDbError(
  */
 export function dbErrorMessage(action: string, error: unknown): string {
   console.error(`[db error] ${action}`, error);
-  return `${action}に失敗しました。時間をおいて再度お試しください。`;
+  return `${action}に失敗しました。時間をおいて、もう一度お試しください。`;
 }

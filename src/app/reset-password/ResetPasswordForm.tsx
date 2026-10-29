@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, passwordLengthError } from "@/lib/auth/password.ts";
+import { translateAuthError } from "@/lib/auth/captcha.ts";
 
 // w-full: 配布前QAで発見。入力欄に幅を明示しないと、スマホ幅で入力欄がはみ出す不具合が
 // あったため付与する(他画面の同名定数と同じ修正)。
@@ -85,6 +87,11 @@ export function ResetPasswordForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    const lengthError = passwordLengthError(password, "reset");
+    if (lengthError) {
+      setError(lengthError);
+      return;
+    }
     if (password !== confirmPassword) {
       setError("パスワードが一致しません。もう一度入力してください。");
       return;
@@ -93,7 +100,7 @@ export function ResetPasswordForm() {
     try {
       const { error } = await supabase!.auth.updateUser({ password });
       if (error) {
-        setError(/should be at least/i.test(error.message) ? "パスワードは6文字以上で入力してください。" : error.message);
+        setError(translateAuthError(error.message));
         return;
       }
       setDone(true);
@@ -109,19 +116,22 @@ export function ResetPasswordForm() {
         <input
           type="password"
           required
-          minLength={6}
+          minLength={PASSWORD_MIN_LENGTH}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className={INPUT_CLASS}
           style={inputStyle}
         />
+        <span className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+          {PASSWORD_HINT}
+        </span>
       </label>
       <label className="flex flex-col gap-2 text-base" style={{ color: "var(--foreground)", fontFamily: "var(--font-noto-sans-jp)" }}>
         新しいパスワード(確認)
         <input
           type="password"
           required
-          minLength={6}
+          minLength={PASSWORD_MIN_LENGTH}
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
           className={INPUT_CLASS}

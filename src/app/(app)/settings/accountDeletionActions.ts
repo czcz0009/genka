@@ -1,6 +1,7 @@
 "use server";
 
 import { requireAuthedClient } from "@/lib/supabase/requireAuthedClient";
+import { dbErrorMessage } from "@/lib/supabase/friendlyDbError";
 import { GRACE_PERIOD_DAYS, DELETE_CONFIRMATION_TEXT, calcScheduledFor } from "@/lib/accountDeletion.ts";
 
 /**
@@ -40,7 +41,7 @@ export async function requestAccountDeletion(confirmationText: string): Promise<
     scheduled_for: scheduledFor.toISOString(),
   });
   if (error) {
-    return { success: false, error: `退会の申請に失敗しました: ${error.message}` };
+    return { success: false, error: dbErrorMessage("退会の申請", error) };
   }
 
   return { success: true, scheduledFor: scheduledFor.toISOString() };
@@ -79,7 +80,7 @@ export async function cancelAccountDeletion(): Promise<CancelAccountDeletionResu
 
   const { error } = await supabase.from("account_deletion_requests").delete().eq("user_id", userId);
   if (error) {
-    return { success: false, error: `取り消しに失敗しました: ${error.message}` };
+    return { success: false, error: dbErrorMessage("取り消し", error) };
   }
   return { success: true };
 }

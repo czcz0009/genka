@@ -1,6 +1,7 @@
 "use server";
 
 import { requireAuthedClient } from "@/lib/supabase/requireAuthedClient";
+import { dbErrorMessage } from "@/lib/supabase/friendlyDbError";
 import { TERMS_VERSION } from "@/lib/legalVersion.ts";
 
 /**
@@ -22,7 +23,7 @@ export async function recordTermsConsent(): Promise<RecordTermsConsentResult> {
     .from("user_consents")
     .upsert({ user_id: userId, terms_version: TERMS_VERSION, accepted_at: new Date().toISOString() });
   if (error) {
-    return { success: false, error: `同意の記録に失敗しました: ${error.message}` };
+    return { success: false, error: dbErrorMessage("同意の記録", error) };
   }
   return { success: true };
 }

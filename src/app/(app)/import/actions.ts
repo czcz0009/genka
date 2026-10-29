@@ -82,7 +82,7 @@ export async function saveImportPlan(input: SaveImportPlanInput): Promise<SaveIm
   if (ingredientUpsertError || !upsertedIngredients) {
     return {
       success: false,
-      error: `食材の保存に失敗しました: ${ingredientUpsertError?.message ?? "不明なエラー"}`,
+      error: dbErrorMessage("食材の保存", ingredientUpsertError),
     };
   }
   const ingredientIdByName = new Map(upsertedIngredients.map((i) => [i.normalized_name, i.id]));
@@ -126,7 +126,7 @@ export async function saveImportPlan(input: SaveImportPlanInput): Promise<SaveIm
     .upsert(menuRows, { onConflict: "store_id,normalized_name" })
     .select("id, normalized_name");
   if (menuUpsertError || !upsertedMenus) {
-    return { success: false, error: `メニューの保存に失敗しました: ${menuUpsertError?.message ?? "不明なエラー"}` };
+    return { success: false, error: dbErrorMessage("メニューの保存", menuUpsertError) };
   }
   const menuIdByName = new Map(upsertedMenus.map((m) => [m.normalized_name, m.id]));
 

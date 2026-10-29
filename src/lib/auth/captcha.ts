@@ -8,6 +8,8 @@
  * - シークレットキーはアプリには置かない(Supabaseの管理画面だけに入れる)。
  */
 
+import { PASSWORD_TOO_SHORT_MESSAGE } from "./password.ts";
+
 export const CAPTCHA_FAILED_MESSAGE = "画像認証を確認できませんでした。画像認証をやり直してから、もう一度お試しください。";
 export const CAPTCHA_LOAD_FAILED_MESSAGE =
   "画像認証を読み込めませんでした。通信の状態を確かめて、ページを読み込み直してください。それでも表示されない場合は、時間をおいてお試しください。";
@@ -28,7 +30,7 @@ export function submitBlockedByCaptcha(s: { enabled: boolean; token: string | nu
   return s.failed ? CAPTCHA_FAILED_MESSAGE : CAPTCHA_WAIT_MESSAGE;
 }
 
-/** Supabase Authの英語のエラーを、日本語の案内に言い換える。想定していないものも原文は出さない */
+/** Supabase Authの英語のエラーを、日本語の案内に言い換える。想定していないものも原文は出さない(2026-10-29、パスワードの再設定の画面も同じものを使う) */
 export function translateAuthError(message: string): string {
   if (/captcha/i.test(message)) return CAPTCHA_FAILED_MESSAGE;
   if (/invalid login credentials/i.test(message)) return "メールアドレスまたはパスワードが正しくありません。";
@@ -36,8 +38,22 @@ export function translateAuthError(message: string): string {
   if (/email not confirmed/i.test(message)) {
     return "メールアドレスの確認が完了していません。届いた確認メール内のリンクを開いてから、もう一度ログインしてください。";
   }
-  const minLength = message.match(/password should be at least (\d+)/i);
-  if (minLength) return `パスワードは${minLength[1]}文字以上で入力してください。`;
+  // パスワードが短い: Supabaseの設定の数字に関係なく、アプリの決まり(8文字)で案内する(2026-10-29)
+  if (/password should be at least \d+/i.test(message)) return PASSWORD_TOO_SHORT_MESSAGE;
+  if (/should be different from the old password/i.test(message)) return "今のパスワードと違うパスワードを入力してください。";
+  if (/known to be weak|easy to guess|pwned/i.test(message)) return "このパスワードは推測されやすいため使えません。別のパスワードにしてください。";
+  if (/password should contain at least one character/i.test(message)) {
+    return "パスワードに、英字の小文字・大文字・数字をそれぞれ1文字以上入れてください。";
+  }
+  if (/auth session missing/i.test(message)) {
+    return "ログインの有効期限が切れました。もう一度ログイン画面から「パスワードをお忘れの場合」をお試しください。";
+  }
+  if (/unable to validate email address|email address .* is invalid|invalid format/i.test(message)) {
+    return "メールアドレスの形が正しくありません。もう一度確かめてください。";
+  }
+  if (/failed to fetch|networkerror|network request failed|load failed/i.test(message)) {
+    return "通信に失敗しました。電波の状態を確かめて、もう一度お試しください。";
+  }
   if (/security purposes.*after/i.test(message) || /email rate limit exceeded/i.test(message)) {
     return "メール送信の回数制限に達しました。少し時間を空けてから、もう一度お試しください。";
   }

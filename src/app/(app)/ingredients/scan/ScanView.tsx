@@ -163,6 +163,8 @@ export function ScanView({
   const pickInputRef = useRef<HTMLInputElement | null>(null);
   const [picked, setPicked] = useState<PickedFile[]>([]);
   const [pages, setPages] = useState<InvoicePage[]>([]);
+  /** 別々の納品書のお知らせが出たときの「同じ納品書として確定する」の印(2026-10-29) */
+  const [samePagesConfirmed, setSamePagesConfirmed] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [rows, setRows] = useState<Row[] | null>(null);
@@ -358,6 +360,7 @@ export function ScanView({
       setRemaining(result.remaining);
       setInvoice(result.invoice);
       setPages(result.pages);
+      setSamePagesConfirmed(false);
       setTaxBasis(result.invoice.taxBasis);
       setTaxBasisFromAi(result.invoice.taxBasis != null);
       setRows(result.items.map((item) => buildRow(item, result.invoice.taxBasis ?? storeTaxMode)));
@@ -380,8 +383,10 @@ export function ScanView({
 
   const rowViews = (rows ?? []).map((row) => ({ row, d: derive(row, taxBasis) }));
   const pending = rowViews.filter((v) => v.row.included && v.row.status !== "saved");
+  const pageNotice = pagesMismatchNotice(pages);
   const blockers = confirmBlockers({
     needsTaxChoice: rows != null && taxBasis == null,
+    pagesMismatchUnconfirmed: pageNotice != null && !samePagesConfirmed,
     rows: pending.map(({ row, d }) => ({
       name: row.target === "new" ? row.newName || row.invoiceName : (d.existing?.name ?? row.invoiceName),
       included: row.included,
@@ -395,7 +400,6 @@ export function ScanView({
     .filter(({ row }) => row.target === "new" && (!row.newName.trim() || !row.newUnit.trim()))
     .map(({ row }) => `${row.invoiceName}: 新しい食材の名前と単位を入れてください`);
   const allBlockers = [...blockers, ...newNameErrors];
-  const pageNotice = pagesMismatchNotice(pages);
   const duplicate = invoice ? findPossibleDuplicate({ invoiceDate: invoice.date, supplier: invoice.supplier, totalAmount: invoice.totalAmount }, invoiceRecords) : null;
 
   async function handleConfirm() {
@@ -818,9 +822,21 @@ export function ScanView({
               <dd className="[overflow-wrap:anywhere]">{invoice.totalAmount != null ? formatYen(invoice.totalAmount) : "読み取れませんでした"}</dd>
             </dl>
             {pageNotice && (
-              <p className="rounded border p-3 text-sm [overflow-wrap:anywhere]" style={{ borderColor: "var(--status-warn)", color: "var(--foreground)", ...JP }}>
-                ⚠ {pageNotice}
-              </p>
+              <div className="flex min-w-0 flex-col gap-2 rounded border p-3" style={{ borderColor: "var(--status-warn)" }}>
+                <p className="text-sm [overflow-wrap:anywhere]" style={{ color: "var(--foreground)", ...JP }}>
+                  ⚠ {pageNotice}
+                </p>
+                <label className="flex items-start gap-2 text-sm font-semibold" style={{ color: "var(--foreground)", ...JP }}>
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={samePagesConfirmed}
+                    disabled={confirming}
+                    onChange={(e) => setSamePagesConfirmed(e.target.checked)}
+                  />
+                  同じ納品書として確定する(確かめないと確定できません)
+                </label>
+              </div>
             )}
             {duplicate && (
               <p className="rounded border p-3 text-sm" style={{ borderColor: "var(--status-warn)", color: "var(--foreground)", ...JP }}>

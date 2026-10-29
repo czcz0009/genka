@@ -86,9 +86,17 @@ export interface BlockerRow {
   estimateUnconfirmed?: boolean;
 }
 
-/** 確定を押せない理由(空なら確定できる)。外した行は見ない */
-export function confirmBlockers(s: { needsTaxChoice: boolean; rows: BlockerRow[] }): string[] {
+export const PAGES_MISMATCH_BLOCKER =
+  "選んだページの中に、別々の納品書かもしれないページがあります。上のお知らせを確かめて、同じ納品書なら「同じ納品書として確定する」に印を付けてください(別々の納品書なら、1枚ずつ読み取り直してください)";
+
+/**
+ * 確定を押せない理由(空なら確定できる)。外した行は見ない。
+ * pagesMismatchUnconfirmed: 別々の納品書が混ざったときのお知らせ(pageConsistency.ts)が出ていて、
+ * 「同じ納品書として確定する」に印が無い(2026-10-29。読み飛ばして税込・税抜がずれた単価を保存するのを防ぐ)
+ */
+export function confirmBlockers(s: { needsTaxChoice: boolean; pagesMismatchUnconfirmed?: boolean; rows: BlockerRow[] }): string[] {
   const out: string[] = [];
+  if (s.pagesMismatchUnconfirmed) out.push(PAGES_MISMATCH_BLOCKER);
   if (s.needsTaxChoice) out.push("この納品書の金額が税込か税抜かを、上で選んでください");
   for (const r of s.rows) {
     if (!r.included) continue;

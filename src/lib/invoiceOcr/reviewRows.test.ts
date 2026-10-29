@@ -86,3 +86,17 @@ test("Y-7 確定できない理由: 納品書の税込・税抜を選んでい�
   );
   assert.deepEqual(confirmBlockers({ needsTaxChoice: false, rows: [{ name: "玉ねぎ", included: true, needsConversion: false, priceBlank: false, conversionError: null }] }), []);
 });
+
+// 2026-10-29の指示: 別々の納品書が混ざったときのお知らせが出たら、「同じ納品書として確定する」に印を付けないと確定できない
+// (お知らせを読み飛ばして、税込・税抜がずれた単価を保存するのを防ぐ)
+test("Y-8 別々の納品書のお知らせが出ていて、印が無い → 確定できない。印があれば確定できる。お知らせが無ければ何も言わない", () => {
+  const row = { name: "玉ねぎ", included: true, needsConversion: false, priceBlank: false, conversionError: null };
+  assert.deepEqual(confirmBlockers({ needsTaxChoice: false, pagesMismatchUnconfirmed: true, rows: [row] }), [
+    "選んだページの中に、別々の納品書かもしれないページがあります。上のお知らせを確かめて、同じ納品書なら「同じ納品書として確定する」に印を付けてください(別々の納品書なら、1枚ずつ読み取り直してください)",
+  ]);
+  assert.deepEqual(confirmBlockers({ needsTaxChoice: false, pagesMismatchUnconfirmed: false, rows: [row] }), []);
+  assert.deepEqual(confirmBlockers({ needsTaxChoice: false, rows: [row] }), []);
+  // 税込・税抜の選択と両方あれば、お知らせのほうを先に出す(どちらを選ぶかが変わりうるため)
+  assert.deepEqual(confirmBlockers({ needsTaxChoice: true, pagesMismatchUnconfirmed: true, rows: [] }).length, 2);
+  assert.match(confirmBlockers({ needsTaxChoice: true, pagesMismatchUnconfirmed: true, rows: [] })[0], /^選んだページの中に/);
+});
